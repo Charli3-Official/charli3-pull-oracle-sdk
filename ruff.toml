@@ -1,0 +1,49 @@
+line-length = 88
+target-version = "py310"
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "B",   # flake8-bugbear
+    "C",   # flake8-comprehensions
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "W",   # pycodestyle warnings
+    "YTT", # flake8-2020
+    "ANN", # flake8-annotations
+    "S",   # flake8-bandit
+    "PL",  # pylint
+    "RUF", # ruff-specific rules
+]
+ignore = [
+    "E501",    # line too long (handled by black)
+    "B905",    # `zip()` without an explicit `strict=` parameter
+    "ANN101",  # Missing type annotation for self in method
+    "ANN102",  # Missing type annotation for cls in classmethod
+    "PLR0913", # Too many arguments to function call
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]    # Unused imports
+"tests/**/*.py" = [
+    "S101",    # Use of assert detected
+    "ANN201",  # Missing return type annotation for public function
+]
+
+[lint.isort]
+known-first-party = ["charli3"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"

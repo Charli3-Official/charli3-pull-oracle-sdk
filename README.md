@@ -36,7 +36,7 @@ cd odv-multisig-charli3-offchain-core
 ## 🏗️ Project Structure
 
 ```
-charli3-sdk/
+odv-multisig-charli3-offchain-core/
 ├── .github/
 │   └── workflows/
 │       ├── test.yml
@@ -45,7 +45,7 @@ charli3-sdk/
 │       └── docs.yml
 │
 ├── src/
-│   └── charli3/
+│   └── charli3-offchain-core/
 │       ├── __init__.py
 │       │
 │       ├── api/             # External API integrations
@@ -110,7 +110,7 @@ charli3-sdk/
 │   │   ├── getting_started.md
 │   │   ├── oracle_management.md
 │   │   └── contract_interaction.md
-│  
+│
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── pyproject.toml
