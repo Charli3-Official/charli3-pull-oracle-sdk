@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pycardano import PlutusData, ScriptHash, VerificationKeyHash
+from pycardano import PlutusData
 
 
 @dataclass
@@ -10,8 +10,8 @@ class Node(PlutusData):
     """Represents an oracle node with payment and feed verification keys"""
 
     CONSTR_ID = 0
-    payment_vkh: VerificationKeyHash
-    feed_vkh: VerificationKeyHash
+    payment_vkh: bytes
+    feed_vkh: bytes
 
 
 @dataclass
@@ -28,7 +28,7 @@ class Asset(PlutusData):
     """Represents a native token asset"""
 
     CONSTR_ID = 0
-    policy_id: ScriptHash
+    policy_id: bytes  # PolicyID
     name: bytes  # AssetName
 
 
@@ -46,7 +46,7 @@ class OracleConfiguration(PlutusData):
     """Immutable oracle settings"""
 
     CONSTR_ID = 0
-    platform_auth_nft: ScriptHash
+    platform_auth_nft: bytes  # PolicyID
     closing_period_length: int  # PosixTimeDiff
     reward_dismissing_period_length: int  # PosixTimeDiff
     fee_token: Asset
