@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Core off-chain infrastructure for Charli3's Oracle Data Verification (ODV) system with multisig capabilities"
 authors = ["Deep Bhatt <deep.bhatt@charli3.io>"]
 readme = "README.md"
+packages = [
+    { include = "charli3_offchain_core" }
+]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
