@@ -10,8 +10,8 @@ class Node(PlutusData):
     """Represents an oracle node with payment and feed verification keys"""
 
     CONSTR_ID = 0
-    payment_vkh: bytes
     feed_vkh: bytes
+    payment_vkh: bytes
 
 
 @dataclass
@@ -95,32 +95,68 @@ class AggStateDatum(PlutusData):
 
 
 @dataclass
-class RewardTransportDatum(PlutusData):
-    """Can be either NoRewards or RewardConsensusPending"""
+class NoRewards(PlutusData):
+    """Reward transport with no rewards state"""
 
-    CONSTR_ID = 0  # For NoRewards
+    CONSTR_ID = 0
 
 
 @dataclass
-class RewardConsensusPendingDatum(PlutusData):
-    """Represents pending reward consensus state"""
+class RewardConsensusPending(PlutusData):
+    """Reward transport with pending consensus state"""
 
-    CONSTR_ID = 1  # For RewardConsensusPending
+    CONSTR_ID = 1
     oracle_feed: int
     message: AggregateMessage
 
 
+# Main datum variants
+@dataclass
+class OracleSettingsVariant(PlutusData):
+    """Oracle settings variant of OracleDatum"""
+
+    CONSTR_ID = 0
+    datum: OracleSettingsDatum
+
+
+@dataclass
+class RewardAccountVariant(PlutusData):
+    """Reward account variant of OracleDatum"""
+
+    CONSTR_ID = 1
+    datum: RewardAccountDatum
+
+
+@dataclass
+class RewardTransportVariant(PlutusData):
+    """Reward transport variant of OracleDatum"""
+
+    CONSTR_ID = 2
+    datum: NoRewards | RewardConsensusPending
+
+
+@dataclass
+class AggStateVariant(PlutusData):
+    """Agg state variant of OracleDatum"""
+
+    CONSTR_ID = 3
+    datum: AggStateDatum | None
+
+
 @dataclass
 class OracleDatum(PlutusData):
-    """Main oracle datum that can be one of four types:
-    1. OracleSettings - single source of truth for settings and node list
-    2. RewardAccount - single source of truth for reward distribution
-    3. RewardTransport - handles ODV aggregation
-    4. AggState - contains oracle feed value
+    """
+    Main oracle datum with four possible variants:
+    1. OracleSettingsVariant
+    2. RewardAccountVariant
+    3. RewardTransportVariant
+    4. AggStateVariant
     """
 
-    CONSTR_ID = 0  # For OracleSettings
-    settings: OracleSettingsDatum | None = None
-    reward_account: RewardAccountDatum | None = None
-    reward_transport: RewardTransportDatum | RewardConsensusPendingDatum | None = None
-    agg_state: AggStateDatum | None = None
+    CONSTR_ID = 0
+    variant: (
+        OracleSettingsVariant
+        | RewardAccountVariant
+        | RewardTransportVariant
+        | AggStateVariant
+    )
