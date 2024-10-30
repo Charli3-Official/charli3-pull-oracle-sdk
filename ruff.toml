@@ -31,6 +31,8 @@ ignore = [
     "S101",    # Use of assert detected
     "ANN201",  # Missing return type annotation for public function
 ]
+"charli3_offchain_core/models/oracle_datums.py" = ["UP006", "UP035"]
+"charli3_offchain_core/cli/config/utils.py" = ["ANN001","ANN002","ANN003"]
 
 [lint.isort]
 known-first-party = ["charli3"]
