@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pycardano import (
     Address,
     ExtendedSigningKey,
+    Network,
     PaymentSigningKey,
     Transaction,
     UTxO,
@@ -51,7 +52,8 @@ class ReferenceScriptBuilder:
         self,
         config: OracleConfiguration,
         script_config: OracleScriptConfig,
-        reference_address: Address,
+        script_address: Address,
+        admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         platform_utxo: UTxO,
     ) -> ReferenceScriptResult:
@@ -61,7 +63,8 @@ class ReferenceScriptBuilder:
         Args:
             config: Oracle configuration
             script_config: Reference script configuration
-            reference_address: Address for reference scripts
+            script_address: Address of oracle script
+            admin_address: Address of oracle admin
             signing_key: Signing key for transactions
             platform_utxo: Platform auth UTxO for NFT script
 
@@ -72,16 +75,21 @@ class ReferenceScriptBuilder:
 
         # Handle manager script
         if script_config.create_manager_reference:
+            # Get parameterized manager contract
+            manager_contract = self.contracts.apply_spend_params(config)
+            # Use contract's network-specific address
+
             result.manager_utxo = await self.script_finder.find_manager_reference(
-                reference_address, config
+                config
             )
 
             if not result.manager_utxo:
                 logger.info("Creating new manager reference script")
-                manager_contract = self.contracts.apply_spend_params(config)
+
                 result.manager_tx = await self.tx_manager.build_reference_script_tx(
-                    script=manager_contract.cbor_hex,
-                    address=reference_address,
+                    script=manager_contract.contract,
+                    script_address=script_address,
+                    admin_address=admin_address,
                     signing_key=signing_key,
                     reference_ada=script_config.reference_ada_amount,
                 )
@@ -89,14 +97,24 @@ class ReferenceScriptBuilder:
         # Handle NFT script
         if script_config.create_nft_reference:
             logger.info("Creating NFT reference script")
+            # Get parameterized NFT contract
             nft_contract = self.contracts.apply_mint_params(
                 platform_utxo.output,
                 config,
                 self.contracts.spend.script_hash,
             )
+            # Use contract's network-specific address
+            nft_address = (
+                nft_contract.mainnet_addr
+                if self.chain_query.context.network == Network.MAINNET
+                else nft_contract.testnet_addr
+            )
+            logger.info("NFT script address: %s", nft_address)
+
             result.nft_tx = await self.tx_manager.build_reference_script_tx(
-                script=nft_contract.script,
-                address=reference_address,
+                script=nft_contract.contract,
+                script_address=nft_address,
+                admin_address=admin_address,
                 signing_key=signing_key,
                 reference_ada=script_config.reference_ada_amount,
             )

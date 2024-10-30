@@ -5,12 +5,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from opshin.builder import PlutusContract, Purpose
-from pycardano import PlutusV3Script, ScriptHash, TransactionOutput
+from pycardano import (
+    PlutusV3Script,
+    ScriptHash,
+    TransactionOutput,
+    UTxO,
+)
 
+from charli3_offchain_core.contracts.plutus_v3_contract import PlutusV3Contract, Purpose
 from charli3_offchain_core.models.oracle_datums import (
     OracleConfiguration,
     OracleDatum,
+    OutputReference,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     MintingRedeemer,
@@ -22,8 +28,8 @@ from charli3_offchain_core.models.oracle_redeemers import (
 class OracleContracts:
     """Container for Oracle spend validator and mint policy"""
 
-    spend: PlutusContract
-    mint: PlutusContract
+    spend: PlutusV3Contract
+    mint: PlutusV3Contract
 
     @classmethod
     def from_blueprint(cls, blueprint_path: str | Path) -> "OracleContracts":
@@ -58,12 +64,12 @@ class OracleContracts:
         return cls(spend=spend_validator, mint=mint_validator)
 
     @staticmethod
-    def _create_spend_contract(validator: dict[str, Any]) -> PlutusContract:
+    def _create_spend_contract(validator: dict[str, Any]) -> PlutusV3Contract:
         """Create spend validator contract"""
         contract = PlutusV3Script(bytes.fromhex(validator["compiledCode"]))
 
         # Uses predefined OracleDatum and OracleRedeemer types
-        return PlutusContract(
+        return PlutusV3Contract(
             contract=contract,
             datum_type=("own_datum", OracleDatum),
             redeemer_type=("redeemer", OracleRedeemer),
@@ -74,12 +80,12 @@ class OracleContracts:
         )
 
     @staticmethod
-    def _create_mint_contract(validator: dict[str, Any]) -> PlutusContract:
+    def _create_mint_contract(validator: dict[str, Any]) -> PlutusV3Contract:
         """Create minting policy contract"""
         contract = PlutusV3Script(bytes.fromhex(validator["compiledCode"]))
 
         # Uses predefined MintingRedeemer type
-        return PlutusContract(
+        return PlutusV3Contract(
             contract=contract,
             redeemer_type=("redeemer", MintingRedeemer),
             parameter_types=[
@@ -92,15 +98,18 @@ class OracleContracts:
             title=validator["title"],
         )
 
-    def apply_spend_params(self, config: OracleConfiguration) -> PlutusContract:
+    def apply_spend_params(self, config: OracleConfiguration) -> PlutusV3Contract:
         """Apply parameters to spend validator"""
         return self.spend.apply_parameter(config)
 
     def apply_mint_params(
         self,
-        utxo_ref: TransactionOutput,
+        utxo_ref: UTxO,
         config: OracleConfiguration,
         oracle_script_hash: ScriptHash,
-    ) -> PlutusContract:
+    ) -> PlutusV3Contract:
         """Apply parameters to mint policy"""
-        return self.mint.apply_parameter(utxo_ref, config, oracle_script_hash)
+        tx_utxo_ref = OutputReference(
+            utxo_ref.input.transaction_id.payload, utxo_ref.input.index
+        )
+        return self.mint.apply_parameter(tx_utxo_ref, config, oracle_script_hash)

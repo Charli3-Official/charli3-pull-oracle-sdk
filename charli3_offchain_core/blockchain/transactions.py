@@ -36,7 +36,7 @@ class TransactionConfig:
 
     validity_offset: int = 0
     ttl_offset: int = 120
-    extra_collateral: int = 2_500_000
+    extra_collateral: int = 6_000_000
     min_utxo_value: int = 2_000_000
     default_script_utxo_cost: int = 5_000_000
 
@@ -121,7 +121,8 @@ class TransactionManager:
     async def build_reference_script_tx(
         self,
         script: PlutusV3Script,
-        address: Address,
+        script_address: Address,
+        admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         reference_ada: int | None = None,
     ) -> Transaction:
@@ -132,12 +133,12 @@ class TransactionManager:
             # Create reference script output
             reference_amount = reference_ada or self.config.default_script_utxo_cost
             reference_output = TransactionOutput(
-                address=address, amount=reference_amount, script=script
+                address=script_address, amount=reference_amount, script=script
             )
             builder.add_output(reference_output)
 
             return await self.build_tx(
-                builder=builder, change_address=address, signing_key=signing_key
+                builder=builder, change_address=admin_address, signing_key=signing_key
             )
 
         except Exception as e:
@@ -167,7 +168,7 @@ class TransactionManager:
             builder.add_input_address(change_address)
 
             # Add collateral for script transactions
-            if builder.has_plutus_script():
+            if len(builder.scripts) > 0:
                 collateral_utxo = await self.chain_query.get_or_create_collateral(
                     change_address, signing_key, self.config.extra_collateral
                 )
@@ -179,8 +180,6 @@ class TransactionManager:
             # Build transaction
             tx_body = builder.build(
                 change_address=change_address,
-                validity_start=self.config.validity_offset,
-                ttl=self.config.ttl_offset,
             )
 
             # Create initial witness set

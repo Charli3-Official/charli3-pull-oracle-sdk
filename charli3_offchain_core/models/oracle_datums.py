@@ -1,8 +1,25 @@
 """Oracle datums for the oracle core contract"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 from pycardano import PlutusData
+
+
+@dataclass
+class NoDatum(PlutusData):
+    """Universal None type for PlutusData"""
+
+    CONSTR_ID = 1
+
+
+@dataclass
+class OutputReference(PlutusData):
+    """Represents a reference to a transaction output"""
+
+    CONSTR_ID = 0
+    tx_hash: bytes
+    index: int
 
 
 @dataclass
@@ -37,8 +54,8 @@ class FeeConfig(PlutusData):
     """Represents fee configuration"""
 
     CONSTR_ID = 0
-    rate_nft: Asset | None
     reward_prices: RewardPrices
+    rate_nft: Asset | None = field(default=None, metadata={"optional": True})
 
 
 @dataclass
@@ -57,13 +74,15 @@ class OracleSettingsDatum(PlutusData):
     """Mutable oracle settings"""
 
     CONSTR_ID = 0
-    nodes: list[Node]
+    nodes: List[Node]
     required_node_signatures_count: int
     fee_info: FeeConfig
     aggregation_liveness_period: int  # PosixTimeDiff
     time_absolute_uncertainty: int  # PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
-    closing_period_started_at: int | None  # Optional PosixTime
+    closing_period_started_at: int | None = field(
+        default=None, metadata={"optional": True}
+    )
 
 
 @dataclass
@@ -71,7 +90,7 @@ class RewardAccountDatum(PlutusData):
     """Reward distribution datum"""
 
     CONSTR_ID = 0
-    nodes_to_rewards: list[int]  # Maps node ID to reward amount
+    nodes_to_rewards: List[int]  # Maps node ID to reward amount
 
 
 @dataclass
@@ -132,7 +151,9 @@ class RewardTransportVariant(PlutusData):
     """Reward transport variant of OracleDatum"""
 
     CONSTR_ID = 2
-    datum: NoRewards | RewardConsensusPending
+    datum: RewardConsensusPending | None = field(
+        default=None, metadata={"optional": True}
+    )
 
 
 @dataclass
@@ -140,7 +161,7 @@ class AggStateVariant(PlutusData):
     """Agg state variant of OracleDatum"""
 
     CONSTR_ID = 3
-    datum: AggStateDatum | None
+    datum: AggStateDatum | None = field(default=None, metadata={"optional": True})
 
 
 @dataclass

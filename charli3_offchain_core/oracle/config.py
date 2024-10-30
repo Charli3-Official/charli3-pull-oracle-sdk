@@ -19,7 +19,9 @@ class OracleTokenNames:
     @classmethod
     def from_network(cls, network: Network) -> "OracleTokenNames":
         """Create token names configuration based on network"""
-        if network == Network.MAINNET:
+        # For now use same token names for testnet and mainnet
+        # due to validator is not able to handle testnet token names
+        if network in (Network.TESTNET, Network.MAINNET):
             return cls(
                 core_settings="C3CS",
                 reward_account="C3RA",

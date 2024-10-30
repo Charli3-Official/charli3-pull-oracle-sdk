@@ -3,7 +3,7 @@
 import logging
 
 from opshin.builder import PlutusContract
-from pycardano import Address, PlutusV3Script, UTxO
+from pycardano import PlutusV3Script, UTxO
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
@@ -21,20 +21,26 @@ class ReferenceScriptFinder:
 
     async def find_manager_reference(
         self,
-        script_address: Address,
         config: OracleConfiguration,
     ) -> UTxO | None:
         """
         Find existing oracle manager reference script with matching configuration.
 
         Args:
-            script_address: Address to search for reference scripts
             config: Oracle configuration to match
 
         Returns:
             UTxO containing matching reference script if found, None otherwise
         """
         try:
+            # Get parameterized contract for address
+            manager_contract = self.contracts.apply_spend_params(config)
+            script_address = (
+                manager_contract.mainnet_addr
+                if self.chain_query.context.network.MAINNET
+                else manager_contract.testnet_addr
+            )
+
             # Get UTxOs at script address
             utxos = await self.chain_query.get_utxos(script_address)
 
