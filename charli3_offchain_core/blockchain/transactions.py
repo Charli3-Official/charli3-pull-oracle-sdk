@@ -1,0 +1,251 @@
+"""Transaction management utilities for building, signing and submitting transactions."""
+
+import logging
+from dataclasses import dataclass
+
+from pycardano import (
+    Address,
+    BlockFrostChainContext,
+    ExtendedSigningKey,
+    MultiAsset,
+    PaymentSigningKey,
+    PlutusV3Script,
+    Redeemer,
+    Transaction,
+    TransactionBuilder,
+    TransactionInput,
+    TransactionOutput,
+    UTxO,
+    VerificationKeyHash,
+    VerificationKeyWitness,
+)
+
+from .chain_query import ChainQuery
+from .exceptions import (
+    CollateralError,
+    TransactionBuildError,
+    TransactionSubmissionError,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TransactionConfig:
+    """Transaction building configuration."""
+
+    validity_offset: int = 0
+    ttl_offset: int = 120
+    extra_collateral: int = 2_500_000
+    min_utxo_value: int = 2_000_000
+    default_script_utxo_cost: int = 5_000_000
+
+
+class TransactionManager:
+    """Manages transaction building and submission."""
+
+    def __init__(
+        self, chain_query: ChainQuery, config: TransactionConfig | None = None
+    ) -> None:
+        self.chain_query = chain_query
+        self.config = config or TransactionConfig()
+
+    async def build_simple_payment(
+        self,
+        outputs: list[TransactionOutput],
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        metadata: dict | None = None,
+    ) -> Transaction:
+        """Build simple payment transaction."""
+        builder = TransactionBuilder(self.chain_query.context)
+
+        # Add outputs
+        for output in outputs:
+            builder.add_output(output)
+
+        return await self.build_tx(
+            builder=builder,
+            change_address=change_address,
+            signing_key=signing_key,
+            metadata=metadata,
+        )
+
+    async def build_script_tx(
+        self,
+        script_inputs: list[tuple[UTxO, Redeemer, UTxO | PlutusV3Script | None]],
+        script_outputs: list[TransactionOutput],
+        reference_inputs: set[UTxO | TransactionInput] | None = None,
+        mint: MultiAsset | None = None,
+        mint_redeemer: Redeemer | None = None,
+        mint_script: PlutusV3Script | None = None,
+        required_signers: list[VerificationKeyHash] | None = None,
+        change_address: Address = None,
+        signing_key: PaymentSigningKey | ExtendedSigningKey = None,
+        metadata: dict | None = None,
+    ) -> Transaction:
+        """Build script interaction transaction."""
+        try:
+            builder = TransactionBuilder(self.chain_query.context)
+
+            # Add script inputs
+            for utxo, script, redeemer in script_inputs:
+                builder.add_script_input(utxo=utxo, script=script, redeemer=redeemer)
+
+            # Add script outputs with datums
+            for output in script_outputs:
+                builder.add_output(output)
+
+            # Add reference inputs
+            if reference_inputs:
+                builder.reference_inputs.update(reference_inputs)
+
+            # Add minting if specified
+            if mint and mint_script and mint_redeemer:
+                builder.mint = mint
+                builder.add_minting_script(script=mint_script, redeemer=mint_redeemer)
+
+            return await self.build_tx(
+                builder=builder,
+                change_address=change_address,
+                signing_key=signing_key,
+                metadata=metadata,
+                required_signers=required_signers,
+            )
+
+        except Exception as e:
+            raise TransactionBuildError(
+                f"Failed to build script transaction: {e}"
+            ) from e
+
+    async def build_reference_script_tx(
+        self,
+        script: PlutusV3Script,
+        address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        reference_ada: int | None = None,
+    ) -> Transaction:
+        """Build transaction to publish reference script."""
+        try:
+            builder = TransactionBuilder(self.chain_query.context)
+
+            # Create reference script output
+            reference_amount = reference_ada or self.config.default_script_utxo_cost
+            reference_output = TransactionOutput(
+                address=address, amount=reference_amount, script=script
+            )
+            builder.add_output(reference_output)
+
+            return await self.build_tx(
+                builder=builder, change_address=address, signing_key=signing_key
+            )
+
+        except Exception as e:
+            raise TransactionBuildError(
+                f"Failed to build reference script tx: {e}"
+            ) from e
+
+    async def build_tx(
+        self,
+        builder: TransactionBuilder,
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        metadata: dict | None = None,
+        required_signers: list[VerificationKeyHash] | None = None,
+    ) -> Transaction:
+        """Build transaction with proper inputs and collateral."""
+        try:
+            # Add required signers
+            if required_signers:
+                builder.required_signers.extend(required_signers)
+
+            # Add metadata if provided
+            if metadata:
+                builder.auxiliary_data = metadata
+
+            # Add input address for fees/balancing
+            builder.add_input_address(change_address)
+
+            # Add collateral for script transactions
+            if builder.has_plutus_script():
+                collateral_utxo = await self.chain_query.get_or_create_collateral(
+                    change_address, signing_key, self.config.extra_collateral
+                )
+                if collateral_utxo:
+                    builder.collaterals.append(collateral_utxo)
+                else:
+                    raise CollateralError("Failed to get collateral")
+
+            # Build transaction
+            tx_body = builder.build(
+                change_address=change_address,
+                validity_start=self.config.validity_offset,
+                ttl=self.config.ttl_offset,
+            )
+
+            # Create initial witness set
+            witness_set = builder.build_witness_set()
+            witness_set.vkey_witnesses = []
+
+            return Transaction(
+                tx_body, witness_set, auxiliary_data=builder.auxiliary_data
+            )
+
+        except Exception as e:
+            raise TransactionBuildError(f"Failed to build transaction: {e}") from e
+
+    def sign_tx(
+        self, tx: Transaction, signing_key: PaymentSigningKey | ExtendedSigningKey
+    ) -> None:
+        """Sign transaction with key."""
+        signature = signing_key.sign(tx.transaction_body.hash())
+
+        # Initialize vkey_witnesses if needed
+        if tx.transaction_witness_set.vkey_witnesses is None:
+            tx.transaction_witness_set.vkey_witnesses = []
+
+        # Add witness
+        tx.transaction_witness_set.vkey_witnesses.append(
+            VerificationKeyWitness(signing_key.to_verification_key(), signature)
+        )
+
+    async def sign_and_submit(
+        self,
+        tx: Transaction,
+        signing_keys: list[PaymentSigningKey | ExtendedSigningKey],
+        wait_confirmation: bool = True,
+    ) -> tuple[str, Transaction]:
+        """Sign with multiple keys and submit."""
+        try:
+            # Sign with all provided keys
+            for key in signing_keys:
+                self.sign_tx(tx, key)
+
+            # Submit and wait for confirmation if requested
+            status, submitted_tx = await self.chain_query.submit_tx(
+                tx, wait_confirmation=wait_confirmation
+            )
+
+            if status not in ["confirmed", "submitted"]:
+                raise TransactionSubmissionError(
+                    f"Transaction failed with status: {status}"
+                )
+
+            return status, submitted_tx
+
+        except Exception as e:
+            raise TransactionSubmissionError(
+                f"Failed to submit transaction: {e}"
+            ) from e
+
+    async def estimate_execution_units(self, tx: Transaction) -> dict[str, int]:
+        """Estimate execution units for transaction."""
+        try:
+            if isinstance(self.chain_query.context, BlockFrostChainContext):
+                return self.chain_query.context.evaluate_tx_cbor(tx.to_cbor())
+            return await self.chain_query.context.evaluate_tx_cbor(tx.to_cbor())
+
+        except Exception as e:
+            raise TransactionBuildError(
+                f"Failed to estimate execution units: {e}"
+            ) from e
