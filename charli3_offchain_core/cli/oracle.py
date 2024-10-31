@@ -16,6 +16,7 @@ from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     Asset,
     FeeConfig,
+    NoDatum,
     OracleConfiguration,
     RewardPrices,
 )
@@ -139,7 +140,7 @@ async def deploy(config: Path) -> None:
         )
 
         fee_config = FeeConfig(
-            rate_nft=None,  # No rate NFT for now
+            rate_nft=NoDatum(),
             reward_prices=RewardPrices(
                 node_fee=deployment_config.fees.node_fee,
                 platform_fee=deployment_config.fees.platform_fee,
