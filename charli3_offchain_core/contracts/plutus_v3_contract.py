@@ -1,6 +1,5 @@
 """ Module for PlutusV3Contract class, an extension of PlutusContract for Plutus V3 scripts """
 
-import copy
 import json
 import typing
 
@@ -10,16 +9,9 @@ from opshin.util import datum_to_cbor
 from pycardano import Datum, PlutusV3Script
 from uplc import flatten
 
-EMPTY_PARAMETER_TYPES: list[tuple[str, type[Datum]]] = []
-
 
 class PlutusV3Contract(PlutusContract):
-    """
-    Extension of PlutusContract that handles PlutusV3Script instead of PlutusV2Script.
-    Inherits all functionality from PlutusContract while modifying only version-specific methods.
-    """
-
-    contract: PlutusV3Script  # Type hint for better IDE support
+    """Extension of PlutusContract for Plutus V3 scripts."""
 
     def __init__(
         self,
@@ -33,14 +25,11 @@ class PlutusV3Contract(PlutusContract):
         description: str | None = None,
         license: str | None = None,
     ) -> None:
-        if parameter_types is None:
-            parameter_types = EMPTY_PARAMETER_TYPES
-        # Call parent's __init__ with provided arguments
         super().__init__(
             contract=contract,
             datum_type=datum_type,
             redeemer_type=redeemer_type,
-            parameter_types=parameter_types,
+            parameter_types=parameter_types or [],
             purpose=purpose,
             version=version,
             title=title,
@@ -50,7 +39,7 @@ class PlutusV3Contract(PlutusContract):
 
     @property
     def plutus_json(self) -> str:
-        """Override to specify PlutusV3Script type"""
+        """Return Plutus V3 script JSON representation."""
         return json.dumps(
             {
                 "type": "PlutusScriptV3",
@@ -62,49 +51,41 @@ class PlutusV3Contract(PlutusContract):
 
     @property
     def blueprint(self) -> dict:
-        """Override to specify V3 in the preamble"""
+        """Return blueprint with V3 specification."""
         blueprint_data = super().blueprint
         blueprint_data["preamble"]["plutusVersion"] = "v3"
         return blueprint_data
 
     def apply_parameter(self, *args: Datum) -> "PlutusV3Contract":
-        """
-        Override to return PlutusV3Contract instead of PlutusContract
-        """
+        """Apply parameters to contract."""
         if len(self.parameter_types) < len(args):
             raise ValueError(
-                f"Applying too many parameters to contract, allowed amount: {self.parameter_types}, but got {len(args)}"
+                f"Too many parameters: allowed {len(self.parameter_types)}, got {len(args)}"
             )
-        new_parameter_types = copy.copy(self.parameter_types)
-        for _ in args:
-            new_parameter_types.pop(0)
-        new_contract_contract = apply_parameters(self.contract, *args)
-        new_contract = PlutusV3Contract(
-            new_contract_contract,
+
+        new_params = self.parameter_types[len(args) :]
+        new_contract = apply_parameters(self.contract, *args)
+
+        return PlutusV3Contract(
+            new_contract,
             self.datum_type,
             self.redeemer_type,
-            new_parameter_types,
+            new_params,
             self.purpose,
             self.version,
             self.title,
             self.description,
         )
-        return new_contract
 
 
-# Helper functions specific to V3 Script handling
 def apply_parameters(script: PlutusV3Script, *args: Datum) -> PlutusV3Script:
-    """Helper function to apply parameters to a PlutusV3Script"""
+    """Apply parameters to PlutusV3Script."""
     return _build(_apply_parameters(uplc.unflatten(script), *args))
 
 
 def _apply_parameters(script: uplc.ast.Program, *args: Datum) -> uplc.ast.Program:
-    """
-    Expects a UPLC program and returns the build artifacts from applying parameters to it
-    """
-    # apply parameters from the command line to the contract (instantiates parameterized contract!)
+    """Apply parameters to UPLC program."""
     code = script.term
-    # UPLC lambdas may only take one argument at a time, so we evaluate by repeatedly applying
     for d in args:
         code = uplc.ast.Apply(
             code,
@@ -114,11 +95,9 @@ def _apply_parameters(script: uplc.ast.Program, *args: Datum) -> uplc.ast.Progra
                 else d
             ),
         )
-    code = uplc.ast.Program((1, 0, 0), code)
-    return code
+    return uplc.ast.Program((1, 0, 0), code)
 
 
 def _build(contract: uplc.ast.Program) -> PlutusV3Script:
-    """Helper function to build a PlutusV3Script from a UPLC program"""
-    cbor = flatten(contract)
-    return PlutusV3Script(cbor)
+    """Build PlutusV3Script from UPLC program."""
+    return PlutusV3Script(flatten(contract))

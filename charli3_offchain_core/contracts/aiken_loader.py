@@ -2,8 +2,9 @@
 
 import json
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar, TypedDict
 
 from pycardano import (
     PlutusV3Script,
@@ -24,82 +25,100 @@ from charli3_offchain_core.models.oracle_redeemers import (
 )
 
 
+class ValidatorType(str, Enum):
+    """Oracle validator types."""
+
+    SPEND = "oracle.oracle_manager.spend"
+    MINT = "oracle.oracle_nfts.mint"
+
+
+class ValidatorConfig(TypedDict, total=False):
+    """Type definition for validator configuration."""
+
+    datum_type: tuple[str, type[OracleDatum]]
+    redeemer_type: tuple[str, type[MintingRedeemer | OracleRedeemer]]
+    parameter_types: list[tuple[str, type[Any]]]
+    purpose: list[Purpose]
+
+
 @dataclass
 class OracleContracts:
-    """Container for Oracle spend validator and mint policy"""
+    """Oracle spend validator and mint policy container."""
 
     spend: PlutusV3Contract
     mint: PlutusV3Contract
 
-    @classmethod
-    def from_blueprint(cls, blueprint_path: str | Path) -> "OracleContracts":
-        """Load Oracle contracts from plutus.json blueprint"""
-        blueprint_path = Path(blueprint_path)
-        if not blueprint_path.exists():
-            raise FileNotFoundError(f"Blueprint file not found: {blueprint_path}")
-
-        try:
-            with blueprint_path.open(encoding="utf-8") as f:
-                blueprint = json.load(f)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid blueprint JSON: {e}") from e
-
-        if blueprint["preamble"].get("plutusVersion") != "v3":
-            raise ValueError("Only Plutus V3 contracts supported")
-
-        validators = blueprint["validators"]
-        spend_validator = None
-        mint_validator = None
-
-        for validator in validators:
-            title = validator["title"]
-            if title == "oracle.oracle_manager.spend":
-                spend_validator = cls._create_spend_contract(validator)
-            elif title == "oracle.oracle_nfts.mint":
-                mint_validator = cls._create_mint_contract(validator)
-
-        if not spend_validator or not mint_validator:
-            raise ValueError("Missing required validators in blueprint")
-
-        return cls(spend=spend_validator, mint=mint_validator)
-
-    @staticmethod
-    def _create_spend_contract(validator: dict[str, Any]) -> PlutusV3Contract:
-        """Create spend validator contract"""
-        contract = PlutusV3Script(bytes.fromhex(validator["compiledCode"]))
-
-        # Uses predefined OracleDatum and OracleRedeemer types
-        return PlutusV3Contract(
-            contract=contract,
-            datum_type=("own_datum", OracleDatum),
-            redeemer_type=("redeemer", OracleRedeemer),
-            parameter_types=[("config", OracleConfiguration)],
-            purpose=[Purpose.spending],
-            version="1.0.0",
-            title=validator["title"],
-        )
-
-    @staticmethod
-    def _create_mint_contract(validator: dict[str, Any]) -> PlutusV3Contract:
-        """Create minting policy contract"""
-        contract = PlutusV3Script(bytes.fromhex(validator["compiledCode"]))
-
-        # Uses predefined MintingRedeemer type
-        return PlutusV3Contract(
-            contract=contract,
-            redeemer_type=("redeemer", MintingRedeemer),
-            parameter_types=[
+    VALIDATOR_CONFIGS: ClassVar[dict[ValidatorType, ValidatorConfig]] = {
+        ValidatorType.SPEND: {
+            "datum_type": ("own_datum", OracleDatum),
+            "redeemer_type": ("redeemer", OracleRedeemer),
+            "parameter_types": [("config", OracleConfiguration)],
+            "purpose": [Purpose.spending],
+        },
+        ValidatorType.MINT: {
+            "redeemer_type": ("redeemer", MintingRedeemer),
+            "parameter_types": [
                 ("utxo_ref", TransactionOutput),
                 ("config", OracleConfiguration),
                 ("oracle_script_hash", ScriptHash),
             ],
-            purpose=[Purpose.minting],
-            version="1.0.0",
+            "purpose": [Purpose.minting],
+        },
+    }
+
+    ERROR_MESSAGES: ClassVar[dict[str, str]] = {
+        "plutus_version": "Only Plutus V3 contracts supported",
+        "missing_validators": "Missing required validators",
+        "invalid_blueprint": "Invalid blueprint: {error}",
+    }
+
+    @classmethod
+    def from_blueprint(cls, blueprint_path: str | Path) -> "OracleContracts":
+        """Load Oracle contracts from blueprint."""
+        try:
+            blueprint = json.loads(Path(blueprint_path).read_text(encoding="utf-8"))
+
+            if blueprint["preamble"].get("plutusVersion") != "v3":
+                raise ValueError(cls.ERROR_MESSAGES["plutus_version"])
+
+            validators = {v["title"]: v for v in blueprint["validators"]}
+            required = set(ValidatorType)
+
+            if not all(t.value in validators for t in required):
+                raise ValueError(cls.ERROR_MESSAGES["missing_validators"])
+
+            contracts = {
+                "spend": cls._create_validator(
+                    validators[ValidatorType.SPEND.value],
+                    cls.VALIDATOR_CONFIGS[ValidatorType.SPEND],
+                ),
+                "mint": cls._create_validator(
+                    validators[ValidatorType.MINT.value],
+                    cls.VALIDATOR_CONFIGS[ValidatorType.MINT],
+                ),
+            }
+
+            return cls(**contracts)
+
+        except (json.JSONDecodeError, FileNotFoundError) as e:
+            raise ValueError(
+                cls.ERROR_MESSAGES["invalid_blueprint"].format(error=e)
+            ) from e
+
+    @staticmethod
+    def _create_validator(
+        validator: dict[str, Any], config: ValidatorConfig
+    ) -> PlutusV3Contract:
+        """Create PlutusV3Contract from validator config."""
+        return PlutusV3Contract(
+            contract=PlutusV3Script(bytes.fromhex(validator["compiledCode"])),
             title=validator["title"],
+            version="1.0.0",
+            **config
         )
 
     def apply_spend_params(self, config: OracleConfiguration) -> PlutusV3Contract:
-        """Apply parameters to spend validator"""
+        """Apply parameters to spend validator."""
         return self.spend.apply_parameter(config)
 
     def apply_mint_params(
@@ -108,8 +127,8 @@ class OracleContracts:
         config: OracleConfiguration,
         oracle_script_hash: ScriptHash,
     ) -> PlutusV3Contract:
-        """Apply parameters to mint policy"""
-        tx_utxo_ref = OutputReference(
+        """Apply parameters to mint policy."""
+        tx_ref = OutputReference(
             utxo_ref.input.transaction_id.payload, utxo_ref.input.index
         )
-        return self.mint.apply_parameter(tx_utxo_ref, config, oracle_script_hash)
+        return self.mint.apply_parameter(tx_ref, config, oracle_script_hash)
