@@ -50,6 +50,44 @@ class TransactionManager:
         self.chain_query = chain_query
         self.config = config or TransactionConfig()
 
+    async def _get_collateral(
+        self,
+        address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+    ) -> UTxO | None:
+        """Get or create collateral UTxO for script transaction."""
+        return await self.chain_query.get_or_create_collateral(
+            address, signing_key, self.config.extra_collateral
+        )
+
+    async def _prepare_builder(
+        self,
+        builder: TransactionBuilder,
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        metadata: dict | None = None,
+        required_signers: list[VerificationKeyHash] | None = None,
+    ) -> None:
+        """Prepare transaction builder with inputs, collateral, and metadata."""
+        # Add required signers
+        if required_signers:
+            builder.required_signers.extend(required_signers)
+
+        # Add metadata if provided
+        if metadata:
+            builder.auxiliary_data = metadata
+
+        # Handle collateral first if needed for script transactions
+        if len(builder.scripts) > 0:
+            collateral_utxo = await self._get_collateral(change_address, signing_key)
+            if not collateral_utxo:
+                raise CollateralError("Failed to get collateral")
+            builder.collaterals.append(collateral_utxo)
+
+        # Add input address for fees/balancing after collateral is handled
+        # This ensures we have the latest UTxO state
+        builder.add_input_address(change_address)
+
     async def build_simple_payment(
         self,
         outputs: list[TransactionOutput],
@@ -156,31 +194,17 @@ class TransactionManager:
     ) -> Transaction:
         """Build transaction with proper inputs and collateral."""
         try:
-            # Add required signers
-            if required_signers:
-                builder.required_signers.extend(required_signers)
-
-            # Add metadata if provided
-            if metadata:
-                builder.auxiliary_data = metadata
-
-            # Add input address for fees/balancing
-            builder.add_input_address(change_address)
-
-            # Add collateral for script transactions
-            if len(builder.scripts) > 0:
-                collateral_utxo = await self.chain_query.get_or_create_collateral(
-                    change_address, signing_key, self.config.extra_collateral
-                )
-                if collateral_utxo:
-                    builder.collaterals.append(collateral_utxo)
-                else:
-                    raise CollateralError("Failed to get collateral")
-
-            # Build transaction
-            tx_body = builder.build(
+            # Prepare builder with all necessary components
+            await self._prepare_builder(
+                builder=builder,
                 change_address=change_address,
+                signing_key=signing_key,
+                metadata=metadata,
+                required_signers=required_signers,
             )
+
+            # Build transaction components
+            tx_body = builder.build(change_address=change_address)
 
             # Create initial witness set
             witness_set = builder.build_witness_set()
