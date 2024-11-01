@@ -77,22 +77,6 @@ class NetworkConfig:
 
 
 @dataclass
-class AddressConfig:
-    """Address configuration."""
-
-    admin_address: str | None = None
-    script_address: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "AddressConfig":
-        """Create address config from dictionary."""
-        return cls(
-            admin_address=data["admin_address"],
-            script_address=data["script_address"],
-        )
-
-
-@dataclass
 class TokenConfig:
     """Token configuration."""
 
@@ -156,7 +140,6 @@ class DeploymentConfig:
     transport_count: int = 4
     blueprint_path: Path = Path("artifacts/plutus.json")
     create_reference: bool = True
-    create_nft_reference: bool = False
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "DeploymentConfig":
@@ -180,7 +163,6 @@ class DeploymentConfig:
             transport_count=data.get("transport_count", 4),
             blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),
             create_reference=data.get("create_reference", True),
-            create_nft_reference=data.get("create_nft_reference", False),
         )
 
 

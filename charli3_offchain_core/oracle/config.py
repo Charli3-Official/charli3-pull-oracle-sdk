@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from pycardano import Network
 
-MinimumRewardTransportCount = 4
+MINIMUM_REWARD_TRANSPORT_COUNT = 4
 
 
 @dataclass
@@ -39,7 +39,7 @@ class OracleTokenNames:
 
 @dataclass
 class OracleDeploymentConfig:
-    """Configuration for oracle deployment"""
+    """Configuration for oracle deployment."""
 
     network: Network
     reward_transport_count: int
@@ -47,7 +47,7 @@ class OracleDeploymentConfig:
     token_names: OracleTokenNames | None = None
 
     def __post_init__(self) -> None:
-        """Set default values based on network"""
+        """Validate and set default configuration."""
         if self.token_names is None:
             self.token_names = OracleTokenNames.from_network(self.network)
 
@@ -55,19 +55,18 @@ class OracleDeploymentConfig:
             self.disallow_less_than_four_nodes = self.network == Network.MAINNET
 
         if self.reward_transport_count <= 0:
-            raise ValueError("reward_transport_count must be greater than 0")
+            raise ValueError("Reward transport count must be greater than 0")
 
         if (
             self.disallow_less_than_four_nodes
-            and self.reward_transport_count < MinimumRewardTransportCount
+            and self.reward_transport_count < MINIMUM_REWARD_TRANSPORT_COUNT
         ):
             raise ValueError("Mainnet requires at least 4 reward transport UTxOs")
 
 
 @dataclass
 class OracleScriptConfig:
-    """Configuration for oracle reference scripts"""
+    """Configuration for oracle reference scripts."""
 
     create_manager_reference: bool = True
-    create_nft_reference: bool = False
-    reference_ada_amount: int = 55_000_000  # Default 55 ADA for reference scripts
+    reference_ada_amount: int = 55_000_000  # 55 ADA for reference scripts

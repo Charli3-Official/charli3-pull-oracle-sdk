@@ -22,6 +22,7 @@ ignore = [
     "B905",    # `zip()` without an explicit `strict=` parameter
     "ANN101",  # Missing type annotation for self in method
     "ANN102",  # Missing type annotation for cls in classmethod
+    "ANN401", # Allow Any
     "PLR0913", # Too many arguments to function call
     "PLR2004", # Magic number
 ]

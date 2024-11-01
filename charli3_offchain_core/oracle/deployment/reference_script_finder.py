@@ -3,11 +3,10 @@
 import logging
 
 from opshin.builder import PlutusContract
-from pycardano import PlutusV3Script, UTxO
+from pycardano import Network, PlutusV3Script, UTxO
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
-from charli3_offchain_core.models.oracle_datums import OracleConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -21,57 +20,43 @@ class ReferenceScriptFinder:
 
     async def find_manager_reference(
         self,
-        config: OracleConfiguration,
     ) -> UTxO | None:
         """
         Find existing oracle manager reference script with matching configuration.
-
-        Args:
-            config: Oracle configuration to match
 
         Returns:
             UTxO containing matching reference script if found, None otherwise
         """
         try:
-            # Get parameterized contract for address
-            manager_contract = self.contracts.apply_spend_params(config)
+            # Get script hash
+            script_hash = self.contracts.spend.script_hash
+
+            # Get address based on network
             script_address = (
-                manager_contract.mainnet_addr
-                if self.chain_query.context.network.MAINNET
-                else manager_contract.testnet_addr
+                self.contracts.spend.mainnet_addr
+                if self.chain_query.context.network == Network.MAINNET
+                else self.contracts.spend.testnet_addr
             )
 
             # Get UTxOs at script address
             utxos = await self.chain_query.get_utxos(script_address)
-
-            # Filter for reference scripts
-            reference_utxos = [utxo for utxo in utxos if utxo.output.script is not None]
+            reference_utxos = [utxo for utxo in utxos if utxo.output.script]
 
             if not reference_utxos:
                 return None
 
-            # Get parameterized manager contract for comparison
-            target_contract = self.contracts.apply_spend_params(config)
-            target_hash = target_contract.script_hash
-
-            # Find matching script
             for utxo in reference_utxos:
-                script = utxo.output.script
-                if await self._validate_manager_script(script, target_hash):
-                    logger.info(
-                        "Found matching manager reference script: %s",
-                        utxo.output.script,
-                    )
+                if await self._validate_script(utxo.output.script, script_hash):
+                    logger.info("Found matching manager reference script")
                     return utxo
 
-            logger.info("No matching manager reference script found")
             return None
 
         except Exception as e:  # pylint: disable=broad-except
             logger.error("Error finding manager reference script: %s", e)
             return None
 
-    async def _validate_manager_script(
+    async def _validate_script(
         self,
         script: PlutusV3Script,
         target_hash: bytes,
@@ -87,10 +72,7 @@ class ReferenceScriptFinder:
             True if script matches target
         """
         try:
-            # We can validate by comparing script hashes
-            script_hash = PlutusContract(script).script_hash
-            return script_hash == target_hash
-
+            return PlutusContract(script).script_hash == target_hash
         except Exception as e:  # pylint: disable=broad-except
-            logger.error("Error validating manager script: %s", e)
+            logger.error("Error validating script: %s", e)
             return False

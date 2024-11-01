@@ -4,10 +4,7 @@ import logging
 from pathlib import Path
 
 import click
-from pycardano import (
-    BlockFrostChainContext,
-    Network,
-)
+from pycardano import BlockFrostChainContext
 from pycardano.backend.kupo import KupoChainContextExtension
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -29,20 +26,22 @@ from charli3_offchain_core.oracle.deployment.orchestrator import (
     DeploymentStatus,
     OracleDeploymentOrchestrator,
 )
-from charli3_offchain_core.oracle.deployment.reference_script_builder import (
-    ReferenceScriptBuilder,
-    ReferenceScriptResult,
-)
 
 from .base import (
     create_chain_context,
     derive_deployment_addresses,
-    format_status_update,
     load_keys_with_validation,
     validate_deployment_config,
     validate_platform_auth_utxo,
 )
 from .config.deployment import DeploymentConfig
+from .config.formatting import (
+    format_deployment_summary,
+    format_status_update,
+    print_confirmation_prompt,
+    print_header,
+    print_progress,
+)
 from .config.utils import async_command
 
 logger = logging.getLogger(__name__)
@@ -76,27 +75,60 @@ async def deploy(config: Path) -> None:
     charli3 oracle deploy --config deploy-testnet.yaml
     """
     try:
-        # Load configuration
-        click.echo("Loading configuration...")
+        # Load and validate configuration
+        print_header("Deployment Configuration")
+        print_progress("Loading configuration")
         deployment_config = DeploymentConfig.from_yaml(config)
-        contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
-
-        # Validate configuration
         validate_deployment_config(deployment_config)
 
-        # Load keys with validation
-        keys = load_keys_with_validation(deployment_config, contracts)
-        addresses = derive_deployment_addresses(deployment_config, contracts)
+        # Load base contracts
+        print_progress("Loading base contracts from blueprint")
+        base_contracts = OracleContracts.from_blueprint(
+            deployment_config.blueprint_path
+        )
+        logger.debug("Base contract hash: %s", base_contracts.spend.script_hash)
 
-        # Show derived addresses
-        click.echo("\nDeployment Addresses:")
-        click.echo(f"Admin Address: {addresses.admin_address}")
-        click.echo(f"Script Address: {addresses.script_address}")
+        # Create oracle configuration
+        print_progress("Creating oracle configuration")
+        oracle_config = OracleConfiguration(
+            platform_auth_nft=bytes.fromhex(
+                deployment_config.tokens.platform_auth_policy
+            ),
+            closing_period_length=deployment_config.timing.closing_period,
+            reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
+            fee_token=Asset(
+                policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
+                name=bytes.fromhex(deployment_config.tokens.fee_token_name),
+            ),
+        )
 
-        if not click.confirm("Continue with these addresses?"):
+        # Parameterize contracts
+        logger.info("Parameterizing contracts...")
+        parameterized_contracts = OracleContracts(
+            spend=base_contracts.apply_spend_params(oracle_config),
+            mint=base_contracts.mint,  # Mint policy is parameterized later with UTxO
+        )
+        logger.info(
+            "Parameterized contract hash: %s", parameterized_contracts.spend.script_hash
+        )
+
+        # Load keys and derive addresses using parameterized contracts
+        keys = load_keys_with_validation(deployment_config, parameterized_contracts)
+        addresses = derive_deployment_addresses(
+            deployment_config, parameterized_contracts
+        )
+
+        # Display addresses and get confirmation
+        if not print_confirmation_prompt(
+            {
+                "Admin Address": addresses.admin_address,
+                "Script Address": addresses.script_address,
+            }
+        ):
             raise click.Abort()
 
-        # Initialize chain context based on backend
+        # Initialize deployment
+        print_progress("Initializing deployment components")
         chain_context = create_chain_context(deployment_config)
 
         # Initialize core components
@@ -115,18 +147,10 @@ async def deploy(config: Path) -> None:
 
         tx_manager = TransactionManager(chain_query)
 
-        # Create orchestrator
-        orchestrator = OracleDeploymentOrchestrator(
-            chain_query=chain_query,
-            contracts=contracts,
-            tx_manager=tx_manager,
-            status_callback=format_status_update,
-        )
-
         # Create configurations
         script_config = OracleScriptConfig(
             create_manager_reference=deployment_config.create_reference,
-            create_nft_reference=deployment_config.create_nft_reference,
+            reference_ada_amount=55_000_000,
         )
 
         oracle_deployment_config = OracleDeploymentConfig(
@@ -147,13 +171,28 @@ async def deploy(config: Path) -> None:
             ),
         )
 
-        # Get and validate platform auth UTxO
+        # Validate platform auth UTxO
+        logger.info("Validating platform auth UTxO...")
         utxos = await chain_query.get_utxos(addresses.admin_address)
         platform_utxo = validate_platform_auth_utxo(
             utxos, deployment_config.tokens.platform_auth_policy
         )
+        logger.info(
+            "Using platform UTxO: %s#%s",
+            platform_utxo.input.transaction_id,
+            platform_utxo.input.index,
+        )
 
-        # Deploy oracle
+        # Deploy oracle using parameterized contracts
+        logger.info("Initializing deployment orchestrator...")
+        orchestrator = OracleDeploymentOrchestrator(
+            chain_query=chain_query,
+            contracts=parameterized_contracts,  # Using parameterized contracts
+            tx_manager=tx_manager,
+            status_callback=format_status_update,
+        )
+
+        print_progress("Starting oracle deployment")
         result: DeploymentResult = await orchestrator.deploy_oracle(
             platform_auth_policy_id=bytes.fromhex(
                 deployment_config.tokens.platform_auth_policy
@@ -173,41 +212,9 @@ async def deploy(config: Path) -> None:
             platform_utxo=platform_utxo,
         )
 
-        # Show final results
+        # Display results
         if result.status == DeploymentStatus.COMPLETED:
-            click.secho("\nDeployment completed successfully!", fg="green", bold=True)
-
-            if result.reference_scripts.manager_tx:
-                click.echo("✓ Manager reference script created")
-                click.echo(f"  Address: {addresses.script_address}")
-                click.echo(f"  TxHash: {result.reference_scripts.manager_tx.id}")
-
-            if result.reference_scripts.nft_tx:
-                nft_contract = contracts.apply_mint_params(
-                    platform_utxo.output, config, contracts.spend.script_hash
-                )
-                nft_address = (
-                    nft_contract.mainnet_addr
-                    if deployment_config.network.network == Network.MAINNET
-                    else nft_contract.testnet_addr
-                )
-                click.echo("✓ NFT reference script created")
-                click.echo(f"  Address: {nft_address}")
-                click.echo(f"  TxHash: {result.reference_scripts.nft_tx.id}")
-
-            if result.start_result:
-                click.echo("\nOracle UTxOs:")
-                click.echo("✓ Settings UTxO created")
-                click.echo("✓ Reward Account UTxO created")
-                click.echo(
-                    f"✓ {len(result.start_result.reward_transport_utxos)} Reward Transport UTxOs created"
-                )
-                click.echo(
-                    f"✓ {len(result.start_result.agg_state_utxos)} Aggregation State UTxOs created"
-                )
-                click.echo(
-                    f"\nStart Transaction Hash: {result.start_result.transaction.id}"
-                )
+            format_deployment_summary(result)
         else:
             raise click.ClickException(f"Deployment failed: {result.error}")
 
@@ -226,44 +233,18 @@ async def deploy(config: Path) -> None:
 @click.option(
     "--force/--no-force",
     default=False,
-    help="Force creation even if scripts exist",
-)
-@click.option(
-    "--manager/--no-manager",
-    default=True,
-    help="Create manager reference script",
-)
-@click.option(
-    "--nft/--no-nft",
-    default=False,
-    help="Create NFT policy reference script",
+    help="Force creation even if script exists",
 )
 @async_command
-async def create_reference_scripts(
-    config: Path,
-    force: bool,
-    manager: bool,
-    nft: bool,
-) -> None:
-    """Create oracle reference scripts separately.
-
-    This command creates reference scripts without deploying a full oracle.
-    Useful for creating shared reference scripts that can be reused.
-
-    Example:
-    \b
-    charli3 oracle create-reference-scripts \\
-        --config deploy-testnet.yaml \\
-        --manager \\
-        --nft
-    """
+async def create_reference_script(config: Path, force: bool) -> None:
+    """Create oracle manager reference script separately."""
     try:
-        # Load configuration
+        # Load configuration and contracts
         click.echo("Loading configuration...")
         deployment_config = DeploymentConfig.from_yaml(config)
         contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
 
-        # Load signing key
+        # Load keys and initialize components
         keys = load_keys_with_validation(deployment_config, contracts)
         addresses = derive_deployment_addresses(deployment_config, contracts)
 
@@ -286,148 +267,44 @@ async def create_reference_scripts(
 
         tx_manager = TransactionManager(chain_query)
 
-        # Create oracle configuration
-        config = OracleConfiguration(
-            platform_auth_nft=bytes.fromhex(
-                deployment_config.tokens.platform_auth_policy
-            ),
-            closing_period_length=deployment_config.timing.closing_period,
-            reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
-            fee_token=Asset(
-                policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
-                name=bytes.fromhex(deployment_config.tokens.fee_token_name),
-            ),
-        )
-
-        # Initialize script builder with status updates
-        script_builder = ReferenceScriptBuilder(
-            chain_query=chain_query,
-            contracts=contracts,
-            tx_manager=tx_manager,
-        )
-
-        # Get platform auth UTxO for NFT script if needed
-        platform_utxo = None
-        if nft:
-            utxos = await chain_query.get_utxos(addresses.admin_address)
-            if not utxos:
-                raise click.ClickException(
-                    "No UTxOs found at reference address for NFT script creation"
-                )
-            platform_utxo = utxos[0]
-
         # Create script config
         script_config = OracleScriptConfig(
-            create_manager_reference=manager,
-            create_nft_reference=nft,
-            reference_ada_amount=55_000_000,  # 55 ADA for reference scripts
+            create_manager_reference=True,
+            reference_ada_amount=55_000_000,
         )
 
-        # Check existing scripts if not forcing
-        if not force and manager:
-            click.echo("Checking for existing manager reference script...")
-            existing_manager = (
-                await script_builder.script_finder.find_manager_reference(config)
-            )
-            if existing_manager:
-                manager_contract = contracts.apply_spend_params(config)
-                script_address = (
-                    manager_contract.mainnet_addr
-                    if deployment_config.network.network == Network.MAINNET
-                    else manager_contract.testnet_addr
-                )
+        # Check for existing script
+        if not force:
+            click.echo("Checking for existing reference script...")
+            existing = await chain_query.get_utxos(addresses.script_address)
+            if existing:
                 click.echo(
-                    "✓ Found existing manager reference script at: "
-                    f"{script_address}\n"
-                    f"  UTxO: {existing_manager.input.transaction_id}#{existing_manager.input.index}"
+                    f"Found existing reference script at: {addresses.script_address}"
                 )
-                manager = False
+                if not click.confirm("Continue with creation?"):
+                    return
 
-        if not (manager or nft):
-            click.echo("No reference scripts to create!")
-            return
+        # Create and submit transaction
+        click.echo("\nCreating reference script...")
 
-        # Create reference scripts
-        click.echo("\nPreparing reference script transactions...")
-
-        result = await script_builder.prepare_reference_scripts(
-            config=config,
-            script_config=script_config,
+        result = await tx_manager.build_reference_script_tx(
+            script=contracts.spend.contract,
             script_address=addresses.script_address,
             admin_address=addresses.admin_address,
             signing_key=keys.payment_sk,
-            platform_utxo=platform_utxo,
+            reference_ada=script_config.reference_ada_amount,
         )
 
-        # Submit transactions
-        click.echo("\nSubmitting transactions...")
-
-        try:
-            if result.manager_tx:
-                click.echo("Creating manager reference script...")
-                status, _ = await tx_manager.sign_and_submit(
-                    result.manager_tx, [keys.payment_sk]
-                )
-                click.echo(
-                    f"✓ Manager reference script created: {result.manager_tx.id}, status: {status}"
-                )
-
-            if result.nft_tx:
-                click.echo("Creating NFT reference script...")
-                status, _ = await tx_manager.sign_and_submit(
-                    result.nft_tx, [keys.payment_sk]
-                )
-                click.echo(
-                    f"✓ NFT reference script created: {result.nft_tx.id}, status: {status}"
-                )
-
-        except Exception as e:
-            raise click.ClickException(f"Failed to submit transactions: {e}") from e
-
-        click.secho("\nReference script creation completed!", fg="green")
+        status, tx = await tx_manager.sign_and_submit(result, [keys.payment_sk])
+        if status == "confirmed":
+            click.secho("\n✓ Reference script created successfully!", fg="green")
+            click.echo(f"Transaction: {tx.id}")
+        else:
+            raise click.ClickException(f"Transaction failed with status: {status}")
 
     except Exception as e:
         logger.error("Reference script creation failed", exc_info=e)
         raise click.ClickException(str(e)) from e
-
-
-def show_reference_script_info(
-    result: ReferenceScriptResult,
-    force: bool,
-    manager: bool,
-    nft: bool,
-) -> None:
-    """Display reference script information."""
-    click.echo("\nReference Script Details:")
-    click.echo("-" * 50)
-
-    if manager:
-        if result.manager_utxo:
-            click.echo("\nManager Reference Script:")
-            click.echo(
-                f"✓ UTxO: {result.manager_utxo.input.transaction_id}#{result.manager_utxo.input.index}"
-            )
-            click.echo(f"✓ Address: {result.manager_utxo.output.address}")
-            click.echo(
-                f"✓ Ada: {result.manager_utxo.output.amount.coin / 1_000_000:.6f}"
-            )
-        elif force:
-            click.echo("\nManager Reference Script: Not created (force-skipped)")
-        else:
-            click.echo("\nManager Reference Script: Not needed")
-
-    if nft:
-        if result.nft_utxo:
-            click.echo("\nNFT Reference Script:")
-            click.echo(
-                f"✓ UTxO: {result.nft_utxo.input.transaction_id}#{result.nft_utxo.input.index}"
-            )
-            click.echo(f"✓ Address: {result.nft_utxo.output.address}")
-            click.echo(f"✓ Ada: {result.nft_utxo.output.amount.coin / 1_000_000:.6f}")
-        elif force:
-            click.echo("\nNFT Reference Script: Not created (force-skipped)")
-        else:
-            click.echo("\nNFT Reference Script: Not needed")
 
 
 if __name__ == "__main__":
