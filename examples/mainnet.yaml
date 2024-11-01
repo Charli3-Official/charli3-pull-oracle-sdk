@@ -25,15 +25,6 @@ network:
     # payment_vkey_path: "keys/payment.vkey"
     # stake_vkey_path: "keys/stake.vkey"
 
-addresses:
-  # Address where reference scripts will be stored
-  # Must contain platform auth NFT
-  admin_address: "addr1..."
-
-  # Address for oracle UTxOs
-  # Must be a script address derived from validator
-  script_address: "addr1..."
-
 tokens:
   # Platform authorization NFT policy ID (hex)
   platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -65,4 +56,3 @@ blueprint_path: "artifacts/plutus.json"
 
 # Reference script creation options
 create_reference: true # Create manager reference script
-create_nft_reference: false # Skip NFT reference script creation

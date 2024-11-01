@@ -15,6 +15,8 @@ network:
 
 ## Network Configuration
 
+The system supports two backend options: Blockfrost or Kupo/Ogmios. You must configure exactly one of these.
+
 ### Blockfrost Backend
 
 ```yaml
@@ -31,13 +33,15 @@ network:
 network:
   network: "mainnet"  # or "testnet"
   ogmios_kupo:
-    ogmios_url: "http://localhost:1337"
-    kupo_url: "http://localhost:1442"
+    ogmios_url: "ws://localhost:1337"    # WebSocket URL required
+    kupo_url: "http://localhost:1442"     # HTTP URL required
 ```
 
 ### Wallet Configuration
 
-Using mnemonic:
+Two options are available for wallet configuration:
+
+Using mnemonic (recommended for development):
 ```yaml
 network:
   wallet:
@@ -57,12 +61,12 @@ network:
 
 ```yaml
 tokens:
-  # Policy ID of the platform authorization NFT
+  # Policy ID of the platform authorization NFT (28 bytes)
   platform_auth_policy: "hex_policy_id"
 
   # Fee token details
-  fee_token_policy: "hex_policy_id"
-  fee_token_name: "hex_asset_name"
+  fee_token_policy: "hex_policy_id"  # 28 bytes
+  fee_token_name: "hex_asset_name"   # Asset name in hex
 ```
 
 ### Oracle NFT Token Names
@@ -85,10 +89,10 @@ Token names are automatically configured based on the network:
 
 ```yaml
 fees:
-  # Fee for oracle nodes in lovelace
+  # Fee for oracle nodes (in lovelace)
   node_fee: 1000000      # 1 ADA
 
-  # Fee for platform in lovelace
+  # Fee for platform (in lovelace)
   platform_fee: 500000   # 0.5 ADA
 ```
 
@@ -96,16 +100,16 @@ fees:
 
 ```yaml
 timing:
-  # Period during which oracle can be closed (milliseconds)
+  # Period during which oracle can be closed
   closing_period: 3600000        # 1 hour
 
-  # Period for dismissing unclaimed rewards (milliseconds)
-  reward_dismissing_period: 7200000  # 2 hours
+  # Period for dismissing unclaimed rewards
+  reward_dismissing_period: 7200000  # 2 hours (must be > closing_period)
 
-  # Time window for aggregating oracle data (milliseconds)
+  # Time window for aggregating oracle data
   aggregation_liveness: 300000   # 5 minutes
 
-  # Allowed time uncertainty for oracle operations (milliseconds)
+  # Allowed time uncertainty for oracle operations
   time_uncertainty: 60000        # 1 minute
 
   # Multiplier for IQR-based outlier detection (percentage)
@@ -115,63 +119,50 @@ timing:
 ## Deployment Options
 
 ```yaml
-# Number of reward transport UTxOs to create
+# Number of reward transport UTxOs (minimum 4)
 transport_count: 4
 
 # Path to Aiken blueprint file
 blueprint_path: "artifacts/plutus.json"
 
-# Reference script creation options
-create_reference: true       # Create manager reference script
-create_nft_reference: false  # Create NFT policy reference script
-```
-
-## Environment Variables
-
-The configuration system supports using environment variables for sensitive data:
-
-```bash
-export BLOCKFROST_PROJECT_ID="your-project-id"
-export WALLET_MNEMONIC="your 24 word mnemonic"
-```
-
-Then in your YAML:
-```yaml
-network:
-  blockfrost:
-    project_id: $BLOCKFROST_PROJECT_ID
-  wallet:
-    mnemonic: $WALLET_MNEMONIC
+# Create manager reference script
+create_reference: true
 ```
 
 ## Validation Rules
 
-The configuration system enforces several validation rules:
+The configuration system enforces these validation rules:
 
 1. **Network Backend**
    - Must specify either Blockfrost or Kupo/Ogmios backend
-   - Cannot specify both backends simultaneously
+   - Cannot specify both backends
+   - Valid network type (mainnet/testnet)
 
 2. **Wallet Configuration**
    - Must provide either mnemonic or all key file paths
    - Key files must exist and be readable
 
-3. **Transport Count**
-   - Must be greater than 0
-   - Mainnet requires minimum of 4 transport UTxOs
-   - Testnet allows custom transport count
+3. **Token Configuration**
+   - Platform auth policy ID must be 28 bytes
+   - Fee token policy ID must be 28 bytes
+   - Valid hex values for all IDs and names
 
-4. **Timing Parameters**
+4. **Transport Count**
+   - Minimum of 4 transport UTxOs required
+   - Must be greater than 0
+
+5. **Timing Parameters**
    - All periods must be positive
    - Reward dismissing period must be greater than closing period
+   - Valid ranges for all time values
 
-5. **Fees**
+6. **Fees**
    - Both node and platform fees must be positive
-   - Fees are specified in lovelace (1 ADA = 1,000,000 lovelace)
+   - Values in lovelace (1 ADA = 1,000,000 lovelace)
 
-## Example Configurations
+## Example Configuration
 
-### Minimal Testnet Configuration
+### Complete Configuration Example
 
 ```yaml
 network:
@@ -181,56 +172,34 @@ network:
   wallet:
     mnemonic: "your 24 word mnemonic"
 
+tokens:
+  platform_auth_policy: "1234...cdef"  # 28 bytes hex
+  fee_token_policy: "5678...abcd"      # 28 bytes hex
+  fee_token_name: "434841524C4933"     # "CHARLI3" in hex
+
+fees:
+  node_fee: 1000000    # 1 ADA
+  platform_fee: 500000 # 0.5 ADA
+
 timing:
   closing_period: 3600000
   reward_dismissing_period: 7200000
   aggregation_liveness: 300000
   time_uncertainty: 60000
   iqr_multiplier: 150
-
-tokens:
-  platform_auth_policy: "policy_id"
-  fee_token_policy: "policy_id"
-  fee_token_name: "hex_name"
-
-fees:
-  node_fee: 1000000
-  platform_fee: 500000
 
 transport_count: 4
-```
-
-### Full Mainnet Configuration
-
-```yaml
-network:
-  network: "mainnet"
-  ogmios_kupo:
-    ogmios_url: "http://localhost:1337"
-    kupo_url: "http://localhost:1442"
-  wallet:
-    payment_skey_path: "keys/payment.skey"
-    payment_vkey_path: "keys/payment.vkey"
-    stake_vkey_path: "keys/stake.vkey"
-
-tokens:
-  platform_auth_policy: "policy_id"
-  fee_token_policy: "policy_id"
-  fee_token_name: "hex_name"
-
-fees:
-  node_fee: 2000000
-  platform_fee: 1000000
-
-timing:
-  closing_period: 3600000
-  reward_dismissing_period: 7200000
-  aggregation_liveness: 300000
-  time_uncertainty: 60000
-  iqr_multiplier: 150
-
-transport_count: 8
 blueprint_path: "artifacts/plutus.json"
 create_reference: true
-create_nft_reference: true
+```
+
+## Environment Variables
+
+Use environment variables for sensitive data:
+
+```bash
+export BLOCKFROST_PROJECT_ID="your-project-id"
+export WALLET_MNEMONIC="your 24 word mnemonic"
+export OGMIOS_URL="ws://localhost:1337"
+export KUPO_URL="http://localhost:1442"
 ```
