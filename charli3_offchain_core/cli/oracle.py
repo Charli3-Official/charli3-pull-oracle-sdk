@@ -26,13 +26,13 @@ from charli3_offchain_core.oracle.deployment.orchestrator import (
     DeploymentStatus,
     OracleDeploymentOrchestrator,
 )
+from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
 from .base import (
     create_chain_context,
     derive_deployment_addresses,
     load_keys_with_validation,
     validate_deployment_config,
-    validate_platform_auth_utxo,
 )
 from .config.deployment import DeploymentConfig
 from .config.formatting import (
@@ -118,11 +118,17 @@ async def deploy(config: Path) -> None:
             deployment_config, parameterized_contracts
         )
 
+        if deployment_config.multi_sig.platform_addr:
+            platform_address = deployment_config.multi_sig.platform_addr
+        else:
+            platform_address = addresses.admin_address
+
         # Display addresses and get confirmation
         if not print_confirmation_prompt(
             {
                 "Admin Address": addresses.admin_address,
                 "Script Address": addresses.script_address,
+                "Platform Address": platform_address,
             }
         ):
             raise click.Abort()
@@ -170,13 +176,22 @@ async def deploy(config: Path) -> None:
                 platform_fee=deployment_config.fees.platform_fee,
             ),
         )
+        platform_auth_finder = PlatformAuthFinder(chain_query)
 
         # Validate platform auth UTxO
         logger.info("Validating platform auth UTxO...")
-        utxos = await chain_query.get_utxos(addresses.admin_address)
-        platform_utxo = validate_platform_auth_utxo(
-            utxos, deployment_config.tokens.platform_auth_policy
+        platform_utxo = await platform_auth_finder.find_auth_utxo(
+            policy_id=deployment_config.tokens.platform_auth_policy,
+            platform_address=platform_address,
         )
+
+        if platform_utxo is None:
+            logger.error(
+                "No UTxO found with platform auth NFT (policy: %s)",
+                deployment_config.tokens.platform_auth_policy,
+            )
+            return
+
         logger.info(
             "Using platform UTxO: %s#%s",
             platform_utxo.input.transaction_id,

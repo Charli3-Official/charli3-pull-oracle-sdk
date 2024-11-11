@@ -24,6 +24,14 @@ network:
     # payment_vkey_path: "testnet-keys/payment.vkey"
     # stake_vkey_path: "testnet-keys/stake.vkey"
 
+multisig:
+  platform_addr: "addr_test1wqrqgd6jpkkaxwfr29s60p0xrtazlvcpvp2xp6vrtc7rm9g2r63c3" #By Default wallet address is used
+  threshold: 1  # Number of required signatures
+  parties:  #List of pkhs that can sign
+    - 47438589f392891ba49fbbb883c0fdf6892e894aaa5a371ed1f042ac
+    - 33a52f9a29729c61c04cc9fffd1bccd8e04e35b7679cbb2b4dead231
+    - 37e0f2c3cac5af474d028e662181a94249b36a9e4b7bd0a2ebfae6ba
+
 tokens:
   # Test NFT policy ID - can be generated for testing
   platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
