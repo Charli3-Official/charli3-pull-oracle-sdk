@@ -55,7 +55,6 @@ class PlatformAuthBuilder:
         """Build transaction to mint platform authorization NFT."""
         # Build scripts
         validity_slot, minting_script = self.script_builder.build_minting_script()
-        spending_script = self.script_builder.build_spending_script()
         platform_address = self.script_builder.script_address()
 
         # Create token parameters
@@ -73,18 +72,9 @@ class PlatformAuthBuilder:
         builder.ttl = validity_slot
         builder.mint = token_value.multi_asset
         builder.add_minting_script(minting_script)
-
         builder.add_output(
             TransactionOutput(address=platform_address, amount=token_value)
         )
-
-        builder.native_scripts = [spending_script]
-
-        # builder.add_output(
-        #     TransactionOutput(
-        #         address=platform_address, amount=self.REFERENCE_ADA_AMOUNT, script=spending_script
-        #     )
-        # )
 
         # Build and return result
         tx = await self.tx_manager.build_tx(

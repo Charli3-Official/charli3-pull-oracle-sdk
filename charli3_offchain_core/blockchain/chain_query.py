@@ -197,14 +197,10 @@ class ChainQuery:
             raise ChainContextError("No chain context available")
 
         try:
-            print("YOU EITHER GET AN ERROR OR YOU SEE THE PRINT STATEMENT")
             if isinstance(address, str):
                 address = Address.from_primitive(address)
-                print("CONVERTED ADDRESSS")
-                print(address)
             utxos = self.context.utxos(str(address))
 
-            print(utxos)
             return utxos
 
         except ApiError as e:
