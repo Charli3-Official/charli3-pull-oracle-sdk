@@ -38,6 +38,7 @@ from .exceptions import (
 from .network import NetworkConfig, get_network_type
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 NotFoundErrorCode = 404
 
 
@@ -196,10 +197,15 @@ class ChainQuery:
             raise ChainContextError("No chain context available")
 
         try:
+            print("YOU EITHER GET AN ERROR OR YOU SEE THE PRINT STATEMENT")
             if isinstance(address, str):
                 address = Address.from_primitive(address)
+                print("CONVERTED ADDRESSS")
+                print(address)
+            utxos = self.context.utxos(str(address))
 
-            return self.context.utxos(str(address))
+            print(utxos)
+            return utxos
 
         except ApiError as e:
             raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e

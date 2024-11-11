@@ -23,9 +23,10 @@ class PlatformAuthFinder:
     ) -> UTxO | None:
         """Find platform authorization NFT UTxO."""
         try:
+            print("THIS IS THE PLATFORM ADDRESS:")
+            print(platform_address)
             policy_hash = ScriptHash(bytes.fromhex(policy_id))
             utxos = await self.chain_query.get_utxos(platform_address)
-
             return next(
                 (utxo for utxo in utxos if self._has_policy_token(utxo, policy_hash)),
                 None,

@@ -81,6 +81,8 @@ class PlatformAuthScript:
         """Build time-locked native script."""
         if self.is_mock:
             return None
+        if validity_slot == 0:
+            return ScriptAll([self._multisig])
 
         return ScriptAll([self._multisig, InvalidHereAfter(validity_slot)])
 

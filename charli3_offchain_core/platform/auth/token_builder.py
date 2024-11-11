@@ -32,7 +32,7 @@ class AuthBuildResult:
 class PlatformAuthBuilder:
     """Builds transactions for platform authorization NFT"""
 
-    TOKEN_NAME = b"AuthNFTC3"
+    TOKEN_NAME = b"AuthPNFTC3"
     MIN_UTXO_VALUE = 2_000_000
     REFERENCE_ADA_AMOUNT = 5_000_000
 
@@ -75,10 +75,16 @@ class PlatformAuthBuilder:
         builder.add_minting_script(minting_script)
 
         builder.add_output(
-            TransactionOutput(
-                address=platform_address, amount=token_value, script=spending_script
-            )
+            TransactionOutput(address=platform_address, amount=token_value)
         )
+
+        builder.native_scripts = [spending_script]
+
+        # builder.add_output(
+        #     TransactionOutput(
+        #         address=platform_address, amount=self.REFERENCE_ADA_AMOUNT, script=spending_script
+        #     )
+        # )
 
         # Build and return result
         tx = await self.tx_manager.build_tx(
