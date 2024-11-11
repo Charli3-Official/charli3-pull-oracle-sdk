@@ -43,6 +43,12 @@ class TransactionBuildError(TransactionError):
     pass
 
 
+class TransactionConfirmationError(TransactionError):
+    """Raised when transaction confirmation fails."""
+
+    pass
+
+
 class CollateralError(TransactionError):
     """Raised when there are issues with collateral UTxOs."""
 

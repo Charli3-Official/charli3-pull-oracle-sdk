@@ -1,0 +1,71 @@
+"""Oracle deployment configuration models."""
+
+from dataclasses import dataclass
+
+from pycardano import Network
+
+MINIMUM_REWARD_TRANSPORT_COUNT = 3
+
+
+@dataclass
+class OracleTokenNames:
+    """Token names for oracle NFTs"""
+
+    core_settings: str
+    reward_account: str
+    reward_transport: str
+    aggstate: str
+
+    @classmethod
+    def from_network(cls, network: Network) -> "OracleTokenNames":
+        """Create token names configuration based on network"""
+        # For now use same token names for testnet and mainnet
+        # due to validator is not able to handle testnet token names
+        if network == Network.MAINNET:
+            return cls(
+                core_settings="C3CS",
+                reward_account="C3RA",
+                reward_transport="C3RT",
+                aggstate="C3AS",
+            )
+        # TESTNET
+        return cls(
+            core_settings="CoreSettings",
+            reward_account="RewardAccount",
+            reward_transport="RewardTransport",
+            aggstate="AggregationState",
+        )
+
+
+@dataclass
+class OracleDeploymentConfig:
+    """Configuration for oracle deployment."""
+
+    network: Network
+    reward_transport_count: int
+    disallow_less_than_four_nodes: bool | None = None
+    token_names: OracleTokenNames | None = None
+
+    def __post_init__(self) -> None:
+        """Validate and set default configuration."""
+        if self.token_names is None:
+            self.token_names = OracleTokenNames.from_network(self.network)
+
+        if self.disallow_less_than_four_nodes is None:
+            self.disallow_less_than_four_nodes = self.network == Network.MAINNET
+
+        if self.reward_transport_count <= 0:
+            raise ValueError("Reward transport count must be greater than 0")
+
+        if self.reward_transport_count < MINIMUM_REWARD_TRANSPORT_COUNT:
+            raise ValueError(
+                f"At least {MINIMUM_REWARD_TRANSPORT_COUNT} reward transport/aggstate UTxO pairs required"
+            )
+
+
+@dataclass
+class OracleScriptConfig:
+    """Configuration for oracle reference scripts."""
+
+    create_manager_reference: bool = True
+    reference_ada_amount: int = 56_000_000  # 56 ADA for reference scripts

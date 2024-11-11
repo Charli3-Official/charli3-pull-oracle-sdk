@@ -31,6 +31,7 @@ from .exceptions import (
     CollateralError,
     NetworkConfigError,
     ScriptQueryError,
+    TransactionConfirmationError,
     TransactionSubmissionError,
     UTxOQueryError,
 )
@@ -48,6 +49,7 @@ class ChainQueryConfig:
     max_retries: int = 10
     retry_delay: int = 20  # seconds
     submission_timeout: int = 120  # seconds
+    utxo_refresh_delay: int = 5  # seconds
 
     # Collateral settings
     min_collateral: int = 5_000_000  # lovelace
@@ -102,6 +104,30 @@ class ChainQuery:
                 raise NetworkConfigError(
                     f"Failed to initialize network config: {e}"
                 ) from e
+
+    async def _refresh_utxos(self, addresses: list[str | Address]) -> None:
+        """Refresh UTxO cache for given addresses after waiting for chain update."""
+        # Wait for chain to update
+        await asyncio.sleep(self.config.utxo_refresh_delay)
+
+        # Clear cache
+        self._invalidate_cache_for_addresses(addresses)
+
+        # Force refresh by querying UTxOs
+        for address in addresses:
+            try:
+                _ = await self.get_utxos(address)
+            except UTxOQueryError:
+                logger.warning("Failed to refresh UTxOs for address: %s", address)
+
+    def _invalidate_cache_for_addresses(self, addresses: list[str | Address]) -> None:
+        """Invalidate Kupo cache for given addresses."""
+        if isinstance(self.context, KupoChainContextExtension):
+            for address in addresses:
+                addr_str = str(address)
+                addr_key = f"address_{addr_str}"
+                if addr_key in self.context._utxo_cache:
+                    del self.context._utxo_cache[addr_key]
 
     @property
     def genesis_params(self) -> GenesisParameters:
@@ -209,6 +235,8 @@ class ChainQuery:
         # Create new
         try:
             await self.create_collateral(address, signing_key, amount)
+            # Refresh cache and try find again
+            await self._refresh_utxos([address])
             return await self.find_collateral(address, amount)
         except Exception as e:
             raise CollateralError(f"Failed to create collateral: {e}") from e
@@ -231,20 +259,17 @@ class ChainQuery:
         try:
             utxos = await self.get_utxos(address)
 
-            for utxo in utxos:
-                # Must not have any native assets
-                if utxo.output.amount.multi_asset:
-                    continue
-
-                # Check amount is within acceptable range
-                coin = utxo.output.amount.coin
-                if (
-                    required_amount
-                    <= coin
+            return next(
+                (
+                    utxo
+                    for utxo in utxos
+                    if not utxo.output.amount.multi_asset
+                    and required_amount
+                    <= utxo.output.amount.coin
                     <= required_amount + self.config.collateral_buffer
-                ):
-                    return utxo
-
+                ),
+                None,
+            )
         except UTxOQueryError:
             raise
         except Exception as e:  # pylint: disable=broad-except
@@ -296,6 +321,9 @@ class ChainQuery:
                     f"Collateral creation failed with status: {status}"
                 )
 
+            # Refresh UTxO cache after collateral creation
+            await self._refresh_utxos([address])
+
         except Exception as e:
             raise CollateralError(f"Failed to create collateral: {e}") from e
 
@@ -329,6 +357,10 @@ class ChainQuery:
 
             status = "submitted"
 
+            # Clear cache for affected addresses
+            addresses = [output.address for output in tx.transaction_body.outputs]
+            self._invalidate_cache_for_addresses(addresses)
+
             if not wait_confirmation:
                 return status, tx
 
@@ -357,28 +389,50 @@ class ChainQuery:
 
         Returns:
             Tuple of (status, transaction)
+
+        Raises:
+            TransactionConfirmationError: If confirmation fails
         """
         timeout = timeout or self.config.submission_timeout
         retries = 0
+        tx_id = str(tx_id)
 
-        while retries < self.config.max_retries:
+        async def check_blockfrost(tx_id: TransactionId) -> Transaction | None:
+            """Check transaction status using Blockfrost."""
             try:
-                if self.blockfrost:
-                    tx = self.blockfrost.api.transaction(tx_id)
-                else:
-                    tx = await self.ogmios.get_transaction(tx_id)
-
-                if tx:
-                    logger.info("Transaction confirmed: %s", tx_id)
-                    return "confirmed", tx
-
+                return self.blockfrost.api.transaction(tx_id)
             except ApiError as e:
                 if (
                     e.status_code != NotFoundErrorCode
                 ):  # 404 just means not confirmed yet
-                    raise TransactionSubmissionError(
+                    raise TransactionConfirmationError(
                         f"Error checking transaction: {e}"
                     ) from e
+                return None
+
+        async def check_ogmios(tx_id: TransactionId) -> Transaction | None:
+            """Check transaction status using Ogmios."""
+            try:
+                # Use UTxO query as a proxy for transaction confirmation
+                response = self.ogmios._wrapped_backend._query_utxos_by_tx_id(tx_id, 0)
+                return response if response != [] else None
+            except Exception as e:
+                raise TransactionConfirmationError(
+                    f"Error checking transaction: {e}"
+                ) from e
+
+        # Select appropriate check function
+        check_fn = check_blockfrost if self.blockfrost else check_ogmios
+
+        while retries < self.config.max_retries:
+            try:
+                tx = await check_fn(tx_id)
+                if tx:
+                    logger.info("Transaction confirmed: %s", tx_id)
+                    return "confirmed", tx
+
+            except TransactionConfirmationError:
+                raise
 
             await asyncio.sleep(self.config.retry_delay)
             retries += 1

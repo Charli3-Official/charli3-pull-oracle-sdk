@@ -22,7 +22,9 @@ ignore = [
     "B905",    # `zip()` without an explicit `strict=` parameter
     "ANN101",  # Missing type annotation for self in method
     "ANN102",  # Missing type annotation for cls in classmethod
+    "ANN401", # Allow Any
     "PLR0913", # Too many arguments to function call
+    "PLR2004", # Magic number
 ]
 
 [lint.per-file-ignores]
@@ -31,6 +33,8 @@ ignore = [
     "S101",    # Use of assert detected
     "ANN201",  # Missing return type annotation for public function
 ]
+"charli3_offchain_core/models/oracle_datums.py" = ["UP006","UP007", "UP035"]
+"charli3_offchain_core/cli/config/utils.py" = ["ANN001","ANN002","ANN003"]
 
 [lint.isort]
 known-first-party = ["charli3"]

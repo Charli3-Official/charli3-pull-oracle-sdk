@@ -1,8 +1,33 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
+from typing import List, Union
 
 from pycardano import PlutusData
+
+PolicyId = bytes
+AssetName = bytes
+NodeId = int
+PosixTime = int
+PosixTimeDiff = int
+OracleFeed = int
+NodeFeed = int
+
+
+@dataclass
+class NoDatum(PlutusData):
+    """Universal None type for PlutusData"""
+
+    CONSTR_ID = 1
+
+
+@dataclass
+class OutputReference(PlutusData):
+    """Represents a reference to a transaction output"""
+
+    CONSTR_ID = 0
+    tx_hash: bytes
+    index: int
 
 
 @dataclass
@@ -28,8 +53,13 @@ class Asset(PlutusData):
     """Represents a native token asset"""
 
     CONSTR_ID = 0
-    policy_id: bytes  # PolicyID
-    name: bytes  # AssetName
+    policy_id: PolicyId
+    name: AssetName
+
+    def __post_init__(self) -> None:
+        # Add validation for policy_id length (28 bytes for Cardano)
+        if len(self.policy_id) != 28:
+            raise ValueError("Policy ID must be 28 bytes long")
 
 
 @dataclass
@@ -37,7 +67,7 @@ class FeeConfig(PlutusData):
     """Represents fee configuration"""
 
     CONSTR_ID = 0
-    rate_nft: Asset | None
+    rate_nft: Union[Asset, NoDatum]
     reward_prices: RewardPrices
 
 
@@ -46,10 +76,15 @@ class OracleConfiguration(PlutusData):
     """Immutable oracle settings"""
 
     CONSTR_ID = 0
-    platform_auth_nft: bytes  # PolicyID
-    closing_period_length: int  # PosixTimeDiff
-    reward_dismissing_period_length: int  # PosixTimeDiff
+    platform_auth_nft: PolicyId
+    closing_period_length: PosixTimeDiff
+    reward_dismissing_period_length: PosixTimeDiff
     fee_token: Asset
+
+    def __post_init__(self) -> None:
+        # Add validation for platform_auth_nft length (28 bytes for Cardano)
+        if len(self.platform_auth_nft) != 28:
+            raise ValueError("Policy ID must be 28 bytes long")
 
 
 @dataclass
@@ -57,13 +92,13 @@ class OracleSettingsDatum(PlutusData):
     """Mutable oracle settings"""
 
     CONSTR_ID = 0
-    nodes: list[Node]
+    nodes: List[Node]
     required_node_signatures_count: int
     fee_info: FeeConfig
-    aggregation_liveness_period: int  # PosixTimeDiff
-    time_absolute_uncertainty: int  # PosixTimeDiff
+    aggregation_liveness_period: PosixTimeDiff
+    time_absolute_uncertainty: PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
-    closing_period_started_at: int | None  # Optional PosixTime
+    closing_period_started_at: Union[PosixTime, NoDatum]
 
 
 @dataclass
@@ -71,7 +106,7 @@ class RewardAccountDatum(PlutusData):
     """Reward distribution datum"""
 
     CONSTR_ID = 0
-    nodes_to_rewards: list[int]  # Maps node ID to reward amount
+    nodes_to_rewards: List[NodeId]
 
 
 @dataclass
@@ -79,9 +114,9 @@ class AggregateMessage(PlutusData):
     """Represents an aggregate message from nodes"""
 
     CONSTR_ID = 0
-    node_feeds_sorted_by_feed: dict[int, int]  # NodeId -> NodeFeed
+    node_feeds_sorted_by_feed: dict[NodeId, NodeFeed]
     node_feeds_count: int
-    timestamp: int  # PosixTime
+    timestamp: PosixTime
 
 
 @dataclass
@@ -89,9 +124,9 @@ class AggStateDatum(PlutusData):
     """AggState contains oracle feed data and timing information"""
 
     CONSTR_ID = 0
-    oracle_feed: int  # OracleFeed
-    expiry_timestamp: int  # PosixTime
-    created_at: int  # PosixTime
+    oracle_feed: OracleFeed
+    expiry_timestamp: PosixTime
+    created_at: PosixTime
 
 
 @dataclass
@@ -106,7 +141,7 @@ class RewardConsensusPending(PlutusData):
     """Reward transport with pending consensus state"""
 
     CONSTR_ID = 1
-    oracle_feed: int
+    oracle_feed: OracleFeed
     message: AggregateMessage
 
 
@@ -132,7 +167,7 @@ class RewardTransportVariant(PlutusData):
     """Reward transport variant of OracleDatum"""
 
     CONSTR_ID = 2
-    datum: NoRewards | RewardConsensusPending
+    datum: Union[NoRewards, RewardConsensusPending]
 
 
 @dataclass
@@ -140,7 +175,7 @@ class AggStateVariant(PlutusData):
     """Agg state variant of OracleDatum"""
 
     CONSTR_ID = 3
-    datum: AggStateDatum | None
+    datum: Union[AggStateDatum, NoDatum]
 
 
 @dataclass
@@ -153,7 +188,6 @@ class OracleDatum(PlutusData):
     4. AggStateVariant
     """
 
-    CONSTR_ID = 0
     variant: (
         OracleSettingsVariant
         | RewardAccountVariant

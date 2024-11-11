@@ -36,7 +36,7 @@ class TransactionConfig:
 
     validity_offset: int = 0
     ttl_offset: int = 120
-    extra_collateral: int = 2_500_000
+    extra_collateral: int = 6_000_000
     min_utxo_value: int = 2_000_000
     default_script_utxo_cost: int = 5_000_000
 
@@ -49,6 +49,44 @@ class TransactionManager:
     ) -> None:
         self.chain_query = chain_query
         self.config = config or TransactionConfig()
+
+    async def _get_collateral(
+        self,
+        address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+    ) -> UTxO | None:
+        """Get or create collateral UTxO for script transaction."""
+        return await self.chain_query.get_or_create_collateral(
+            address, signing_key, self.config.extra_collateral
+        )
+
+    async def _prepare_builder(
+        self,
+        builder: TransactionBuilder,
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        metadata: dict | None = None,
+        required_signers: list[VerificationKeyHash] | None = None,
+    ) -> None:
+        """Prepare transaction builder with inputs, collateral, and metadata."""
+        # Add required signers
+        if required_signers:
+            builder.required_signers.extend(required_signers)
+
+        # Add metadata if provided
+        if metadata:
+            builder.auxiliary_data = metadata
+
+        # Handle collateral first if needed for script transactions
+        if len(builder.scripts) > 0:
+            collateral_utxo = await self._get_collateral(change_address, signing_key)
+            if not collateral_utxo:
+                raise CollateralError("Failed to get collateral")
+            builder.collaterals.append(collateral_utxo)
+
+        # Add input address for fees/balancing after collateral is handled
+        # This ensures we have the latest UTxO state
+        builder.add_input_address(change_address)
 
     async def build_simple_payment(
         self,
@@ -121,7 +159,8 @@ class TransactionManager:
     async def build_reference_script_tx(
         self,
         script: PlutusV3Script,
-        address: Address,
+        script_address: Address,
+        admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         reference_ada: int | None = None,
     ) -> Transaction:
@@ -132,12 +171,12 @@ class TransactionManager:
             # Create reference script output
             reference_amount = reference_ada or self.config.default_script_utxo_cost
             reference_output = TransactionOutput(
-                address=address, amount=reference_amount, script=script
+                address=script_address, amount=reference_amount, script=script
             )
             builder.add_output(reference_output)
 
             return await self.build_tx(
-                builder=builder, change_address=address, signing_key=signing_key
+                builder=builder, change_address=admin_address, signing_key=signing_key
             )
 
         except Exception as e:
@@ -155,33 +194,17 @@ class TransactionManager:
     ) -> Transaction:
         """Build transaction with proper inputs and collateral."""
         try:
-            # Add required signers
-            if required_signers:
-                builder.required_signers.extend(required_signers)
-
-            # Add metadata if provided
-            if metadata:
-                builder.auxiliary_data = metadata
-
-            # Add input address for fees/balancing
-            builder.add_input_address(change_address)
-
-            # Add collateral for script transactions
-            if builder.has_plutus_script():
-                collateral_utxo = await self.chain_query.get_or_create_collateral(
-                    change_address, signing_key, self.config.extra_collateral
-                )
-                if collateral_utxo:
-                    builder.collaterals.append(collateral_utxo)
-                else:
-                    raise CollateralError("Failed to get collateral")
-
-            # Build transaction
-            tx_body = builder.build(
+            # Prepare builder with all necessary components
+            await self._prepare_builder(
+                builder=builder,
                 change_address=change_address,
-                validity_start=self.config.validity_offset,
-                ttl=self.config.ttl_offset,
+                signing_key=signing_key,
+                metadata=metadata,
+                required_signers=required_signers,
             )
+
+            # Build transaction components
+            tx_body = builder.build(change_address=change_address)
 
             # Create initial witness set
             witness_set = builder.build_witness_set()

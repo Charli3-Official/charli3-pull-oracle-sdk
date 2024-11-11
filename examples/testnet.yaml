@@ -1,0 +1,55 @@
+# Testnet Oracle Deployment Configuration
+
+network:
+  # Network type (mainnet/testnet)
+  network: "testnet"
+
+  # Blockfrost configuration for testnet
+  blockfrost:
+    project_id: "$BLOCKFROST_TESTNET_PROJECT_ID"
+    # Optional custom testnet URL
+    # api_url: "https://cardano-testnet.blockfrost.io/api/v0"
+
+  # Alternative Ogmios/Kupo configuration for local testnet
+  # ogmios_kupo:
+  #   ogmios_url: "http://localhost:1337"
+  #   kupo_url: "http://localhost:1442"
+
+  # Wallet configuration - use either mnemonic or key files
+  wallet:
+    mnemonic: "$TESTNET_WALLET_MNEMONIC"
+
+    # Option 2: Test key files
+    # payment_skey_path: "testnet-keys/payment.skey"
+    # payment_vkey_path: "testnet-keys/payment.vkey"
+    # stake_vkey_path: "testnet-keys/stake.vkey"
+
+tokens:
+  # Test NFT policy ID - can be generated for testing
+  platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+  # Test fee token - can use any token for testing
+  fee_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  fee_token_name: "544553544348524923"  # "TESTCHRI#" in hex
+
+fees:
+  # Lower fees for testnet
+  node_fee: 1000000        # 1 ADA
+  platform_fee: 500000     # 0.5 ADA
+
+timing:
+  # Shorter periods for testing
+  closing_period: 1800000              # 30 minutes
+  reward_dismissing_period: 3600000    # 1 hour
+  aggregation_liveness: 180000         # 3 minutes
+  time_uncertainty: 30000              # 30 seconds
+  iqr_multiplier: 150                  # 1.5x multiplier for outlier detection
+
+# Can use fewer transport UTxOs on testnet
+transport_count: 4
+
+# Path to Aiken blueprint file
+blueprint_path: "artifacts/testnet_plutus.json"
+
+# Create both reference scripts for testing
+create_reference: true

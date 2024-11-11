@@ -1,0 +1,58 @@
+# Mainnet Oracle Deployment Configuration
+
+network:
+  # Network type (mainnet/testnet)
+  network: "mainnet"
+
+  # Blockfrost configuration
+  blockfrost:
+    project_id: "$BLOCKFROST_PROJECT_ID" # Use environment variable
+    # Optional custom Blockfrost URL
+    # api_url: "https://cardano-mainnet.blockfrost.io/api/v0"
+
+  # Alternative Ogmios/Kupo configuration
+  # ogmios_kupo:
+  #   ogmios_url: "http://localhost:1337"
+  #   kupo_url: "http://localhost:1442"
+
+  # Wallet configuration - use either mnemonic or key files
+  wallet:
+    # Option 1: Mnemonic (recommended to use environment variable)
+    mnemonic: "$WALLET_MNEMONIC"
+
+    # Option 2: Key files
+    # payment_skey_path: "keys/payment.skey"
+    # payment_vkey_path: "keys/payment.vkey"
+    # stake_vkey_path: "keys/stake.vkey"
+
+tokens:
+  # Platform authorization NFT policy ID (hex)
+  platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+  # Fee token details
+  fee_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  fee_token_name: "43485249" # "CHRI" in hex
+
+fees:
+  # Node operator fee (in lovelace)
+  node_fee: 2000000 # 2 ADA
+
+  # Platform fee (in lovelace)
+  platform_fee: 1000000 # 1 ADA
+
+timing:
+  # All periods in milliseconds
+  closing_period: 3600000 # 1 hour
+  reward_dismissing_period: 7200000 # 2 hours
+  aggregation_liveness: 300000 # 5 minutes
+  time_uncertainty: 60000 # 1 minute
+  iqr_multiplier: 150 # 1.5x multiplier for outlier detection
+
+# Number of reward transport UTxOs (minimum 4 for mainnet)
+transport_count: 4
+
+# Path to Aiken blueprint file
+blueprint_path: "artifacts/plutus.json"
+
+# Reference script creation options
+create_reference: true # Create manager reference script
