@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from pycardano import Network
 
-MINIMUM_REWARD_TRANSPORT_COUNT = 4
+MINIMUM_REWARD_TRANSPORT_COUNT = 3
 
 
 @dataclass
@@ -21,7 +21,7 @@ class OracleTokenNames:
         """Create token names configuration based on network"""
         # For now use same token names for testnet and mainnet
         # due to validator is not able to handle testnet token names
-        if network in (Network.TESTNET, Network.MAINNET):
+        if network == Network.MAINNET:
             return cls(
                 core_settings="C3CS",
                 reward_account="C3RA",
@@ -57,11 +57,10 @@ class OracleDeploymentConfig:
         if self.reward_transport_count <= 0:
             raise ValueError("Reward transport count must be greater than 0")
 
-        if (
-            self.disallow_less_than_four_nodes
-            and self.reward_transport_count < MINIMUM_REWARD_TRANSPORT_COUNT
-        ):
-            raise ValueError("Mainnet requires at least 4 reward transport UTxOs")
+        if self.reward_transport_count < MINIMUM_REWARD_TRANSPORT_COUNT:
+            raise ValueError(
+                f"At least {MINIMUM_REWARD_TRANSPORT_COUNT} reward transport/aggstate UTxO pairs required"
+            )
 
 
 @dataclass
@@ -69,4 +68,4 @@ class OracleScriptConfig:
     """Configuration for oracle reference scripts."""
 
     create_manager_reference: bool = True
-    reference_ada_amount: int = 55_000_000  # 55 ADA for reference scripts
+    reference_ada_amount: int = 56_000_000  # 56 ADA for reference scripts

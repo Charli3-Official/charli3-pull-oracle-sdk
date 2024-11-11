@@ -119,7 +119,7 @@ After deployment completes, verify:
 ## Resource Requirements
 
 1. **ADA Requirements**
-   - Reference Script: 55 ADA
+   - Reference Script: 56 ADA
    - Each UTxO: 2 ADA minimum
    - Transaction fees: ~1 ADA per transaction
    - Total: ~65 ADA + (4 ADA * transport_count)
