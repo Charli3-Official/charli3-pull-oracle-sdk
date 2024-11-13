@@ -27,7 +27,6 @@ from charli3_offchain_core.oracle.deployment.reference_script_builder import (
     ReferenceScriptBuilder,
     ReferenceScriptResult,
 )
-from charli3_offchain_core.platform.auth.token_script_builder import PlatformAuthScript
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +98,7 @@ class OracleDeploymentOrchestrator:
         # Network configuration
         platform_auth_policy_id: bytes,
         fee_token: Asset,
-        platform_auth_script_builder: PlatformAuthScript,
+        platform_script: NativeScript,
         # Script configuration
         script_config: OracleScriptConfig,
         admin_address: Address,
@@ -163,7 +162,6 @@ class OracleDeploymentOrchestrator:
                 admin_address=admin_address,
                 signing_key=signing_key,
             )
-            platform_auth_script = platform_auth_script_builder.build_spending_script()
 
             # Handle start transaction
             start_result = await self._handle_start_transaction(
@@ -171,7 +169,7 @@ class OracleDeploymentOrchestrator:
                 deployment_config=deployment_config,
                 script_address=script_address,
                 platform_utxo=platform_utxo,
-                platform_script=platform_auth_script,
+                platform_script=platform_script,
                 admin_address=admin_address,
                 signing_key=signing_key,
                 fee_config=fee_config,

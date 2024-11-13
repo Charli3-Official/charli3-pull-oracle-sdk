@@ -9,12 +9,14 @@ import logging
 import time
 from dataclasses import dataclass
 
+import requests
 from blockfrost import ApiError
 from pycardano import (
     Address,
     BlockFrostChainContext,
     ExtendedSigningKey,
     GenesisParameters,
+    NativeScript,
     PaymentSigningKey,
     PlutusV3Script,
     ScriptHash,
@@ -502,3 +504,32 @@ class ChainQuery:
 
         except Exception as e:
             raise TransactionSubmissionError(f"Transaction failed: {e}") from e
+
+    async def get_native_script(self, script_hash: ScriptHash) -> NativeScript | None:
+        """Get native script by hash.
+
+        Args:
+            script_hash: Script hash to query
+
+        Returns:
+            Native script
+
+        Raises:
+            ScriptQueryError: If script cannot be found or retrieved
+        """
+        try:
+            if isinstance(self.context, BlockFrostChainContext):
+                script = self.context._get_script(str(script_hash))
+            else:
+                kupo_script_url = f"{self.context._kupo_url}/scripts/{script_hash}"
+                script_json = await asyncio.to_thread(
+                    lambda: requests.get(kupo_script_url, timeout=(5, 15)).json()
+                )
+                script = NativeScript.from_cbor(script_json["script"])
+            if not script:
+                raise ScriptQueryError(f"Script not found for hash: {script_hash}")
+
+            return script
+
+        except Exception as e:
+            raise ScriptQueryError(f"Failed to get script: {e}") from e

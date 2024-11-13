@@ -32,7 +32,7 @@ class AuthBuildResult:
 class PlatformAuthBuilder:
     """Builds transactions for platform authorization NFT"""
 
-    TOKEN_NAME = b"AuthPNFTC3"
+    TOKEN_NAME = b"C3PAuth"
     MIN_UTXO_VALUE = 2_000_000
     REFERENCE_ADA_AMOUNT = 5_000_000
 
@@ -55,6 +55,7 @@ class PlatformAuthBuilder:
         """Build transaction to mint platform authorization NFT."""
         # Build scripts
         validity_slot, minting_script = self.script_builder.build_minting_script()
+        spending_script = self.script_builder.build_spending_script()
         platform_address = self.script_builder.script_address()
 
         # Create token parameters
@@ -75,6 +76,13 @@ class PlatformAuthBuilder:
         builder.add_output(
             TransactionOutput(address=platform_address, amount=token_value)
         )
+        builder.add_output(
+            TransactionOutput(
+                address=platform_address,
+                amount=self.REFERENCE_ADA_AMOUNT,
+                script=spending_script,
+            )
+        )
 
         # Build and return result
         tx = await self.tx_manager.build_tx(
@@ -82,7 +90,6 @@ class PlatformAuthBuilder:
             change_address=sender_address,
             signing_key=signing_key,
         )
-
         return AuthBuildResult(
             transaction=tx,
             policy_id=script_hash.payload.hex(),

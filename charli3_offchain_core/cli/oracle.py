@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 import click
-from pycardano import BlockFrostChainContext, VerificationKeyHash
+from pycardano import BlockFrostChainContext
 from pycardano.backend.kupo import KupoChainContextExtension
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -27,10 +27,6 @@ from charli3_offchain_core.oracle.deployment.orchestrator import (
     OracleDeploymentOrchestrator,
 )
 from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
-from charli3_offchain_core.platform.auth.token_script_builder import (
-    PlatformAuthScript,
-    ScriptConfig,
-)
 
 from .base import (
     create_chain_context,
@@ -180,7 +176,11 @@ async def deploy(config: Path) -> None:
                 platform_fee=deployment_config.fees.platform_fee,
             ),
         )
+
         platform_auth_finder = PlatformAuthFinder(chain_query)
+        multisig_script = await platform_auth_finder.get_platform_script(
+            platform_address
+        )
 
         # Validate platform auth UTxO
         logger.info("Validating platform auth UTxO...")
@@ -202,19 +202,6 @@ async def deploy(config: Path) -> None:
             platform_utxo.input.index,
         )
 
-        platform_auth_script_config = ScriptConfig(
-            signers=[
-                VerificationKeyHash.from_primitive(pkh)
-                for pkh in deployment_config.multi_sig.parties
-            ],
-            threshold=deployment_config.multi_sig.threshold,
-            network=deployment_config.network.network,
-        )
-
-        platform_nft_script_builder = PlatformAuthScript(
-            chain_query=chain_query, config=platform_auth_script_config, is_mock=False
-        )
-
         # Deploy oracle using parameterized contracts
         logger.info("Initializing deployment orchestrator...")
         orchestrator = OracleDeploymentOrchestrator(
@@ -230,7 +217,7 @@ async def deploy(config: Path) -> None:
                 deployment_config.tokens.platform_auth_policy
             ),
             fee_token=fee_token,
-            platform_auth_script_builder=platform_nft_script_builder,
+            platform_script=multisig_script,
             script_config=script_config,
             admin_address=addresses.admin_address,
             script_address=addresses.script_address,

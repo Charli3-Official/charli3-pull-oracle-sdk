@@ -2,10 +2,7 @@
 
 import logging
 
-from pycardano import (
-    ScriptHash,
-    UTxO,
-)
+from pycardano import Address, NativeScript, ScriptHash, UTxO
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 
@@ -39,3 +36,13 @@ class PlatformAuthFinder:
             utxo.output.amount.multi_asset is not None
             and policy_hash in utxo.output.amount.multi_asset
         )
+
+    async def get_platform_script(self, address: str) -> NativeScript:
+        """Get MultiSig script for platform authorization"""
+        script_hash = self._get_script_hash(address)
+        return await self.chain_query.get_native_script(script_hash)
+
+    def _get_script_hash(self, address: str) -> ScriptHash:
+        """Extract script hash from script address."""
+        addr = Address.from_primitive(address)
+        return addr.payment_part
