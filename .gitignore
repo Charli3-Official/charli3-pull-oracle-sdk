@@ -1,4 +1,6 @@
 .DS_Store
+#tx files
+tx_platform_mint.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

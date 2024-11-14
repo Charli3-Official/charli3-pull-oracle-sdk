@@ -5,33 +5,29 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from pycardano import Address, PaymentSigningKey, Transaction, VerificationKeyHash
+from pycardano import (
+    Address,
+    ExtendedSigningKey,
+    PaymentSigningKey,
+    Transaction,
+    VerificationKeyHash,
+)
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 
+from ...constants.status import ProcessStatus
 from .token_builder import PlatformAuthBuilder
 from .token_script_builder import PlatformAuthScript, ScriptConfig
 
 logger = logging.getLogger(__name__)
 
 
-class AuthStatus(str, Enum):
-    """Status of platform authorization process"""
-
-    NOT_STARTED = "not_started"
-    CREATING_SCRIPT = "creating_script"
-    BUILDING_TRANSACTION = "building_transaction"
-    SUBMITTING_TRANSACTION = "submitting_transaction"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
 @dataclass
 class AuthResult:
     """Result of platform authorization process"""
 
-    status: AuthStatus
+    status: ProcessStatus
     transaction: Transaction | None = None
     policy_id: bytes | None = None
     platform_address: Address | None = None
@@ -45,21 +41,21 @@ class PlatformAuthOrchestrator:
         self,
         chain_query: ChainQuery,
         tx_manager: TransactionManager,
-        status_callback: Callable[[AuthStatus, str], None] | None = None,
+        status_callback: Callable[[ProcessStatus, str], None] | None = None,
     ) -> None:
         self.chain_query = chain_query
         self.tx_manager = tx_manager
         self.status_callback = status_callback
-        self.current_status = AuthStatus.NOT_STARTED
+        self.current_status = ProcessStatus.NOT_STARTED
 
-    def _update_status(self, status: AuthStatus, message: str = "") -> None:
+    def _update_status(self, status: ProcessStatus, message: str = "") -> None:
         """Update process status and notify callback."""
         self.current_status = status
         if self.status_callback:
             self.status_callback(status, message)
         logger.info("Auth status: %s - %s", status, message)
 
-    async def create_platform_auth(
+    async def build_tx(
         self,
         sender_address: Address,
         signing_key: PaymentSigningKey,
@@ -69,9 +65,8 @@ class PlatformAuthOrchestrator:
         network: str | None = None,
         is_mock: bool = False,
     ) -> AuthResult:
-        """Create platform authorization NFT."""
+        """Build platform authorization NFT transaction."""
         try:
-            # Create script config
             script_config = ScriptConfig(
                 signers=[
                     VerificationKeyHash.from_primitive(pkh) for pkh in multisig_parties
@@ -80,34 +75,62 @@ class PlatformAuthOrchestrator:
                 network=network,
             )
 
-            self._update_status(AuthStatus.CREATING_SCRIPT)
+            self._update_status(ProcessStatus.CREATING_SCRIPT)
             script_builder = PlatformAuthScript(
                 chain_query=self.chain_query, config=script_config, is_mock=is_mock
             )
 
-            self._update_status(AuthStatus.BUILDING_TRANSACTION)
+            self._update_status(ProcessStatus.BUILDING_TRANSACTION)
             token_builder = PlatformAuthBuilder(
                 self.chain_query, self.tx_manager, script_builder
             )
 
-            result = await token_builder.build_auth_transaction(
+            result = await token_builder.build_auth_tx(
                 sender_address=sender_address,
                 signing_key=signing_key,
                 metadata=metadata,
             )
 
-            self._update_status(AuthStatus.SUBMITTING_TRANSACTION)
-            await self.tx_manager.sign_and_submit(result.transaction, [signing_key])
-
-            self._update_status(AuthStatus.COMPLETED)
             return AuthResult(
-                status=AuthStatus.COMPLETED,
+                status=ProcessStatus.TRANSACTION_BUILT,
                 transaction=result.transaction,
                 policy_id=result.policy_id,
                 platform_address=result.platform_address,
             )
 
         except Exception as e:
-            logger.error("Platform auth creation failed: %s", str(e))
-            self._update_status(AuthStatus.FAILED, str(e))
-            return AuthResult(status=AuthStatus.FAILED, error=e)
+            logger.error("Platform auth transaction creation failed: %s", str(e))
+            self._update_status(ProcessStatus.FAILED, str(e))
+            return AuthResult(status=ProcessStatus.FAILED, error=e)
+
+    async def handle_tx(
+        self,
+        tx: Transaction,
+        signing_key: PaymentSigningKey | ExtendedSigningKey | None = None,
+        submit: bool = False,
+    ) -> tuple[Transaction | None, Enum]:
+        """Handle transaction signing and/or submission based on provided parameters."""
+        try:
+
+            if submit:
+                self._update_status(ProcessStatus.SUBMITTING_TRANSACTION)
+                signing_keys = [signing_key] if signing_key else []
+                await self.tx_manager.sign_and_submit(tx, signing_keys)
+                return tx, ProcessStatus.COMPLETED
+
+            if signing_key:
+                self._update_status(ProcessStatus.SIGNING_TRANSACTION)
+                self.tx_manager.sign_tx(tx, signing_key)
+                if not submit:
+                    return tx, ProcessStatus.TRANSACTION_SIGNED
+
+            return tx, (
+                ProcessStatus.TRANSACTION_SIGNED
+                if signing_key
+                else ProcessStatus.TRANSACTION_BUILT
+            )
+
+        except Exception as e:
+            logger.error("Transaction operation failed: %s", str(e))
+            self._update_status(ProcessStatus.FAILED, str(e))
+            return None, ProcessStatus.FAILED

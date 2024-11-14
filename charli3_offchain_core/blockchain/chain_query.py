@@ -201,9 +201,7 @@ class ChainQuery:
         try:
             if isinstance(address, str):
                 address = Address.from_primitive(address)
-            utxos = self.context.utxos(str(address))
-
-            return utxos
+            return self.context.utxos(str(address))
 
         except ApiError as e:
             raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e
@@ -506,17 +504,7 @@ class ChainQuery:
             raise TransactionSubmissionError(f"Transaction failed: {e}") from e
 
     async def get_native_script(self, script_hash: ScriptHash) -> NativeScript | None:
-        """Get native script by hash.
-
-        Args:
-            script_hash: Script hash to query
-
-        Returns:
-            Native script
-
-        Raises:
-            ScriptQueryError: If script cannot be found or retrieved
-        """
+        """Get native script by hash."""
         try:
             if isinstance(self.context, BlockFrostChainContext):
                 script = self.context._get_script(str(script_hash))

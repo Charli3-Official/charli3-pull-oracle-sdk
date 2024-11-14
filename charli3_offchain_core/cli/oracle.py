@@ -178,9 +178,6 @@ async def deploy(config: Path) -> None:
         )
 
         platform_auth_finder = PlatformAuthFinder(chain_query)
-        multisig_script = await platform_auth_finder.get_platform_script(
-            platform_address
-        )
 
         # Validate platform auth UTxO
         logger.info("Validating platform auth UTxO...")
@@ -195,6 +192,10 @@ async def deploy(config: Path) -> None:
                 deployment_config.tokens.platform_auth_policy,
             )
             return
+
+        multisig_script = await platform_auth_finder.get_platform_script(
+            platform_address
+        )
 
         logger.info(
             "Using platform UTxO: %s#%s",

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from pycardano import (
     Address,
+    ExtendedSigningKey,
     MultiAsset,
     PaymentSigningKey,
     Transaction,
@@ -35,6 +36,7 @@ class PlatformAuthBuilder:
     TOKEN_NAME = b"C3PAuth"
     MIN_UTXO_VALUE = 2_000_000
     REFERENCE_ADA_AMOUNT = 5_000_000
+    FEE_BUFFER = 50_000
 
     def __init__(
         self,
@@ -46,10 +48,10 @@ class PlatformAuthBuilder:
         self.tx_manager = tx_manager
         self.script_builder = script_builder
 
-    async def build_auth_transaction(
+    async def build_auth_tx(
         self,
         sender_address: Address,
-        signing_key: PaymentSigningKey,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
         metadata: dict | None = None,
     ) -> AuthBuildResult:
         """Build transaction to mint platform authorization NFT."""
@@ -67,6 +69,7 @@ class PlatformAuthBuilder:
 
         builder = TransactionBuilder(
             self.chain_query.context,
+            fee_buffer=self.FEE_BUFFER,
             auxiliary_data=metadata if metadata else None,
         )
 
@@ -84,7 +87,6 @@ class PlatformAuthBuilder:
             )
         )
 
-        # Build and return result
         tx = await self.tx_manager.build_tx(
             builder=builder,
             change_address=sender_address,
