@@ -146,9 +146,9 @@ class AggregateMessage(PlutusData):
     ) -> "AggregateMessage":
         """Create from hex-encoded VKHs and feed values"""
         sorted_feeds = [
-            (VerificationKeyHash(bytes.fromhex(vkh)), feed)
-            for vkh, feed in sorted(feeds)  # Sort by VKH
+            (VerificationKeyHash(bytes.fromhex(vkh)), feed) for vkh, feed in feeds
         ]
+        sorted_feeds.sort(key=lambda x: x[1])  # sorted by NodeFeed
         return cls(
             node_feeds_sorted_by_feed=sorted_feeds,
             node_feeds_count=len(feeds),
