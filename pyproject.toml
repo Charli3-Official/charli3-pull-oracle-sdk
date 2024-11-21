@@ -11,7 +11,7 @@ packages = [
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
 opshin = "^0.23.1"
-pycardano = { git = "https://github.com/talhahussain7/pycardano.git", branch = "fix/get-utxos-native-scripts" }
+pycardano = { git = "https://github.com/talhahussain7/pycardano.git", rev = "ee1c6ade08ce2255f591804a4e6a956b6af66bcf" }
 
 
 [tool.poetry.group.dev.dependencies]
