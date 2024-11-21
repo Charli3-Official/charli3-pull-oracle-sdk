@@ -40,6 +40,51 @@ poetry run pre-commit install
 
 ## 🚀 Quick Start
 
+### Multisig Platform Auth NFT Mint
+
+#### Configure multisig settings in yaml:
+Reference: configuration file (e.g., `deploy-testnet.yaml`):
+```yaml
+multisig:
+  # platform_addr: "addr_test1..."
+  threshold: 2  # Required signatures
+  parties:
+    - "wallet1_public_key_hash"
+    - "wallet2_public_key_hash"
+```
+
+#### Option 1. Single Signature Flow (threshold = 1)
+```bash
+# Complete flow in single command
+# - Builds transaction
+# - Signs with configured wallet
+# - Submits to network immediately
+# - Returns tx ID and policy ID
+charli3 platform token mint --config deploy-testnet.yaml
+```
+
+#### Option 2.  Multi-Signature Flow (threshold > 1)
+```bash
+# 1. First Wallet: Build and optionally sign
+# - Creates transaction
+# - Prompts to sign with current wallet
+# - Generates tx_platform_mint.json
+charli3 platform token mint --config deploy-testnet-wallet-1.yaml
+
+# 2. Second Wallet: Add signature
+# - Validates key hasn't signed
+# - Updates transaction file
+# - Shows signature progress
+charli3 platform token sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_platform_mint.json
+
+# 3. Submit when all signatures collected
+# - Validates signature threshold
+# - Submits to network
+# - Returns tx ID and policy ID
+charli3 platform token submit-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_platform_mint.json
+```
+
+
 ### Basic Oracle Deployment
 
 1. Create a deployment configuration file (e.g., `deploy-testnet.yaml`):

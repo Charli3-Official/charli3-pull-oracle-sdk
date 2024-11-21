@@ -7,6 +7,8 @@ from pathlib import Path
 import yaml
 from pycardano import Network
 
+from charli3_offchain_core.cli.config.multisig import MultisigConfig
+
 from .keys import WalletConfig
 
 
@@ -138,6 +140,7 @@ class DeploymentConfig:
     fees: FeeConfig
     timing: TimingConfig
     transport_count: int = 4
+    multi_sig: MultisigConfig | None = None
     blueprint_path: Path = Path("artifacts/plutus.json")
     create_reference: bool = True
 
@@ -158,6 +161,7 @@ class DeploymentConfig:
         return cls(
             network=NetworkConfig.from_dict(data.get("network", {})),
             tokens=TokenConfig.from_dict(data.get("tokens", {})),
+            multi_sig=MultisigConfig.from_dict(data.get("multisig", {})),
             fees=FeeConfig.from_dict(data.get("fees", {})),
             timing=TimingConfig.from_dict(data.get("timing", {})),
             transport_count=data.get("transport_count", 4),
