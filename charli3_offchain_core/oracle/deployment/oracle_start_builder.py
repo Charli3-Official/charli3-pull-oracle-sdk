@@ -240,7 +240,7 @@ class OracleStartBuilder:
                 for utxo in utxos
                 if not utxo.output.amount.multi_asset
                 and utxo.output.amount.coin >= self.MIN_UTXO_VALUE
-                and utxo.input.transaction_id != platform_utxo.input.transaction_id
+                and utxo.input != platform_utxo.input
             ),
             None,
         )
