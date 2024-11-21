@@ -40,7 +40,7 @@ from .exceptions import (
 from .network import NetworkConfig, get_network_type
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+
 NotFoundErrorCode = 404
 
 
