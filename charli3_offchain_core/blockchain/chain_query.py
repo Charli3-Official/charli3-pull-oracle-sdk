@@ -416,7 +416,7 @@ class ChainQuery:
             """Check transaction status using Ogmios."""
             try:
                 # Use UTxO query as a proxy for transaction confirmation
-                response = self.ogmios._wrapped_backend._query_utxos_by_tx_id(tx_id, 0)
+                response = self.context._wrapped_backend._query_utxos_by_tx_id(tx_id, 0)
                 return response if response != [] else None
             except Exception as e:
                 raise TransactionConfirmationError(
@@ -424,7 +424,11 @@ class ChainQuery:
                 ) from e
 
         # Select appropriate check function
-        check_fn = check_blockfrost if self.blockfrost else check_ogmios
+        check_fn = (
+            check_blockfrost
+            if isinstance(self.context, BlockFrostChainContext)
+            else check_ogmios
+        )
 
         while retries < self.config.max_retries:
             try:
