@@ -1,7 +1,7 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from pycardano import PlutusData, VerificationKeyHash
 
@@ -32,33 +32,37 @@ class OutputReference(PlutusData):
 @dataclass
 class Nodes(PlutusData):
     """
-    Represents a list of node pairs (feed_vkh, payment_vkh).
-    Must be sorted by feed_vkh to match Aiken's requirements.
+    Represents a map of feed VKHs to payment VKHs.
+    Keys must be sorted to match Aiken's requirements.
     """
 
     CONSTR_ID = 0
-    pairs: List[Tuple[VerificationKeyHash, VerificationKeyHash]]
+    node_map: Dict[VerificationKeyHash, VerificationKeyHash]
 
     @classmethod
-    def from_primitive(cls, pairs: List[Tuple[str, str]]) -> "Nodes":
-        """
-        Create Nodes from a list of hex-encoded VKH pairs.
-        Automatically sorts by feed_vkh.
-        """
-        vkh_pairs = [
-            (
-                VerificationKeyHash(bytes.fromhex(feed)),
-                VerificationKeyHash(bytes.fromhex(payment)),
-            )
-            for feed, payment in pairs
-        ]
-        # Sort by feed_vkh as required by Aiken
-        vkh_pairs.sort(key=lambda x: x[0])
-        return cls(pairs=vkh_pairs)
+    def from_primitive(cls, data: Any) -> "Nodes":
+        """Create Nodes from primitive data."""
+        while hasattr(data, "value"):
+            data = data.value
 
-    def ensure_sorted(self) -> None:
-        """Ensure pairs are sorted by feed_vkh"""
-        self.pairs.sort(key=lambda x: x[0])
+        if not data:
+            return cls(node_map={})
+
+        return cls(
+            node_map={
+                VerificationKeyHash.from_primitive(
+                    k
+                ): VerificationKeyHash.from_primitive(v)
+                for k, v in data.items()
+            }
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        """Convert to primitive map representation."""
+        return {
+            k.to_primitive(): v.to_primitive()
+            for k, v in sorted(self.node_map.items(), key=lambda x: str(x[0]))
+        }
 
 
 @dataclass

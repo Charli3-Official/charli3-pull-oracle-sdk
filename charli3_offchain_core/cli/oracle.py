@@ -156,7 +156,7 @@ async def deploy(config: Path) -> None:
         # Create configurations
         script_config = OracleScriptConfig(
             create_manager_reference=deployment_config.create_reference,
-            reference_ada_amount=56_000_000,
+            reference_ada_amount=62_000_000,
         )
 
         oracle_deployment_config = OracleDeploymentConfig(
@@ -291,7 +291,7 @@ async def create_reference_script(config: Path, force: bool) -> None:
         # Create script config
         script_config = OracleScriptConfig(
             create_manager_reference=True,
-            reference_ada_amount=56_000_000,
+            reference_ada_amount=62_000_000,
         )
 
         # Check for existing script

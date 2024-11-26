@@ -26,6 +26,7 @@ from charli3_offchain_core.models.oracle_datums import (
     AggStateVariant,
     FeeConfig,
     NoDatum,
+    Nodes,
     NoRewards,
     OracleConfiguration,
     OracleSettingsDatum,
@@ -255,7 +256,7 @@ class OracleStartBuilder:
         """Create settings datum with initial configuration."""
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=[],  # Start with empty nodes list
+                nodes=Nodes(node_map={}),
                 required_node_signatures_count=0,  # Initial count is 0
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
