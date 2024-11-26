@@ -42,38 +42,20 @@ class Nodes(PlutusData):
     @classmethod
     def from_primitive(cls, data: Any) -> "Nodes":
         """Create Nodes from primitive data."""
-
         while hasattr(data, "value"):
             data = data.value
 
         if not data:
             return cls(node_map={})
 
-        try:
-            if isinstance(data, Dict):
-                return cls(
-                    node_map={
-                        VerificationKeyHash.from_primitive(
-                            k
-                        ): VerificationKeyHash.from_primitive(v)
-                        for k, v in data.items()
-                    }
-                )
-
-            if isinstance(data, Union[list, tuple]):
-                return cls(
-                    node_map={
-                        VerificationKeyHash.from_primitive(
-                            k
-                        ): VerificationKeyHash.from_primitive(v)
-                        for k, v in data
-                    }
-                )
-
-        except Exception:
-            return cls(node_map={})
-
-        return cls(node_map={})
+        return cls(
+            node_map={
+                VerificationKeyHash.from_primitive(
+                    k
+                ): VerificationKeyHash.from_primitive(v)
+                for k, v in data.items()
+            }
+        )
 
     def to_primitive(self) -> Dict[str, Any]:
         """Convert to primitive map representation."""
