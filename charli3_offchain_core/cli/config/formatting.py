@@ -127,3 +127,21 @@ def enhanced_deploy_output(config: Any, addresses: Any) -> None:
 
     print_progress("Initializing deployment orchestrator")
     print_progress("Starting oracle deployment")
+
+
+def print_confirmation_message_prompt(message: str) -> bool:
+    """Print colored confirmation prompt for message."""
+    return click.confirm(click.style(message, fg=CliColor.WARNING, bold=True))
+
+
+def print_platform_auth_config_prompt(auth_config: any) -> bool:
+    """Format and display platform authorization details with a confirmation prompt."""
+
+    print_header("Platform Authorization Config Details")
+    print_hash_info("Network", auth_config.network.network)
+    print_hash_info("Multisig Threshold", str(auth_config.multisig.threshold))
+
+    for i, party in enumerate(auth_config.multisig.parties, start=1):
+        print_address_info(f"PKH {i}", party)
+
+    return print_confirmation_message_prompt("Proceed with token minting?")

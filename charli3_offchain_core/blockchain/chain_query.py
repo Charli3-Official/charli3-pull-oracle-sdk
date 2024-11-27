@@ -9,12 +9,14 @@ import logging
 import time
 from dataclasses import dataclass
 
+import requests
 from blockfrost import ApiError
 from pycardano import (
     Address,
     BlockFrostChainContext,
     ExtendedSigningKey,
     GenesisParameters,
+    NativeScript,
     PaymentSigningKey,
     PlutusV3Script,
     ScriptHash,
@@ -38,6 +40,7 @@ from .exceptions import (
 from .network import NetworkConfig, get_network_type
 
 logger = logging.getLogger(__name__)
+
 NotFoundErrorCode = 404
 
 
@@ -198,7 +201,6 @@ class ChainQuery:
         try:
             if isinstance(address, str):
                 address = Address.from_primitive(address)
-
             return self.context.utxos(str(address))
 
         except ApiError as e:
@@ -414,7 +416,7 @@ class ChainQuery:
             """Check transaction status using Ogmios."""
             try:
                 # Use UTxO query as a proxy for transaction confirmation
-                response = self.ogmios._wrapped_backend._query_utxos_by_tx_id(tx_id, 0)
+                response = self.context._wrapped_backend._query_utxos_by_tx_id(tx_id, 0)
                 return response if response != [] else None
             except Exception as e:
                 raise TransactionConfirmationError(
@@ -422,7 +424,11 @@ class ChainQuery:
                 ) from e
 
         # Select appropriate check function
-        check_fn = check_blockfrost if self.blockfrost else check_ogmios
+        check_fn = (
+            check_blockfrost
+            if isinstance(self.context, BlockFrostChainContext)
+            else check_ogmios
+        )
 
         while retries < self.config.max_retries:
             try:
@@ -500,3 +506,22 @@ class ChainQuery:
 
         except Exception as e:
             raise TransactionSubmissionError(f"Transaction failed: {e}") from e
+
+    async def get_native_script(self, script_hash: ScriptHash) -> NativeScript | None:
+        """Get native script by hash."""
+        try:
+            if isinstance(self.context, BlockFrostChainContext):
+                script = self.context._get_script(str(script_hash))
+            else:
+                kupo_script_url = f"{self.context._kupo_url}/scripts/{script_hash}"
+                script_json = await asyncio.to_thread(
+                    lambda: requests.get(kupo_script_url, timeout=(5, 15)).json()
+                )
+                script = NativeScript.from_cbor(script_json["script"])
+            if not script:
+                raise ScriptQueryError(f"Script not found for hash: {script_hash}")
+
+            return script
+
+        except Exception as e:
+            raise ScriptQueryError(f"Failed to get script: {e}") from e

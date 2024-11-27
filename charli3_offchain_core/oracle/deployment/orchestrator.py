@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from pycardano import Address, ExtendedSigningKey, PaymentSigningKey, UTxO
+from pycardano import Address, ExtendedSigningKey, NativeScript, PaymentSigningKey, UTxO
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
@@ -98,6 +98,7 @@ class OracleDeploymentOrchestrator:
         # Network configuration
         platform_auth_policy_id: bytes,
         fee_token: Asset,
+        platform_script: NativeScript,
         # Script configuration
         script_config: OracleScriptConfig,
         admin_address: Address,
@@ -168,6 +169,7 @@ class OracleDeploymentOrchestrator:
                 deployment_config=deployment_config,
                 script_address=script_address,
                 platform_utxo=platform_utxo,
+                platform_script=platform_script,
                 admin_address=admin_address,
                 signing_key=signing_key,
                 fee_config=fee_config,
@@ -220,6 +222,7 @@ class OracleDeploymentOrchestrator:
         deployment_config: OracleDeploymentConfig,
         script_address: Address,
         platform_utxo: UTxO,
+        platform_script: NativeScript,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         fee_config: FeeConfig,
@@ -237,6 +240,7 @@ class OracleDeploymentOrchestrator:
             deployment_config=deployment_config,
             script_address=script_address,
             platform_utxo=platform_utxo,
+            platform_script=platform_script,
             change_address=admin_address,
             signing_key=signing_key,
             fee_config=fee_config,

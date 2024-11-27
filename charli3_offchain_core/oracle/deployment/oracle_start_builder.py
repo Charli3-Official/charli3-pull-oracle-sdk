@@ -8,6 +8,7 @@ from pycardano import (
     Address,
     ExtendedSigningKey,
     MultiAsset,
+    NativeScript,
     PaymentSigningKey,
     Redeemer,
     ScriptHash,
@@ -25,6 +26,7 @@ from charli3_offchain_core.models.oracle_datums import (
     AggStateVariant,
     FeeConfig,
     NoDatum,
+    Nodes,
     NoRewards,
     OracleConfiguration,
     OracleSettingsDatum,
@@ -73,6 +75,7 @@ class OracleStartBuilder:
         deployment_config: OracleDeploymentConfig,
         script_address: Address,
         platform_utxo: UTxO,
+        platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         fee_config: FeeConfig,
@@ -122,6 +125,7 @@ class OracleStartBuilder:
 
         # Add inputs and preserve platform auth
         builder.add_input(platform_utxo)
+        builder.native_scripts = [platform_script]
         builder.add_input(minting_utxo)
 
         builder.add_output(
@@ -252,7 +256,7 @@ class OracleStartBuilder:
         """Create settings datum with initial configuration."""
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=[],  # Start with empty nodes list
+                nodes=Nodes(node_map={}),
                 required_node_signatures_count=0,  # Initial count is 0
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,

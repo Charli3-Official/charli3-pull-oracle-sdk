@@ -1,13 +1,12 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import List, Union
+from typing import Any, Dict, List, Tuple, Union
 
-from pycardano import PlutusData
+from pycardano import PlutusData, VerificationKeyHash
 
 PolicyId = bytes
 AssetName = bytes
-NodeId = int
 PosixTime = int
 PosixTimeDiff = int
 OracleFeed = int
@@ -31,12 +30,39 @@ class OutputReference(PlutusData):
 
 
 @dataclass
-class Node(PlutusData):
-    """Represents an oracle node with payment and feed verification keys"""
+class Nodes(PlutusData):
+    """
+    Represents a map of feed VKHs to payment VKHs.
+    Keys must be sorted to match Aiken's requirements.
+    """
 
     CONSTR_ID = 0
-    feed_vkh: bytes
-    payment_vkh: bytes
+    node_map: Dict[VerificationKeyHash, VerificationKeyHash]
+
+    @classmethod
+    def from_primitive(cls, data: Any) -> "Nodes":
+        """Create Nodes from primitive data."""
+        while hasattr(data, "value"):
+            data = data.value
+
+        if not data:
+            return cls(node_map={})
+
+        return cls(
+            node_map={
+                VerificationKeyHash.from_primitive(
+                    k
+                ): VerificationKeyHash.from_primitive(v)
+                for k, v in data.items()
+            }
+        )
+
+    def to_primitive(self) -> Dict[str, Any]:
+        """Convert to primitive map representation."""
+        return {
+            k.to_primitive(): v.to_primitive()
+            for k, v in sorted(self.node_map.items(), key=lambda x: str(x[0]))
+        }
 
 
 @dataclass
@@ -92,7 +118,7 @@ class OracleSettingsDatum(PlutusData):
     """Mutable oracle settings"""
 
     CONSTR_ID = 0
-    nodes: List[Node]
+    nodes: Nodes
     required_node_signatures_count: int
     fee_info: FeeConfig
     aggregation_liveness_period: PosixTimeDiff
@@ -106,7 +132,7 @@ class RewardAccountDatum(PlutusData):
     """Reward distribution datum"""
 
     CONSTR_ID = 0
-    nodes_to_rewards: List[NodeId]
+    nodes_to_rewards: List[int]
 
 
 @dataclass
@@ -114,9 +140,24 @@ class AggregateMessage(PlutusData):
     """Represents an aggregate message from nodes"""
 
     CONSTR_ID = 0
-    node_feeds_sorted_by_feed: dict[NodeId, NodeFeed]
+    node_feeds_sorted_by_feed: List[Tuple[VerificationKeyHash, NodeFeed]]
     node_feeds_count: int
     timestamp: PosixTime
+
+    @classmethod
+    def from_primitive(
+        cls, feeds: List[Tuple[str, int]], timestamp: int
+    ) -> "AggregateMessage":
+        """Create from hex-encoded VKHs and feed values"""
+        sorted_feeds = [
+            (VerificationKeyHash(bytes.fromhex(vkh)), feed) for vkh, feed in feeds
+        ]
+        sorted_feeds.sort(key=lambda x: x[1])  # sorted by NodeFeed
+        return cls(
+            node_feeds_sorted_by_feed=sorted_feeds,
+            node_feeds_count=len(feeds),
+            timestamp=timestamp,
+        )
 
 
 @dataclass
@@ -143,6 +184,7 @@ class RewardConsensusPending(PlutusData):
     CONSTR_ID = 1
     oracle_feed: OracleFeed
     message: AggregateMessage
+    node_reward_price: int
 
 
 # Main datum variants
