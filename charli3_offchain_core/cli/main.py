@@ -4,8 +4,8 @@ import click
 
 from charli3_offchain_core.cli.config.utils import setup_logging
 from charli3_offchain_core.cli.oracle import oracle
-from charli3_offchain_core.cli.txs import tx
 from charli3_offchain_core.cli.platform import platform
+from charli3_offchain_core.cli.txs import tx
 
 
 @click.group()
