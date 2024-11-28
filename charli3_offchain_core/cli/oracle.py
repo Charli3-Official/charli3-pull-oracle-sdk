@@ -228,6 +228,7 @@ async def deploy(config: Path) -> None:
             time_absolute_uncertainty=deployment_config.timing.time_uncertainty,
             iqr_fence_multiplier=deployment_config.timing.iqr_multiplier,
             deployment_config=oracle_deployment_config,
+            nodes_config=deployment_config.nodes,
             fee_config=fee_config,
             signing_key=keys.payment_sk,
             platform_utxo=platform_utxo,

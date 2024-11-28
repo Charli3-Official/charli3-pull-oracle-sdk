@@ -17,10 +17,12 @@ from pycardano import (
     TransactionOutput,
     UTxO,
     Value,
+    VerificationKeyHash,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.deployment import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     AggStateVariant,
@@ -72,6 +74,7 @@ class OracleStartBuilder:
     async def build_start_transaction(
         self,
         config: OracleConfiguration,
+        nodes_config: NodesConfig,
         deployment_config: OracleDeploymentConfig,
         script_address: Address,
         platform_utxo: UTxO,
@@ -88,6 +91,7 @@ class OracleStartBuilder:
 
         Args:
             config: Oracle configuration parameters
+            nodes_config: Nodes configuration with node keys
             deployment_config: Deployment configuration with token names
             script_address: Address for oracle script UTxOs
             platform_utxo: UTxO containing platform auth NFT
@@ -150,6 +154,7 @@ class OracleStartBuilder:
             mint_policy.policy_id,
             self._create_settings_datum(
                 fee_config,
+                nodes_config,
                 aggregation_liveness_period,
                 time_absolute_uncertainty,
                 iqr_fence_multiplier,
@@ -249,15 +254,23 @@ class OracleStartBuilder:
     def _create_settings_datum(
         self,
         fee_config: FeeConfig,
+        nodes_config: NodesConfig,
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
+        node_map = {
+            VerificationKeyHash(bytes.fromhex(node.feed_vkh)): VerificationKeyHash(
+                bytes.fromhex(node.payment_vkh)
+            )
+            for node in nodes_config.nodes
+        }
+
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=Nodes(node_map={}),
-                required_node_signatures_count=0,  # Initial count is 0
+                nodes=Nodes(node_map=node_map),
+                required_node_signatures_count=nodes_config.required_signatures,
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,

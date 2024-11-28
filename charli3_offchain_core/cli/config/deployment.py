@@ -132,6 +132,38 @@ class TimingConfig:
 
 
 @dataclass
+class NodeConfig:
+    """Configuration for oracle node."""
+
+    feed_vkh: str  # Hex encoded feed verification key hash
+    payment_vkh: str  # Hex encoded payment verification key hash
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "NodeConfig":
+        """Create node config from dictionary."""
+        return cls(
+            feed_vkh=data["feed_vkh"],
+            payment_vkh=data["payment_vkh"],
+        )
+
+
+@dataclass
+class NodesConfig:
+    """Node configuration parameters."""
+
+    required_signatures: int
+    nodes: list[NodeConfig]
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "NodesConfig":
+        """Create nodes config from dictionary."""
+        return cls(
+            required_signatures=data["required_signatures"],
+            nodes=[NodeConfig.from_dict(node) for node in data["nodes"]],
+        )
+
+
+@dataclass
 class DeploymentConfig:
     """Complete deployment configuration."""
 
@@ -139,6 +171,7 @@ class DeploymentConfig:
     tokens: TokenConfig
     fees: FeeConfig
     timing: TimingConfig
+    nodes: NodesConfig
     transport_count: int = 4
     multi_sig: MultisigConfig | None = None
     blueprint_path: Path = Path("artifacts/plutus.json")
@@ -164,6 +197,7 @@ class DeploymentConfig:
             multi_sig=MultisigConfig.from_dict(data.get("multisig", {})),
             fees=FeeConfig.from_dict(data.get("fees", {})),
             timing=TimingConfig.from_dict(data.get("timing", {})),
+            nodes=NodesConfig.from_dict(data.get("nodes", {})),
             transport_count=data.get("transport_count", 4),
             blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),
             create_reference=data.get("create_reference", True),

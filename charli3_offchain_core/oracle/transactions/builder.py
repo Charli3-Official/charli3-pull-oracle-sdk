@@ -195,6 +195,7 @@ class OracleTransactionBuilder:
                     datum=RewardConsensusPending(
                         oracle_feed=0,  # Set by validator
                         message=message,
+                        node_reward_price=0,
                     )
                 ),
             )
