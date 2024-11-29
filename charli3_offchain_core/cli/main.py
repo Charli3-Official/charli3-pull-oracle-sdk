@@ -5,6 +5,7 @@ import click
 from charli3_offchain_core.cli.config.utils import setup_logging
 from charli3_offchain_core.cli.oracle import oracle
 from charli3_offchain_core.cli.platform import platform
+from charli3_offchain_core.cli.simulator.commands import simulator
 from charli3_offchain_core.cli.txs import tx
 
 
@@ -19,6 +20,7 @@ def cli(verbose: bool) -> None:
 cli.add_command(oracle)
 cli.add_command(tx)
 cli.add_command(platform)
+cli.add_command(simulator)
 
 
 if __name__ == "__main__":
