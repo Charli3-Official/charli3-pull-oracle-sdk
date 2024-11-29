@@ -6,7 +6,7 @@ from typing import Any
 
 import click
 
-from charli3_offchain_core.cli.simulator.oracle import (
+from charli3_offchain_core.cli.simulator.models import (
     SimulationConfig,
     SimulationResult,
 )

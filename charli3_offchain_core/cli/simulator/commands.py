@@ -5,7 +5,8 @@ from pathlib import Path
 import click
 
 from charli3_offchain_core.cli.config.utils import async_command
-from charli3_offchain_core.cli.simulator.oracle import OracleSimulator, SimulationConfig
+from charli3_offchain_core.cli.simulator.models import SimulationConfig
+from charli3_offchain_core.cli.simulator.oracle import OracleSimulator
 from charli3_offchain_core.cli.simulator.utils import (
     print_simulation_config,
     print_simulation_results,

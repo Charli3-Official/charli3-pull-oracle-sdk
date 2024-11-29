@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from nacl.signing import VerifyKey
 from pycardano import PaymentSigningKey, PaymentVerificationKey, VerificationKeyHash
 
+from charli3_offchain_core.oracle.transactions.builder import RewardsResult
 from charli3_offchain_core.oracle.utils.signature_checks import encode_oracle_feed
 
 
@@ -118,3 +119,30 @@ class SimulatedNode:
         # Create nacl verify key for signature verification
         node._nacl_verify_key = VerifyKey(node.verification_key.payload)
         return node
+
+
+@dataclass
+class SimulationConfig:
+    """Configuration for oracle simulation."""
+
+    node_count: int
+    base_feed: int
+    variance: float
+    required_signatures: int | None = None
+    wait_time: int = 60
+
+    def __post_init__(self) -> None:
+        """Set defaults for optional values."""
+        if self.required_signatures is None:
+            # Default to n-1 required signatures
+            self.required_signatures = max(1, self.node_count - 1)
+
+
+@dataclass
+class SimulationResult:
+    """Results of oracle simulation."""
+
+    nodes: list[SimulatedNode]
+    feeds: dict[int, dict]  # node_id -> {feed, signature, verification_key}
+    odv_tx: str
+    rewards: RewardsResult
