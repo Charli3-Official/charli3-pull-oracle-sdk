@@ -5,7 +5,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from pycardano import Address, ExtendedSigningKey, NativeScript, PaymentSigningKey, UTxO
+from pycardano import (
+    Address,
+    ExtendedSigningKey,
+    NativeScript,
+    PaymentSigningKey,
+    UTxO,
+)
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
@@ -38,8 +44,12 @@ class DeploymentStatus(str, Enum):
     CHECKING_REFERENCE_SCRIPTS = "checking_reference_scripts"
     CREATING_MANAGER_REFERENCE = "creating_manager_reference"
     BUILDING_START_TX = "building_start_tx"
+    TRANSACTION_BUILT = "transaction_built"
+    SIGNING_TX = "signing_transaction"
+    TRANSACTION_SIGNED = "transaction_signed"
     SUBMITTING_START_TX = "submitting_start_tx"
     WAITING_CONFIRMATION = "waiting_confirmation"
+    CONFIRMED = "confirmed"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -93,14 +103,12 @@ class OracleDeploymentOrchestrator:
             self.status_callback(status, message)
         logger.info("Deployment status: %s - %s", status, message)
 
-    async def deploy_oracle(
+    async def build_tx(
         self,
         # Network configuration
         platform_auth_policy_id: bytes,
         fee_token: Asset,
         platform_script: NativeScript,
-        # Script configuration
-        script_config: OracleScriptConfig,
         admin_address: Address,
         script_address: Address,
         # Timing configuration
@@ -150,17 +158,8 @@ class OracleDeploymentOrchestrator:
                 fee_token=fee_token,
             )
 
-            # Handle reference scripts
             self._update_status(
-                DeploymentStatus.CHECKING_REFERENCE_SCRIPTS,
-                "Checking for existing reference scripts...",
-            )
-
-            reference_result = await self._handle_reference_scripts(
-                script_config=script_config,
-                script_address=script_address,
-                admin_address=admin_address,
-                signing_key=signing_key,
+                DeploymentStatus.BUILDING_START_TX, "Building start transaction..."
             )
 
             # Handle start transaction
@@ -178,10 +177,9 @@ class OracleDeploymentOrchestrator:
                 iqr_fence_multiplier=iqr_fence_multiplier,
             )
 
-            self._update_status(DeploymentStatus.COMPLETED, "Deployment completed")
+            self._update_status(DeploymentStatus.TRANSACTION_BUILT, "Transaction built")
             return DeploymentResult(
-                status=DeploymentStatus.COMPLETED,
-                reference_scripts=reference_result,
+                status=DeploymentStatus.TRANSACTION_BUILT,
                 start_result=start_result,
             )
 
@@ -190,30 +188,39 @@ class OracleDeploymentOrchestrator:
             self._update_status(DeploymentStatus.FAILED, str(e))
             raise
 
-    async def _handle_reference_scripts(
+    async def handle_reference_scripts(
         self,
         script_config: OracleScriptConfig,
         script_address: Address,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-    ) -> ReferenceScriptResult:
-        """Handle reference script creation if needed."""
-        # Prepare reference scripts
+    ) -> tuple[ReferenceScriptResult, bool]:
+        """Checks and optionally contructs the reference script creation tx if needed."""
+
+        self._update_status(
+            DeploymentStatus.CHECKING_REFERENCE_SCRIPTS,
+            "Checking for existing reference scripts...",
+        )
+
         result = await self.reference_builder.prepare_reference_script(
             script_config=script_config,
             script_address=script_address,
             admin_address=admin_address,
             signing_key=signing_key,
         )
+        return result, result.manager_tx is not None
 
-        # Submit manager reference script if needed
-        if result.manager_tx:
-            self._update_status(
-                DeploymentStatus.CREATING_MANAGER_REFERENCE,
-                "Creating manager reference script...",
-            )
-            await self.reference_builder.submit_reference_script(result, signing_key)
-
+    async def submit_reference_script_tx(
+        self,
+        result: ReferenceScriptResult,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+    ) -> None:
+        """Submit prepared reference script transaction."""
+        self._update_status(
+            DeploymentStatus.CREATING_MANAGER_REFERENCE,
+            "Creating manager reference script...",
+        )
+        await self.reference_builder.submit_reference_script(result, signing_key)
         return result
 
     async def _handle_start_transaction(
@@ -235,7 +242,7 @@ class OracleDeploymentOrchestrator:
             DeploymentStatus.BUILDING_START_TX, "Building oracle start transaction..."
         )
 
-        start_result = await self.start_builder.build_start_transaction(
+        return await self.start_builder.build_start_transaction(
             config=config,
             deployment_config=deployment_config,
             script_address=script_address,
@@ -248,17 +255,3 @@ class OracleDeploymentOrchestrator:
             time_absolute_uncertainty=time_absolute_uncertainty,
             iqr_fence_multiplier=iqr_fence_multiplier,
         )
-
-        # Submit transaction
-        self._update_status(
-            DeploymentStatus.SUBMITTING_START_TX, "Submitting start transaction..."
-        )
-
-        self._update_status(
-            DeploymentStatus.WAITING_CONFIRMATION,
-            "Waiting for transaction confirmation...",
-        )
-
-        await self.tx_manager.sign_and_submit(start_result.transaction, [signing_key])
-
-        return start_result

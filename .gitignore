@@ -1,6 +1,7 @@
 .DS_Store
 #tx files
 tx_platform_mint.json
+tx_oracle_deploy.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
