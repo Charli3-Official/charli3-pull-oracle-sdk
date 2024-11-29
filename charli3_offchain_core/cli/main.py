@@ -3,6 +3,9 @@
 import click
 
 from charli3_offchain_core.cli.config.utils import setup_logging
+from charli3_offchain_core.cli.node_keys.generate_node_keys_command import (
+    generate_node_keys_command,
+)
 from charli3_offchain_core.cli.oracle import oracle
 from charli3_offchain_core.cli.platform import platform
 from charli3_offchain_core.cli.simulator.commands import simulator
@@ -21,6 +24,7 @@ cli.add_command(oracle)
 cli.add_command(tx)
 cli.add_command(platform)
 cli.add_command(simulator)
+cli.add_command(generate_node_keys_command, name="generate-node-keys")
 
 
 if __name__ == "__main__":

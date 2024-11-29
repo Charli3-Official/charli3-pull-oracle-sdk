@@ -148,6 +148,7 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+node_keys/
 
 # Pyre type checker
 .pyre/
