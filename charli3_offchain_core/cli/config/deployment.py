@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from pycardano import Network
+from pycardano import Network, VerificationKeyHash
 
 from charli3_offchain_core.cli.config.multisig import MultisigConfig
 
@@ -135,15 +135,15 @@ class TimingConfig:
 class NodeConfig:
     """Configuration for oracle node."""
 
-    feed_vkh: str  # Hex encoded feed verification key hash
-    payment_vkh: str  # Hex encoded payment verification key hash
+    feed_vkh: VerificationKeyHash
+    payment_vkh: VerificationKeyHash
 
     @classmethod
     def from_dict(cls, data: dict) -> "NodeConfig":
         """Create node config from dictionary."""
         return cls(
-            feed_vkh=data["feed_vkh"],
-            payment_vkh=data["payment_vkh"],
+            feed_vkh=VerificationKeyHash(bytes.fromhex(data["feed_vkh"])),
+            payment_vkh=VerificationKeyHash(bytes.fromhex(data["payment_vkh"])),
         )
 
 

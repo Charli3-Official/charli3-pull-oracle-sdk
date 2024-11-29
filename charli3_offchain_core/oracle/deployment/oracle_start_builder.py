@@ -17,7 +17,6 @@ from pycardano import (
     TransactionOutput,
     UTxO,
     Value,
-    VerificationKeyHash,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -260,12 +259,7 @@ class OracleStartBuilder:
         iqr_fence_multiplier: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
-        node_map = {
-            VerificationKeyHash(bytes.fromhex(node.feed_vkh)): VerificationKeyHash(
-                bytes.fromhex(node.payment_vkh)
-            )
-            for node in nodes_config.nodes
-        }
+        node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
 
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
