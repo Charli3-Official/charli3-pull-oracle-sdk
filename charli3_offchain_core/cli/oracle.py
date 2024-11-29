@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 @click.group()
 def oracle() -> None:
     """Oracle deployment and management commands."""
-    pass
 
 
 @oracle.command()
