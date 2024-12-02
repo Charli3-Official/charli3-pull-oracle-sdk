@@ -8,8 +8,6 @@ from pycardano import (
     PaymentVerificationKey,
     StakeVerificationKey,
 )
-from pycardano.backend.blockfrost import BlockFrostChainContext
-from pycardano.backend.kupo import KupoChainContextExtension
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
@@ -33,10 +31,9 @@ from ..blockchain.chain_query import ChainQuery
 from ..blockchain.transactions import TransactionManager
 from ..platform.auth.orchestrator import (
     PlatformAuthOrchestrator,
-    ProcessStatus,
 )
 from .base import (
-    create_chain_context,
+    create_chain_query,
     derive_deployment_addresses,
     load_keys_with_validation,
     validate_deployment_config,
@@ -61,6 +58,7 @@ def setup_platform_from_config(config: Path, metadata: Path | None) -> tuple[
     ChainQuery,
     TransactionManager,
     PlatformAuthOrchestrator,
+    Any,
 ]:
     """Set up all required modules that are common across platform functions from config file."""
     auth_config = PlatformAuthConfig.from_yaml(config)
@@ -68,17 +66,13 @@ def setup_platform_from_config(config: Path, metadata: Path | None) -> tuple[
         auth_config.network.wallet
     )
 
-    chain_context = create_chain_context(auth_config)
-    chain_query = ChainQuery(chain_context)
+    chain_query = create_chain_query(auth_config.network)
     tx_manager = TransactionManager(chain_query)
-
-    def status_callback(status: ProcessStatus, message: str) -> None:
-        format_status_update(status.name, message)
 
     orchestrator = PlatformAuthOrchestrator(
         chain_query=chain_query,
         tx_manager=tx_manager,
-        status_callback=status_callback,
+        status_callback=format_status_update,
     )
     meta_data = None
     if metadata:
@@ -102,10 +96,9 @@ def setup_oracle_from_config(
     config: Path,
 ) -> tuple[
     DeploymentConfig,
-    OracleContracts,
-    OracleContracts,
-    Any,
-    Any,
+    PaymentSigningKey,
+    PaymentVerificationKey,
+    OracleAddresses,
     ChainQuery,
     TransactionManager,
     OracleDeploymentOrchestrator,
@@ -151,18 +144,8 @@ def setup_oracle_from_config(
         platform_address=platform_address,
     )
 
-    # Initialize chain components
-    chain_context = create_chain_context(deployment_config)
-    chain_query = ChainQuery(
-        blockfrost_context=(
-            chain_context if isinstance(chain_context, BlockFrostChainContext) else None
-        ),
-        kupo_ogmios_context=(
-            chain_context
-            if isinstance(chain_context, KupoChainContextExtension)
-            else None
-        ),
-    )
+    chain_query = create_chain_query(deployment_config.network)
+
     tx_manager = TransactionManager(chain_query)
 
     # Create configurations
@@ -201,10 +184,9 @@ def setup_oracle_from_config(
 
     return (
         deployment_config,
-        base_contracts,
-        parameterized_contracts,
+        keys.payment_sk,
+        keys.payment_vk,
         oracle_addresses,
-        keys,
         chain_query,
         tx_manager,
         orchestrator,
