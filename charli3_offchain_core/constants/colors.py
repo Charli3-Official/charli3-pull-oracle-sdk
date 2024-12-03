@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class CliColor(str, Enum):
     """CLI color scheme"""
 

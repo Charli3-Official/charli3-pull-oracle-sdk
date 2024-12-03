@@ -1,24 +1,32 @@
 from dataclasses import dataclass
 from pathlib import Path
+
 from pycardano import Network
+
 from .keys import WalletConfig
 from .utils import ConfigFromDict, load_yaml_config
+
 
 @dataclass
 class BlockfrostConfig(ConfigFromDict):
     """Blockfrost backend configuration."""
+
     project_id: str
     api_url: str | None = None
+
 
 @dataclass
 class OgmiosKupoConfig(ConfigFromDict):
     """Ogmios/Kupo backend configuration."""
+
     ogmios_url: str
     kupo_url: str
+
 
 @dataclass
 class NetworkConfig(ConfigFromDict):
     """Network-specific configuration."""
+
     network: Network
     wallet: WalletConfig
     blockfrost: BlockfrostConfig | None = None
@@ -66,6 +74,10 @@ class NetworkConfig(ConfigFromDict):
     def validate(self) -> None:
         """Validate backend configuration."""
         if not self.blockfrost and not self.ogmios_kupo:
-            raise ValueError("Either Blockfrost or Ogmios/Kupo configuration must be provided")
+            raise ValueError(
+                "Either Blockfrost or Ogmios/Kupo configuration must be provided"
+            )
         if self.blockfrost and self.ogmios_kupo:
-            raise ValueError("Cannot specify both Blockfrost and Ogmios/Kupo configuration")
+            raise ValueError(
+                "Cannot specify both Blockfrost and Ogmios/Kupo configuration"
+            )

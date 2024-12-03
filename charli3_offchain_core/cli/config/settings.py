@@ -34,4 +34,3 @@ class TimingConfig:
             time_uncertainty=data.get("time_uncertainty", 60000),
             iqr_multiplier=data.get("iqr_multiplier", 150),
         )
-

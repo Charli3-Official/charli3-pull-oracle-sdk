@@ -13,12 +13,13 @@ from charli3_offchain_core.cli.config.formatting import (
     print_hash_info,
     print_status,
 )
-from .config.network import NetworkConfig
-from .config.keys import KeyManager
 from charli3_offchain_core.cli.config.utils import async_command
-from .base import create_chain_query
+
 from ..blockchain.transactions import TransactionManager
 from ..constants.status import ProcessStatus
+from .base import create_chain_query
+from .config.keys import KeyManager
+from .config.network import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ class TransactionProcessor:
 
 def create_sign_tx_command(
     status_signed_value: Any,
-):
+) -> click.Command:
     """Create a sign transaction command."""
 
     @click.command(name="sign-tx")
@@ -154,9 +155,7 @@ def create_sign_tx_command(
     async def sign_tx(config: Path, tx_file: Path) -> None:
         """Sign a transaction and update the file."""
         await TransactionProcessor.sign_tx(
-            config=config,
-            tx_file=tx_file, 
-            status_signed_value=status_signed_value
+            config=config, tx_file=tx_file, status_signed_value=status_signed_value
         )
 
     return sign_tx
@@ -165,7 +164,7 @@ def create_sign_tx_command(
 def create_submit_tx_command(
     status_success_value: Any,
     success_callback: Callable[[Transaction, dict], None] | None = None,
-):
+) -> click.Command:
     """Create a submit transaction command."""
 
     @click.command(name="submit-tx")
@@ -188,7 +187,7 @@ def create_submit_tx_command(
             config=config,
             tx_file=tx_file,
             success_callback=success_callback,
-            status_success_value=status_success_value
+            status_success_value=status_success_value,
         )
 
     return submit_tx
