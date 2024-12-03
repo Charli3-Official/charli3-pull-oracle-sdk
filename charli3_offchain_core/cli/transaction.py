@@ -62,7 +62,7 @@ class TransactionProcessor:
                     print_status("Transaction", "Submitted successfully", success=True)
                     print_hash_info("Transaction ID", tx.id)
             else:
-                raise click.ClickException("Transaction submission failed")
+                raise click.ClickException('Transaction submission failed due to insufficient signatures or network issues')
 
         except click.Abort:
             click.echo("Process aborted by the user.")
