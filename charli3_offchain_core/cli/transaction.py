@@ -124,7 +124,7 @@ class TransactionProcessor:
                         "Transaction has all required signatures and is ready for submission",
                     )
             else:
-                raise click.ClickException("Transaction signing failed")
+                raise click.ClickException('Transaction signing failed due to invalid key or network issues')
 
         except click.Abort:
             click.echo("Process aborted by the user.")
