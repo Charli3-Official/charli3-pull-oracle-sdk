@@ -1,0 +1,34 @@
+network:
+  # Network type (mainnet/testnet)
+  network: "testnet"
+
+  # Blockfrost configuration for testnet
+  blockfrost:
+    project_id: "$BLOCKFROST_TESTNET_PROJECT_ID"
+    # Optional custom testnet URL
+    # api_url: "https://cardano-testnet.blockfrost.io/api/v0"
+
+  # Alternative Ogmios/Kupo configuration for local testnet
+  # ogmios_kupo:
+  #   ogmios_url: "http://localhost:1337"
+  #   kupo_url: "http://localhost:1442"
+
+  # Wallet configuration - use either mnemonic or key files
+  wallet:
+    mnemonic: "$TESTNET_WALLET_MNEMONIC"
+
+    # Option 2: Test key files
+    # payment_skey_path: "testnet-keys/payment.skey"
+    # payment_vkey_path: "testnet-keys/payment.vkey"
+    # stake_vkey_path: "testnet-keys/stake.vkey"
+
+script_address: "addr1..."
+policy_id: "..."
+
+# Simulation-specific settings
+simulation:
+  node_keys_dir: "node_keys"
+  base_feed: 100
+  variance: 0.02
+  wait_time: 60
+  required_signatures: 3

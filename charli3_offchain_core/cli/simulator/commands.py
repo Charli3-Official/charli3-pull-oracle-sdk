@@ -12,7 +12,7 @@ from charli3_offchain_core.cli.simulator.utils import (
     print_simulation_results,
     save_simulation_results,
 )
-from charli3_offchain_core.cli.txs.base import TxConfig
+from charli3_offchain_core.cli.txs.base import tx_options
 
 
 @click.group()
@@ -21,41 +21,7 @@ def simulator() -> None:
 
 
 @simulator.command()
-@click.option(
-    "--config",
-    type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Transaction config file",
-)
-@click.option(
-    "--node-count",
-    type=int,
-    default=4,
-    help="Number of test nodes",
-)
-@click.option(
-    "--required-sigs",
-    type=int,
-    help="Required signature count (defaults to n-1)",
-)
-@click.option(
-    "--feed-value",
-    type=int,
-    required=True,
-    help="Base feed value",
-)
-@click.option(
-    "--variance",
-    type=float,
-    default=0.01,
-    help="Feed value variance (0-1)",
-)
-@click.option(
-    "--wait-time",
-    type=int,
-    default=60,
-    help="Seconds to wait between ODV and rewards",
-)
+@tx_options
 @click.option(
     "--output",
     type=click.Path(path_type=Path),
@@ -64,33 +30,22 @@ def simulator() -> None:
 @async_command
 async def run(
     config: Path,
-    node_count: int,
-    required_sigs: int | None,
-    feed_value: int,
-    variance: float,
-    wait_time: int,
     output: Path | None,
 ) -> None:
-    """Run complete oracle simulation."""
-    # Load config and create simulator
-    tx_config = TxConfig.from_yaml(config)
-    sim_config = SimulationConfig(
-        node_count=node_count,
-        required_signatures=required_sigs,
-        base_feed=feed_value,
-        variance=variance,
-        wait_time=wait_time,
-    )
+    """Run complete oracle simulation using configuration file."""
+    # Load simulation config
+    sim_config = SimulationConfig.from_yaml(config)
 
-    simulator = OracleSimulator(tx_config, sim_config)
+    # Create simulator
+    oracle_simulator = OracleSimulator(sim_config)
 
     # Show configuration
-    print_simulation_config(sim_config)
+    print_simulation_config(sim_config.simulation)
 
     try:
         # Run simulation
         click.echo("\nStarting Simulation...")
-        result = await simulator.run_simulation()
+        result = await oracle_simulator.run_simulation()
 
         # Show results
         print_simulation_results(result)

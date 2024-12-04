@@ -1,40 +1,78 @@
-"""Models for oracle simulation."""
+"""Simulated node implementation using real node keys."""
 
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
+import yaml
 from nacl.signing import VerifyKey
 from pycardano import PaymentSigningKey, PaymentVerificationKey, VerificationKeyHash
 
+from charli3_offchain_core.cli.config.deployment import NetworkConfig, WalletConfig
+from charli3_offchain_core.cli.txs.base import TxConfig
 from charli3_offchain_core.oracle.transactions.builder import RewardsResult
 from charli3_offchain_core.oracle.utils.signature_checks import encode_oracle_feed
 
 
-@dataclass
-class NodeKeys:
-    """Container for node cryptographic keys."""
-
-    signing_key: PaymentSigningKey
-    verification_key: PaymentVerificationKey
-    feed_vkh: VerificationKeyHash
-    payment_vkh: VerificationKeyHash
-
-
 class SimulatedNode:
-    """Represents a simulated oracle node."""
+    """Represents a simulated oracle node using real keys."""
 
-    def __init__(self) -> None:
-        """Initialize node with generated keys."""
-        # Generate node keys
-        self.signing_key = PaymentSigningKey.generate()
-        self.verification_key = self.signing_key.to_verification_key()
+    def __init__(
+        self,
+        signing_key: PaymentSigningKey,
+        verification_key: PaymentVerificationKey,
+        feed_vkh: VerificationKeyHash,
+        payment_vkh: VerificationKeyHash,
+    ) -> None:
+        """Initialize node with provided keys.
 
-        # Create verification key hashes
-        self.feed_vkh = self.verification_key.hash()
-        self.payment_vkh = self.verification_key.hash()
+        Args:
+            signing_key: Payment signing key
+            verification_key: Payment verification key
+            feed_vkh: Feed verification key hash
+            payment_vkh: Payment verification key hash
+        """
+        self.signing_key = signing_key
+        self.verification_key = verification_key
+        self.feed_vkh = feed_vkh
+        self.payment_vkh = payment_vkh
 
         # Create nacl verify key for signature verification
         self._nacl_verify_key = VerifyKey(self.verification_key.payload)
+
+    @classmethod
+    def from_key_directory(cls, node_dir: Path) -> "SimulatedNode":
+        """Create node from generated key directory.
+
+        Args:
+            node_dir: Directory containing node keys
+
+        Returns:
+            SimulatedNode: New node instance
+
+        Raises:
+            ValueError: If key files are missing or invalid
+        """
+        try:
+            # Load keys from files
+            signing_key = PaymentSigningKey.load(node_dir / "feed.skey")
+            verification_key = PaymentVerificationKey.load(node_dir / "feed.vkey")
+
+            # Load VKH values
+            feed_vkh = VerificationKeyHash(
+                bytes.fromhex((node_dir / "feed.vkh").read_text().strip())
+            )
+            payment_vkh = VerificationKeyHash(
+                bytes.fromhex((node_dir / "payment.vkh").read_text().strip())
+            )
+
+            # Create instance using __init__
+            return cls(signing_key, verification_key, feed_vkh, payment_vkh)
+
+        except FileNotFoundError as e:
+            raise ValueError(f"Missing key file in {node_dir}: {e}") from e
+        except Exception as e:
+            raise ValueError(f"Failed to load node keys from {node_dir}: {e}") from e
 
     @property
     def hex_feed_vkh(self) -> str:
@@ -101,41 +139,39 @@ class SimulatedNode:
             "verification_key": self.verify_key_bytes.hex(),
         }
 
-    @classmethod
-    def from_signing_key(cls, signing_key: PaymentSigningKey) -> "SimulatedNode":
-        """Create node from existing signing key.
-
-        Args:
-            signing_key: Payment signing key
-
-        Returns:
-            SimulatedNode: New node instance
-        """
-        node = cls.__new__(cls)  # Create uninitialized instance
-        node.signing_key = signing_key
-        node.verification_key = signing_key.to_verification_key()
-        node.feed_vkh = node.verification_key.hash()
-        node.payment_vkh = node.verification_key.hash()
-        # Create nacl verify key for signature verification
-        node._nacl_verify_key = VerifyKey(node.verification_key.payload)
-        return node
-
 
 @dataclass
-class SimulationConfig:
-    """Configuration for oracle simulation."""
+class SimulationSettings:
+    """Simulation-specific configuration."""
 
-    node_count: int
+    node_keys_dir: Path
     base_feed: int
-    variance: float
-    required_signatures: int | None = None
+    variance: float = 0.01
     wait_time: int = 60
+    required_signatures: int | None = None
 
     def __post_init__(self) -> None:
-        """Set defaults for optional values."""
+        """Validate and set defaults."""
+        if not self.node_keys_dir.is_dir():
+            raise ValueError(f"Node keys directory not found: {self.node_keys_dir}")
+
+        # Load required signatures from file if not specified
         if self.required_signatures is None:
-            # Default to n-1 required signatures
-            self.required_signatures = max(1, self.node_count - 1)
+            try:
+                self.required_signatures = int(
+                    (self.node_keys_dir / "required_signatures").read_text()
+                )
+            except (FileNotFoundError, ValueError) as e:
+                raise ValueError("Could not load required_signatures") from e
+
+    @property
+    def node_count(self) -> int:
+        """Get number of nodes from directory structure."""
+        return len(list(self.node_keys_dir.glob("node_*")))
+
+    def get_node_dirs(self) -> list[Path]:
+        """Get sorted list of node directories."""
+        return sorted(self.node_keys_dir.glob("node_*"))
 
 
 @dataclass
@@ -146,3 +182,68 @@ class SimulationResult:
     feeds: dict[int, dict]  # node_id -> {feed, signature, verification_key}
     odv_tx: str
     rewards: RewardsResult
+
+
+class SimulationConfig(TxConfig):
+    """Extends base transaction config with simulation settings."""
+
+    def __init__(
+        self,
+        network: NetworkConfig,
+        script_address: str,
+        policy_id: str,
+        wallet: WalletConfig,
+        simulation: SimulationSettings,
+    ) -> None:
+        """Initialize simulation config with base config and simulation settings."""
+        super().__init__(network, script_address, policy_id, wallet)
+        self.simulation = simulation
+
+    @classmethod
+    def from_yaml(cls, path: Path) -> "SimulationConfig":
+        """Load simulation config from YAML file."""
+        if not path.exists():
+            raise FileNotFoundError(f"Config file not found: {path}")
+
+        # Load base config first
+        with path.open("r") as f:
+            data = yaml.safe_load(f)
+
+        # Load simulation settings
+        sim_data = data.get("simulation", {})
+        if not sim_data:
+            raise ValueError("Missing simulation settings in config file")
+
+        sim_settings = SimulationSettings(
+            node_keys_dir=Path(sim_data["node_keys_dir"]),
+            base_feed=sim_data["base_feed"],
+            variance=sim_data.get("variance", 0.01),
+            wait_time=sim_data.get("wait_time", 60),
+            required_signatures=sim_data.get("required_signatures"),
+        )
+
+        return cls(
+            network=NetworkConfig.from_dict(data.get("network", {})),
+            script_address=data["script_address"],
+            policy_id=data["policy_id"],
+            wallet=WalletConfig.from_dict(data["wallet"]),
+            simulation=sim_settings,
+        )
+
+    def validate(self) -> None:
+        """Validate complete configuration."""
+        # Validate base config
+        self.network.validate()
+
+        # Validate simulation settings
+        if self.simulation.node_count < self.simulation.required_signatures:
+            raise ValueError(
+                f"Number of nodes ({self.simulation.node_count}) must be >= "
+                f"required signatures ({self.simulation.required_signatures})"
+            )
+
+        if not 0 < self.simulation.variance < 1:
+            raise ValueError("Variance must be between 0 and 1")
+
+        if self.simulation.wait_time < 0:
+            raise ValueError("Wait time cannot be negative")

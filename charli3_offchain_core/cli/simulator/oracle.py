@@ -7,7 +7,7 @@ import time
 
 from pycardano import Address
 
-from charli3_offchain_core.cli.txs.base import TransactionContext, TxConfig
+from charli3_offchain_core.cli.txs.base import TransactionContext
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
 from charli3_offchain_core.oracle.transactions.builder import (
     OdvResult,
@@ -24,23 +24,25 @@ logger = logging.getLogger(__name__)
 class OracleSimulator:
     """Manages oracle simulation state and operations."""
 
-    def __init__(
-        self,
-        tx_config: TxConfig,
-        sim_config: SimulationConfig,
-    ) -> None:
+    def __init__(self, config: SimulationConfig) -> None:
         """Initialize simulator with configuration.
 
         Args:
-            tx_config: Transaction configuration
-            sim_config: Simulation parameters
+            config: Complete simulation configuration
         """
-        self.tx_config = tx_config
-        self.sim_config = sim_config
-        self.nodes = [SimulatedNode() for _ in range(sim_config.node_count)]
+        # Store config
+        self.config = config
+
+        # Initialize nodes from key directories
+        self.nodes = [
+            SimulatedNode.from_key_directory(node_dir)
+            for node_dir in config.simulation.get_node_dirs()
+        ]
+
+        logger.info("Initialized %d nodes from keys", len(self.nodes))
 
         # Initialize transaction components
-        self.ctx = TransactionContext(tx_config)
+        self.ctx = TransactionContext(config)
         self.tx_builder = OracleTransactionBuilder(
             tx_manager=self.ctx.tx_manager,
             script_address=self.ctx.script_address,
@@ -59,17 +61,17 @@ class OracleSimulator:
 
         for idx, node in enumerate(self.nodes):
             # Add random variance to base feed
-            variance_amount = self.sim_config.base_feed * (
-                (secrets.randbelow(10000) / 10000.0) * self.sim_config.variance
+            variance_amount = self.config.simulation.base_feed * (
+                (secrets.randbelow(10000) / 10000.0) * self.config.simulation.variance
             )
-            feed_value = self.sim_config.base_feed + int(variance_amount)
+            feed_value = self.config.simulation.base_feed + int(variance_amount)
 
             # Sign feed value
             msg_timestamp, signature = node.sign_feed(feed_value, timestamp)
             node_feeds[idx] = {
                 "feed": feed_value,
                 "signature": signature.hex(),
-                "verification_key": node.verification_key.to_primitive().hex(),
+                "verification_key": node.verify_key_bytes.hex(),
                 "timestamp": msg_timestamp,
             }
 
@@ -90,6 +92,9 @@ class OracleSimulator:
 
         Returns:
             ODV transaction result
+
+        Raises:
+            RuntimeError: If transaction fails
         """
         # Load keys
         signing_key, default_change = self.ctx.load_keys()
@@ -125,6 +130,9 @@ class OracleSimulator:
 
         Returns:
             Rewards calculation result
+
+        Raises:
+            RuntimeError: If transaction fails
         """
         # Load keys
         signing_key, default_change = self.ctx.load_keys()
@@ -153,20 +161,27 @@ class OracleSimulator:
 
         Returns:
             SimulationResult containing transaction results
+
+        Raises:
+            Exception: If simulation fails
         """
-        # Generate and submit ODV
-        message, feeds = await self.generate_feeds()
-        odv_result = await self.submit_odv(message)
+        try:
+            # Generate and submit ODV
+            message, feeds = await self.generate_feeds()
+            odv_result = await self.submit_odv(message)
 
-        # Wait configured time
-        await asyncio.sleep(self.sim_config.wait_time)
+            # Wait configured time
+            await asyncio.sleep(self.config.simulation.wait_time)
 
-        # Process rewards
-        rewards = await self.process_rewards()
+            # Process rewards
+            rewards = await self.process_rewards()
 
-        return SimulationResult(
-            nodes=self.nodes,
-            feeds=feeds,
-            odv_tx=str(odv_result.transaction.id),
-            rewards=rewards,
-        )
+            return SimulationResult(
+                nodes=self.nodes,
+                feeds=feeds,
+                odv_tx=str(odv_result.transaction.id),
+                rewards=rewards,
+            )
+        except Exception as e:
+            logger.error("Simulation failed: %s", e)
+            raise
