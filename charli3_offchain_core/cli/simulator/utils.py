@@ -2,9 +2,9 @@
 
 import json
 import time
-from typing import Any
 
 import click
+from pycardano import VerificationKeyHash
 
 from charli3_offchain_core.cli.simulator.models import (
     SimulationConfig,
@@ -13,25 +13,32 @@ from charli3_offchain_core.cli.simulator.models import (
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
 
 
-def create_aggregate_message(
-    node_feeds: dict[int, dict[str, Any]],
-    timestamp: int,
-) -> AggregateMessage:
+def create_aggregate_message(feed_data: dict) -> AggregateMessage:
     """Create aggregate message from node feeds.
 
     Args:
-        node_feeds: Dictionary mapping node ID to feed data
-        timestamp: Message timestamp
+        feed_data: Dictionary of node feed data
 
     Returns:
         AggregateMessage for ODV submission
     """
-    # Sort feeds by value
-    sorted_feeds = dict(sorted(node_feeds.items(), key=lambda x: x[1]["feed"]))
+    # Extract timestamp from first feed (they should all be the same)
+    timestamp = feed_data[0]["timestamp"]
+
+    # Create list of (vkh_hex, feed) tuples
+    feeds = []
+    for _, data in feed_data.items():
+        # Convert verification key to VKH
+        vkh = VerificationKeyHash(bytes.fromhex(data["verification_key"]))
+        feed = data["feed"]
+        feeds.append((vkh, feed))
+
+    # Sort by feed value
+    feeds.sort(key=lambda x: x[1])
 
     return AggregateMessage(
-        node_feeds_sorted_by_feed=sorted_feeds,
-        node_feeds_count=len(sorted_feeds),
+        node_feeds_sorted_by_feed=feeds,
+        node_feeds_count=len(feeds),
         timestamp=timestamp,
     )
 

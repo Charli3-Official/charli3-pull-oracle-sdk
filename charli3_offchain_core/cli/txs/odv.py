@@ -75,7 +75,6 @@ async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
         print_progress("Building ODV transaction...")
         result = await builder.build_odv_tx(
             message=message,
-            settings=feed_data["settings"],  # Settings should be in feed file
             signing_key=signing_key,
             change_address=change_address,
         )

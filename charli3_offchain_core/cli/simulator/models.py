@@ -1,17 +1,23 @@
 """Simulated node implementation using real node keys."""
 
+import json
 import time
 from dataclasses import dataclass
+from logging import getLogger
 from pathlib import Path
 
+import cbor2
 import yaml
-from nacl.signing import VerifyKey
+from nacl.encoding import RawEncoder
+from nacl.signing import SigningKey, VerifyKey
 from pycardano import PaymentSigningKey, PaymentVerificationKey, VerificationKeyHash
 
 from charli3_offchain_core.cli.config.deployment import NetworkConfig, WalletConfig
 from charli3_offchain_core.cli.txs.base import TxConfig
 from charli3_offchain_core.oracle.transactions.builder import RewardsResult
 from charli3_offchain_core.oracle.utils.signature_checks import encode_oracle_feed
+
+logger = getLogger(__name__)
 
 
 class SimulatedNode:
@@ -23,6 +29,7 @@ class SimulatedNode:
         verification_key: PaymentVerificationKey,
         feed_vkh: VerificationKeyHash,
         payment_vkh: VerificationKeyHash,
+        nacl_verify_key: VerifyKey,
     ) -> None:
         """Initialize node with provided keys.
 
@@ -31,14 +38,39 @@ class SimulatedNode:
             verification_key: Payment verification key
             feed_vkh: Feed verification key hash
             payment_vkh: Payment verification key hash
+            nacl_verify_key: NaCl verify key for signature verification
         """
         self.signing_key = signing_key
         self.verification_key = verification_key
         self.feed_vkh = feed_vkh
         self.payment_vkh = payment_vkh
+        self._nacl_verify_key = nacl_verify_key
 
-        # Create nacl verify key for signature verification
-        self._nacl_verify_key = VerifyKey(self.verification_key.payload)
+        try:
+            key_json = json.loads(self.signing_key.to_json())
+            cbor_data = bytes.fromhex(key_json["cborHex"])
+            decoded = cbor2.loads(cbor_data)
+
+            # Extract private key from CBOR data
+            if isinstance(decoded, bytes):
+                private_key_bytes = decoded[-32:]
+            elif isinstance(decoded, list) and len(decoded) > 0:
+                private_key_bytes = (
+                    decoded[-1][-32:]
+                    if isinstance(decoded[-1], bytes)
+                    else decoded[-32:]
+                )
+            else:
+                raise ValueError("Unexpected CBOR data format")
+
+            self._nacl_signing_key = SigningKey(private_key_bytes, encoder=RawEncoder)
+            logger.info(
+                "Initialized node VKH: %s", self.feed_vkh.to_primitive().hex()[:8]
+            )
+
+        except Exception as e:
+            logger.error("Failed to initialize node: %s", str(e))
+            raise ValueError(f"Failed to initialize node: {e!s}") from e
 
     @classmethod
     def from_key_directory(cls, node_dir: Path) -> "SimulatedNode":
@@ -58,6 +90,10 @@ class SimulatedNode:
             signing_key = PaymentSigningKey.load(node_dir / "feed.skey")
             verification_key = PaymentVerificationKey.load(node_dir / "feed.vkey")
 
+            # Process verification key
+            key_bytes = verification_key.payload[-32:]  # Take last 32 bytes
+            nacl_verify_key = VerifyKey(key_bytes)
+
             # Load VKH values
             feed_vkh = VerificationKeyHash(
                 bytes.fromhex((node_dir / "feed.vkh").read_text().strip())
@@ -67,12 +103,15 @@ class SimulatedNode:
             )
 
             # Create instance using __init__
-            return cls(signing_key, verification_key, feed_vkh, payment_vkh)
+            return cls(
+                signing_key, verification_key, feed_vkh, payment_vkh, nacl_verify_key
+            )
 
         except FileNotFoundError as e:
             raise ValueError(f"Missing key file in {node_dir}: {e}") from e
         except Exception as e:
-            raise ValueError(f"Failed to load node keys from {node_dir}: {e}") from e
+            logger.error("Failed to load node keys from %s: %s", node_dir, e)
+            raise ValueError(f"Failed to load node keys: {e!s}") from e
 
     @property
     def hex_feed_vkh(self) -> str:
@@ -95,15 +134,32 @@ class SimulatedNode:
             Tuple of (timestamp, signature bytes)
         """
         if timestamp is None:
-            timestamp = int(time.time() * 1000)  # Convert to milliseconds
+            timestamp = int(time.time() * 1000)
 
         # Create message bytes
         message = encode_oracle_feed(value, timestamp)
 
-        # Use pycardano's signing key for signatures
-        signature = self.signing_key.sign(message)
+        try:
+            signature = self._nacl_signing_key.sign(message).signature
 
-        return timestamp, signature
+            # Verify signature immediately
+            try:
+                self._nacl_verify_key.verify(message, signature)
+                logger.debug(
+                    "Signature verification successful for node %s",
+                    self.hex_feed_vkh[:8],
+                )
+            except Exception as e:  # pylint: disable=broad-except
+                logger.warning(
+                    "Self-verification failed for node %s: %s", self.hex_feed_vkh[:8], e
+                )
+
+            return timestamp, signature
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error(
+                "Failed to sign feed for node %s: %s", self.hex_feed_vkh[:8], e
+            )
+            raise
 
     def verify_feed_signature(
         self, value: int, timestamp: int, signature: bytes
@@ -123,13 +179,14 @@ class SimulatedNode:
             # Use nacl's VerifyKey for verification
             self._nacl_verify_key.verify(message, signature)
             return True
-        except Exception:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
+            logger.warning("Signature verification failed: %s", e)
             return False
 
     @property
     def verify_key_bytes(self) -> bytes:
         """Get raw verification key bytes for signature validation."""
-        return self.verification_key.payload
+        return self.verification_key.hash().payload
 
     def to_dict(self) -> dict:
         """Convert node to dictionary representation."""

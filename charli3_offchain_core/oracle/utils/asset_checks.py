@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from pycardano import Asset, MultiAsset, ScriptHash, UTxO, Value
+from pycardano import Asset, AssetName, MultiAsset, ScriptHash, UTxO, Value
 
 from charli3_offchain_core.oracle.exceptions import ValidationError
 
@@ -75,13 +75,19 @@ def filter_utxos_by_token_name(
     if not policy_id or not token_name:
         raise ValidationError("Invalid policy_id or token_name: cannot be empty")
 
-    encoded_name = token_name.encode() if isinstance(token_name, str) else token_name
+    encoded_name = AssetName(
+        token_name.encode() if isinstance(token_name, str) else token_name
+    )
+
     return [
         utxo
         for utxo in utxos
-        if utxo.output.amount.multi_asset
-        and policy_id in utxo.output.amount.multi_asset
-        and encoded_name in utxo.output.amount.multi_asset[policy_id]
+        if (
+            utxo.output.amount.multi_asset  # Has multi_asset
+            and policy_id in utxo.output.amount.multi_asset  # Has correct policy
+            and encoded_name in utxo.output.amount.multi_asset[policy_id]  # Has token
+            and utxo.output.amount.multi_asset[policy_id][encoded_name] >= 1
+        )  # Amount is >= 1
     ]
 
 

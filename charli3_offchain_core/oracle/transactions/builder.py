@@ -126,9 +126,9 @@ class OracleTransactionBuilder:
             transport, agg_state = state_checks.find_transport_pair(
                 utxos, self.policy_id
             )
-            settings: OracleSettingsDatum = state_checks.filter_oracle_settings(utxos)[
-                0
-            ].output.datum.datum
+            settings: OracleSettingsDatum = (
+                state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
+            )
             # Update calculators with current settings
             self.consensus_calculator = consensus.ConsensusCalculator(settings)
 
@@ -224,9 +224,9 @@ class OracleTransactionBuilder:
         try:
             # Get and validate UTxOs
             utxos = await self._get_script_utxos()
-            settings: OracleSettingsDatum = state_checks.filter_oracle_settings(utxos)[
-                0
-            ].output.datum.datum
+            settings: OracleSettingsDatum = (
+                state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
+            )
             # Update calculators with current settings
             self.consensus_calculator = consensus.ConsensusCalculator(settings)
             self.reward_calculator = rewards.RewardCalculator(settings.fee_info)

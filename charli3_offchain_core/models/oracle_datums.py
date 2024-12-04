@@ -145,19 +145,35 @@ class AggregateMessage(PlutusData):
     timestamp: PosixTime
 
     @classmethod
-    def from_primitive(
-        cls, feeds: List[Tuple[str, int]], timestamp: int
-    ) -> "AggregateMessage":
-        """Create from hex-encoded VKHs and feed values"""
-        sorted_feeds = [
-            (VerificationKeyHash(bytes.fromhex(vkh)), feed) for vkh, feed in feeds
+    def from_primitive(cls, data: Any) -> "AggregateMessage":
+        """Create from primitive representation."""
+        # Handle data unwrapping if needed
+        while hasattr(data, "value"):
+            data = data.value
+
+        # Expect data to be a list of [feeds, count, timestamp]
+        if not isinstance(data, list) or len(data) != 3:
+            raise ValueError("Invalid primitive data format")
+
+        # Process feeds
+        feeds = [
+            (VerificationKeyHash.from_primitive(vkh), feed) for vkh, feed in data[0]
         ]
-        sorted_feeds.sort(key=lambda x: x[1])  # sorted by NodeFeed
+
         return cls(
-            node_feeds_sorted_by_feed=sorted_feeds,
-            node_feeds_count=len(feeds),
-            timestamp=timestamp,
+            node_feeds_sorted_by_feed=feeds, node_feeds_count=data[1], timestamp=data[2]
         )
+
+    def to_primitive(self) -> List:
+        """Convert to primitive representation."""
+        return [
+            [
+                (vkh.to_primitive(), feed)
+                for vkh, feed in self.node_feeds_sorted_by_feed
+            ],
+            self.node_feeds_count,
+            self.timestamp,
+        ]
 
 
 @dataclass

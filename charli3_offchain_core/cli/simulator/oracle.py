@@ -75,7 +75,7 @@ class OracleSimulator:
             }
 
         # Create aggregate message
-        message = create_aggregate_message(node_feeds, timestamp)
+        message = create_aggregate_message(node_feeds)
         return message, node_feeds
 
     async def submit_odv(
@@ -102,7 +102,6 @@ class OracleSimulator:
         # Build and submit transaction
         result = await self.tx_builder.build_odv_tx(
             message=message,
-            settings=None,  # Will be loaded from chain
             signing_key=signing_key,
             change_address=change_address,
         )
@@ -139,7 +138,6 @@ class OracleSimulator:
 
         # Build and submit transaction
         result = await self.tx_builder.build_rewards_tx(
-            settings=None,  # Will be loaded from chain
             signing_key=signing_key,
             change_address=change_address,
         )
@@ -166,6 +164,7 @@ class OracleSimulator:
         """
         try:
             # Generate and submit ODV
+            logger.info("Generating feeds and submitting ODV...")
             message, feeds = await self.generate_feeds()
             odv_result = await self.submit_odv(message)
 
