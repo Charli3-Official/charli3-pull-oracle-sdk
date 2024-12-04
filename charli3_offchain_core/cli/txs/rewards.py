@@ -63,7 +63,6 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
-            oracle_config=None,  # Not needed for transaction building
         )
 
         # Get settings from script address

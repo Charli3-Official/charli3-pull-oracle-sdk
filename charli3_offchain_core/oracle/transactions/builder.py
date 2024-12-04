@@ -18,7 +18,6 @@ from charli3_offchain_core.models.oracle_datums import (
     AggStateDatum,
     AggStateVariant,
     NoRewards,
-    OracleConfiguration,
     OracleSettingsDatum,
     RewardAccountVariant,
     RewardConsensusPending,
@@ -76,7 +75,6 @@ class OracleTransactionBuilder:
         tx_manager: TransactionManager,
         script_address: Address,
         policy_id: bytes,
-        oracle_config: OracleConfiguration,
     ) -> None:
         """Initialize transaction builder.
 
@@ -84,14 +82,12 @@ class OracleTransactionBuilder:
             tx_manager: Transaction manager
             script_address: Script address
             policy_id: Policy ID for tokens
-            oracle_config: Oracle configuration
         """
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
-        self.oracle_config = oracle_config
-        self.consensus_calculator = consensus.ConsensusCalculator(None)
-        self.reward_calculator = rewards.RewardCalculator(None)
+        self.consensus_calculator = None
+        self.reward_calculator = None
         self.reward_accumulator = rewards.RewardAccumulator()
 
     async def _get_script_utxos(self) -> list[UTxO]:
@@ -104,42 +100,9 @@ class OracleTransactionBuilder:
         except Exception as e:
             raise TransactionError(f"Failed to get script UTxOs: {e}") from e
 
-    async def _find_transport_pair(self, utxos: list[UTxO]) -> tuple[UTxO, UTxO]:
-        """Find matching empty transport and agg state pair."""
-        try:
-            # Find empty transport
-            transports = state_checks.filter_empty_transports(
-                asset_checks.filter_utxos_by_token_name(
-                    utxos, self.policy_id, "transport"
-                )
-            )
-            if not transports:
-                raise StateValidationError("No empty transport UTxO found")
-
-            # Find empty agg state
-            agg_states = state_checks.filter_empty_agg_states(
-                asset_checks.filter_utxos_by_token_name(
-                    utxos, self.policy_id, "aggstate"
-                )
-            )
-            if not agg_states:
-                raise StateValidationError("No empty agg state UTxO found")
-
-            # Find matching pair
-            for transport in transports:
-                for agg_state in agg_states:
-                    if state_checks.validate_matching_pair(transport, agg_state):
-                        return transport, agg_state
-
-            raise StateValidationError("No matching transport/agg state pair found")
-
-        except Exception as e:
-            raise TransactionError(f"Failed to find UTxO pair: {e}") from e
-
     async def build_odv_tx(
         self,
         message: AggregateMessage,
-        settings: OracleSettingsDatum,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         change_address: Address | None = None,
     ) -> OdvResult:
@@ -147,7 +110,6 @@ class OracleTransactionBuilder:
 
         Args:
             message: Aggregate message to validate
-            settings: Oracle settings datum
             signing_key: Signing key for transaction
             change_address: Optional change address
 
@@ -159,6 +121,14 @@ class OracleTransactionBuilder:
             TransactionError: If transaction building fails
         """
         try:
+            # Get and validate UTxOs
+            utxos = await self._get_script_utxos()
+            transport, agg_state = state_checks.find_transport_pair(
+                utxos, self.policy_id
+            )
+            settings: OracleSettingsDatum = state_checks.filter_oracle_settings(utxos)[
+                0
+            ].output.datum.datum
             # Update calculators with current settings
             self.consensus_calculator = consensus.ConsensusCalculator(settings)
 
@@ -175,10 +145,6 @@ class OracleTransactionBuilder:
             # Validate oracle state
             if state_checks.is_oracle_closing(settings):
                 raise StateValidationError("Oracle is in closing period")
-
-            # Get and validate UTxOs
-            utxos = await self._get_script_utxos()
-            transport, agg_state = await self._find_transport_pair(utxos)
 
             # Validate timestamp
             current_time = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
@@ -233,7 +199,6 @@ class OracleTransactionBuilder:
 
     async def build_rewards_tx(
         self,
-        settings: OracleSettingsDatum,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         max_inputs: int = 8,
         min_feed_value: int = 0,
@@ -243,7 +208,6 @@ class OracleTransactionBuilder:
         """Build rewards calculation transaction with consensus processing.
 
         Args:
-            settings: Oracle settings datum
             signing_key: Signing key for transaction
             max_inputs: Maximum number of transport UTxOs to process
             min_feed_value: Minimum valid feed value
@@ -258,12 +222,14 @@ class OracleTransactionBuilder:
             TransactionError: If transaction building fails
         """
         try:
+            # Get and validate UTxOs
+            utxos = await self._get_script_utxos()
+            settings: OracleSettingsDatum = state_checks.filter_oracle_settings(utxos)[
+                0
+            ].output.datum.datum
             # Update calculators with current settings
             self.consensus_calculator = consensus.ConsensusCalculator(settings)
             self.reward_calculator = rewards.RewardCalculator(settings.fee_info)
-
-            # Get and validate UTxOs
-            utxos = await self._get_script_utxos()
 
             # Find pending transports
             transports = state_checks.filter_pending_transports(

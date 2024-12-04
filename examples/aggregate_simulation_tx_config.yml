@@ -13,14 +13,14 @@ network:
   #   ogmios_url: "http://localhost:1337"
   #   kupo_url: "http://localhost:1442"
 
-  # Wallet configuration - use either mnemonic or key files
-  wallet:
-    mnemonic: "$TESTNET_WALLET_MNEMONIC"
+  # Option 2: Test key files
+  # payment_skey_path: "testnet-keys/payment.skey"
+  # payment_vkey_path: "testnet-keys/payment.vkey"
+  # stake_vkey_path: "testnet-keys/stake.vkey"
 
-    # Option 2: Test key files
-    # payment_skey_path: "testnet-keys/payment.skey"
-    # payment_vkey_path: "testnet-keys/payment.vkey"
-    # stake_vkey_path: "testnet-keys/stake.vkey"
+# Wallet configuration - use either mnemonic or key files
+wallet:
+  mnemonic: "$TESTNET_WALLET_MNEMONIC"
 
 script_address: "addr1..."
 policy_id: "..."

@@ -47,7 +47,6 @@ class OracleSimulator:
             tx_manager=self.ctx.tx_manager,
             script_address=self.ctx.script_address,
             policy_id=self.ctx.policy_id,
-            oracle_config=None,  # Not needed for simulation
         )
 
     async def generate_feeds(self) -> tuple[AggregateMessage, dict]:

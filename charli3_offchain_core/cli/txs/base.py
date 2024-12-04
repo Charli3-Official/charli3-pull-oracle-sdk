@@ -95,5 +95,5 @@ def tx_options(f: Callable) -> Callable:
         required=True,
         help="Path to transaction configuration YAML",
     )(f)
-    f = click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging")(f)
+
     return f

@@ -69,7 +69,6 @@ async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
-            oracle_config=None,  # Not needed for transaction building
         )
 
         # Build ODV transaction
@@ -93,15 +92,15 @@ async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
 
         # Submit transaction
         print_progress("Submitting transaction...")
-        status, tx = await ctx.tx_manager.sign_and_submit(
+        tx_status, tx = await ctx.tx_manager.sign_and_submit(
             result.transaction, [signing_key], wait_confirmation=wait
         )
 
-        click.secho(f"\n✓ Transaction {status}!", fg="green")
+        click.secho(f"\n✓ Transaction {tx_status}!", fg="green")
         click.echo(f"Transaction ID: {tx.id}")
 
         # Display additional details
-        if status == "confirmed":
+        if tx_status == "confirmed":
             _print_odv_summary(result)
 
     except TransactionError as e:

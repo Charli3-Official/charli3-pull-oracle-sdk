@@ -11,12 +11,14 @@ from charli3_offchain_core.models.oracle_datums import (
     NoRewards,
     OracleDatum,
     OracleSettingsDatum,
+    OracleSettingsVariant,
     RewardAccountDatum,
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
 )
 from charli3_offchain_core.oracle.exceptions import StateValidationError
+from charli3_offchain_core.oracle.utils import asset_checks
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,64 @@ def filter_reward_accounts(utxos: Sequence[UTxO]) -> list[UTxO]:
             and isinstance(utxo.output.datum.variant.datum, RewardAccountDatum)
         )
     ]
+
+
+def filter_oracle_settings(utxos: Sequence[UTxO]) -> list[UTxO]:
+    """Filter UTxOs for oracle settings.
+
+    Args:
+        utxos: List of UTxOs to filter
+
+    Returns:
+        List of UTxOs with oracle settings datums
+    """
+    return [
+        utxo
+        for utxo in utxos
+        if utxo.output.datum
+        and isinstance(utxo.output.datum.variant, OracleSettingsVariant)
+        and isinstance(utxo.output.datum.variant.datum, OracleSettingsDatum)
+    ]
+
+
+def find_transport_pair(utxos: Sequence[UTxO], policy_id: bytes) -> tuple[UTxO, UTxO]:
+    """Find matching empty transport and agg state pair.
+
+    Args:
+        utxos: List of UTxOs to search
+        policy_id: Policy ID for filtering tokens
+
+    Returns:
+        Tuple of (transport UTxO, agg state UTxO)
+
+    Raises:
+        StateValidationError: If no valid pair is found
+    """
+    try:
+        # Find empty transports
+        transports = filter_empty_transports(
+            asset_checks.filter_utxos_by_token_name(utxos, policy_id, "transport")
+        )
+        if not transports:
+            raise StateValidationError("No empty transport UTxO found")
+
+        # Find empty agg states
+        agg_states = filter_empty_agg_states(
+            asset_checks.filter_utxos_by_token_name(utxos, policy_id, "aggstate")
+        )
+        if not agg_states:
+            raise StateValidationError("No empty agg state UTxO found")
+
+        # Find matching pair
+        for transport in transports:
+            for agg_state in agg_states:
+                if validate_matching_pair(transport, agg_state):
+                    return transport, agg_state
+
+        raise StateValidationError("No matching transport/agg state pair found")
+
+    except Exception as e:
+        raise StateValidationError(f"Failed to find UTxO pair: {e}") from e
 
 
 def is_oracle_closing(settings: OracleSettingsDatum) -> bool:
