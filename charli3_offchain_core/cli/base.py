@@ -1,4 +1,4 @@
-"""Base CLI utilities and helper functions for oracle deployment."""
+"""Base CLI utilities and helper functions."""
 
 import logging
 from dataclasses import dataclass
@@ -17,11 +17,12 @@ from pycardano import (
 from pycardano.backend import OgmiosV6ChainContext
 from pycardano.backend.kupo import KupoChainContextExtension
 
+from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
-from charli3_offchain_core.oracle.deployment.orchestrator import DeploymentStatus
 
 from .config.deployment import DeploymentConfig
 from .config.keys import KeyManager
+from .config.network import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
@@ -129,50 +130,35 @@ def validate_deployment_config(config: DeploymentConfig) -> None:
         raise click.ClickException("Fees must be positive")
 
 
-def create_chain_context(
-    config: DeploymentConfig,
-) -> BlockFrostChainContext | KupoChainContextExtension:
-    """Create chain context from configuration."""
+def create_chain_query(config: NetworkConfig) -> ChainQuery:
+    """Create chain query from configuration file."""
     try:
-        if config.network.blockfrost:
-            return BlockFrostChainContext(
-                project_id=config.network.blockfrost.project_id,
-                network=config.network.network,
+        # Use Blockfrost
+        if config.blockfrost:
+            context = BlockFrostChainContext(
+                project_id=config.blockfrost.project_id,
+                network=config.network,
             )
+            return ChainQuery(blockfrost_context=context)
 
         # Use Ogmios/Kupo
-        ogmios_url = config.network.ogmios_kupo.ogmios_url
+        ogmios_url = config.ogmios_kupo.ogmios_url
         host, port, secure = parse_ws_url(ogmios_url)
 
         ogmios_context = OgmiosV6ChainContext(
             host=host,
             port=port,
             secure=secure,
-            network=config.network.network,
+            network=config.network,
         )
-        return KupoChainContextExtension(
+        kupo_context = KupoChainContextExtension(
             ogmios_context,
-            config.network.ogmios_kupo.kupo_url,
+            config.ogmios_kupo.kupo_url,
         )
+        return ChainQuery(kupo_ogmios_context=kupo_context)
+
     except Exception as e:
-        raise click.ClickException(f"Failed to create chain context: {e}") from e
-
-
-def format_status_update(status: DeploymentStatus, message: str) -> None:
-    """Format and display deployment status updates."""
-    colors = {
-        DeploymentStatus.NOT_STARTED: "white",
-        DeploymentStatus.CHECKING_REFERENCE_SCRIPTS: "blue",
-        DeploymentStatus.CREATING_MANAGER_REFERENCE: "yellow",
-        DeploymentStatus.BUILDING_START_TX: "blue",
-        DeploymentStatus.SUBMITTING_START_TX: "yellow",
-        DeploymentStatus.WAITING_CONFIRMATION: "yellow",
-        DeploymentStatus.COMPLETED: "green",
-        DeploymentStatus.FAILED: "red",
-    }
-
-    click.secho(f"\n[{status}]", fg=colors.get(status, "white"), bold=True)
-    click.secho(message)
+        raise click.ClickException(f"Failed to create chain query: {e}") from e
 
 
 def parse_ws_url(url: str) -> tuple[str, int, bool]:
