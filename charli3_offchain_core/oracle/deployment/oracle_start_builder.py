@@ -34,6 +34,7 @@ from charli3_offchain_core.models.oracle_datums import (
     RewardAccountDatum,
     RewardAccountVariant,
     RewardTransportVariant,
+    MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE,
 )
 from charli3_offchain_core.models.oracle_redeemers import Mint as MintRedeemer
 from charli3_offchain_core.oracle.config import OracleDeploymentConfig, OracleTokenNames
@@ -149,6 +150,7 @@ class OracleStartBuilder:
             deployment_config.token_names.core_settings,
             mint_policy.policy_id,
             self._create_settings_datum(
+                config,
                 fee_config,
                 aggregation_liveness_period,
                 time_absolute_uncertainty,
@@ -248,12 +250,23 @@ class OracleStartBuilder:
 
     def _create_settings_datum(
         self,
+        config: OracleConfiguration,
         fee_config: FeeConfig,
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
+
+        if config.fee_token == NoDatum():
+            # If fee token is ada then we need to set buffer to a minimum ada amount held at maximum expected reward account utxo size
+            utxo_size_safety_buffer = (
+                MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE
+            )
+        else:
+            # If fee token is some native token then there is no need to manage leftover fee token amount
+            utxo_size_safety_buffer = 0
+
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
                 nodes=Nodes(node_map={}),
@@ -262,6 +275,7 @@ class OracleStartBuilder:
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,
                 iqr_fence_multiplier=iqr_fence_multiplier,
+                utxo_size_safety_buffer=utxo_size_safety_buffer,
                 closing_period_started_at=NoDatum(),
             )
         )
