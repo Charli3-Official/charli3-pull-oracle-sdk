@@ -16,7 +16,7 @@ from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
-    Asset,
+    Asset,NoDatum,
     FeeConfig,
     OracleConfiguration,
 )
@@ -91,7 +91,7 @@ class OracleDeploymentOrchestrator:
         self,
         # Network, platform and admin configuration
         platform_auth_policy_id: bytes,
-        fee_token: Asset,
+        fee_token: Asset | NoDatum,
         platform_script: NativeScript,
         admin_address: Address,
         script_address: Address,
