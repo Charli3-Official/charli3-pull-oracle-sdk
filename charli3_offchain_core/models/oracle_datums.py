@@ -11,6 +11,8 @@ PosixTime = int
 PosixTimeDiff = int
 OracleFeed = int
 NodeFeed = int
+FeedVkh = VerificationKeyHash
+PaymentVkh = VerificationKeyHash
 
 
 @dataclass
@@ -37,7 +39,7 @@ class Nodes(PlutusData):
     """
 
     CONSTR_ID = 0
-    node_map: Dict[VerificationKeyHash, VerificationKeyHash]
+    node_map: Dict[FeedVkh, PaymentVkh]
 
     @classmethod
     def from_primitive(cls, data: Any) -> "Nodes":
@@ -105,7 +107,7 @@ class OracleConfiguration(PlutusData):
     platform_auth_nft: PolicyId
     closing_period_length: PosixTimeDiff
     reward_dismissing_period_length: PosixTimeDiff
-    fee_token: Asset
+    fee_token: Union[Asset, NoDatum]
 
     def __post_init__(self) -> None:
         # Add validation for platform_auth_nft length (28 bytes for Cardano)
@@ -124,6 +126,7 @@ class OracleSettingsDatum(PlutusData):
     aggregation_liveness_period: PosixTimeDiff
     time_absolute_uncertainty: PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
+    utxo_size_safety_buffer: int  # Lovelace
     closing_period_started_at: Union[PosixTime, NoDatum]
 
 
@@ -178,13 +181,22 @@ class NoRewards(PlutusData):
 
 
 @dataclass
+class Aggregation(PlutusData):
+    """Represents information on aggregation specific details"""
+
+    CONSTR_ID = 0
+    oracle_feed: OracleFeed
+    message: AggregateMessage
+    node_reward_price: int
+    rewards_amount_paid: int
+
+
+@dataclass
 class RewardConsensusPending(PlutusData):
     """Reward transport with pending consensus state"""
 
     CONSTR_ID = 1
-    oracle_feed: OracleFeed
-    message: AggregateMessage
-    node_reward_price: int
+    aggregation: Aggregation
 
 
 # Main datum variants
