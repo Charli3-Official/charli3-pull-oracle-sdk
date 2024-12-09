@@ -124,9 +124,32 @@ transport_count: 4  # Number of reward transport UTxOs
 blueprint_path: "artifacts/plutus.json"  # Path to Aiken blueprint
 ```
 
-2. Deploy the oracle:
+2. Deploy the oracle based on your platform auth NFT configuration:
+
+#### Option 1: Single-Signature Deployment (threshold = 1)
 ```bash
-poetry run charli3 oracle deploy --config deploy-testnet.yaml
+# Complete flow in single command when platform auth NFT only requires one signature
+charli3 oracle deploy --config deploy-testnet.yaml
+```
+
+#### Option 2: Multi-Signature Deployment (threshold > 1)
+```bash
+# 1. First Wallet: Build transaction
+# - Creates deployment transaction
+# - Generates tx_oracle_deploy.json
+charli3 oracle deploy --config deploy-testnet-wallet-1.yaml
+
+# 2. Additional Wallets: Add signatures
+# - Validates key hasn't signed
+# - Updates transaction file
+# - Shows signature progress
+charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_deploy.json
+
+# 3. Submit when signature threshold is met
+# - Validates all required signatures are present
+# - Submits deployment transaction to network
+# - Shows deployment status and script address
+charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_deploy.json
 ```
 
 ### Reference Scripts Management
@@ -210,50 +233,73 @@ odv-multisig-charli3-offchain-core/
 │   │   ├── network.py         # Network configuration & timing
 │   │   └── exceptions.py      # Chain operation exceptions
 │   │
-│   ├── contracts/             # Contract interaction layer
+│   ├── constants/             # Application constants
 │   │   ├── __init__.py
-│   │   └── aiken_loader.py    # Aiken blueprint loader & handler
+│   │   ├── colors.py         # CLI color scheme
+│   │   └── status.py         # Process status enums
 │   │
-│   ├── models/                # Data models
+│   ├── contracts/            # Contract interaction layer
 │   │   ├── __init__.py
-│   │   ├── oracle_datums.py   # Oracle datum types
+│   │   └── aiken_loader.py   # Aiken blueprint loader & handler
+│   │
+│   ├── models/               # Data models
+│   │   ├── __init__.py
+│   │   ├── oracle_datums.py  # Oracle datum types
 │   │   └── oracle_redeemers.py # Oracle redeemer types
 │   │
-│   ├── oracle/                # Oracle operations
+│   ├── oracle/               # Oracle operations
 │   │   ├── __init__.py
-│   │   ├── config.py          # Oracle configuration
+│   │   ├── config.py         # Oracle configuration
 │   │   │
-│   │   └── deployment/        # Deployment operations
+│   │   └── deployment/       # Deployment operations
 │   │       ├── __init__.py
 │   │       ├── orchestrator.py # Deployment coordination
 │   │       ├── oracle_start_builder.py  # Start transaction
 │   │       ├── reference_script_builder.py  # Script creation
 │   │       └── reference_script_finder.py   # Script lookup
 │   │
-│   └── cli/                   # Command line interface
+│   ├── platform/             # Platform operations
+│   │   ├── __init__.py
+│   │   └── auth/            # Platform authorization
+│   │       ├── __init__.py
+│   │       ├── orchestrator.py        # Auth orchestration
+│   │       ├── token_builder.py       # Token building
+│   │       ├── token_finder.py        # Token lookup
+│   │       └── token_script_builder.py # Script building
+│   │
+│   └── cli/                  # Command line interface
 │       ├── __init__.py
-│       ├── base.py            # CLI utilities
-│       ├── oracle.py          # Oracle commands
-│       ├── contracts.py       # Contract commands
+│       ├── base.py           # CLI utilities
+│       ├── oracle.py         # Oracle commands
+│       ├── platform.py       # Platform commands
+│       ├── transaction.py    # Transaction processing
+│       ├── setup.py         # Setup utilities
 │       │
-│       └── config/            # CLI configuration
+│       └── config/          # CLI configuration
 │           ├── __init__.py
-│           ├── deployment.py   # Deployment config
-│           └── keys.py         # Key management
+│           ├── deployment.py  # Deployment config
+│           ├── platform.py    # Platform config
+│           ├── network.py     # Network config
+│           ├── token.py       # Token config
+│           ├── settings.py    # Settings config
+│           ├── formatting.py  # Output formatting
+│           ├── utils.py      # Config utilities
+│           ├── keys.py      # Key management
+│           └── multisig.py  # Multisig config
 │
-├── docs/                      # Documentation
-│   ├── configuration.md       # Configuration guide
-│   └── deployment.md          # Deployment guide
+├── docs/                     # Documentation
+│   ├── configuration.md      # Configuration guide
+│   └── deployment.md         # Deployment guide
 │
-├── examples/                  # Example configurations
-│   ├── mainnet.yaml          # Mainnet deployment config
-│   └── testnet.yaml          # Testnet deployment config
+├── examples/                 # Example configurations
+│   ├── mainnet.yaml         # Mainnet deployment config
+│   └── testnet.yaml         # Testnet deployment config
 │
-├── .gitignore                # Git ignore rules
-├── .pre-commit-config.yaml   # Pre-commit hooks
-├── pyproject.toml            # Project configuration
-├── poetry.lock               # Dependency lock file
-└── README.md                 # Project readme
+├── .gitignore               # Git ignore rules
+├── .pre-commit-config.yaml  # Pre-commit hooks
+├── pyproject.toml           # Project configuration
+├── poetry.lock              # Dependency lock file
+└── README.md               # Project readme
 ```
 
 ### Running Tests

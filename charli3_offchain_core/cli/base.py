@@ -22,6 +22,7 @@ from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 
 from .config.deployment import DeploymentConfig, NetworkConfig
 from .config.keys import KeyManager
+from .config.network import NetworkConfig
 
 logger = logging.getLogger(__name__)
 

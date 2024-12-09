@@ -10,6 +10,7 @@ import click
 from pycardano import Transaction
 
 from charli3_offchain_core.cli.config.deployment import NetworkConfig
+
 from charli3_offchain_core.cli.config.formatting import (
     print_hash_info,
     print_status,

@@ -57,7 +57,7 @@ class OracleStartBuilder:
 
     # Constants for clarity and reuse
     MIN_UTXO_VALUE = 2_000_000
-    FEE_BUFFER = 500
+    FEE_BUFFER = 10_000
 
     def __init__(
         self,

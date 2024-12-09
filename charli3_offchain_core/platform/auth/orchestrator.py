@@ -3,11 +3,9 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
 
 from pycardano import (
     Address,
-    ExtendedSigningKey,
     PaymentSigningKey,
     Transaction,
     VerificationKeyHash,
@@ -53,7 +51,6 @@ class PlatformAuthOrchestrator:
         self.current_status = status
         if self.status_callback:
             self.status_callback(status, message)
-        logger.info("Auth status: %s - %s", status, message)
 
     async def build_tx(
         self,
@@ -80,7 +77,9 @@ class PlatformAuthOrchestrator:
                 chain_query=self.chain_query, config=script_config, is_mock=is_mock
             )
 
-            self._update_status(ProcessStatus.BUILDING_TRANSACTION)
+            self._update_status(
+                ProcessStatus.BUILDING_TRANSACTION, "Builidng minting transaction..."
+            )
             token_builder = PlatformAuthBuilder(
                 self.chain_query, self.tx_manager, script_builder
             )
@@ -90,7 +89,10 @@ class PlatformAuthOrchestrator:
                 signing_key=signing_key,
                 metadata=metadata,
             )
-
+            self._update_status(
+                ProcessStatus.TRANSACTION_BUILT,
+                "platform auth mint transaction was built",
+            )
             return AuthResult(
                 status=ProcessStatus.TRANSACTION_BUILT,
                 transaction=result.transaction,
@@ -102,35 +104,3 @@ class PlatformAuthOrchestrator:
             logger.error("Platform auth transaction creation failed: %s", str(e))
             self._update_status(ProcessStatus.FAILED, str(e))
             return AuthResult(status=ProcessStatus.FAILED, error=e)
-
-    async def handle_tx(
-        self,
-        tx: Transaction,
-        signing_key: PaymentSigningKey | ExtendedSigningKey | None = None,
-        submit: bool = False,
-    ) -> tuple[Transaction | None, Enum]:
-        """Handle transaction signing and/or submission based on provided parameters."""
-        try:
-
-            if submit:
-                self._update_status(ProcessStatus.SUBMITTING_TRANSACTION)
-                signing_keys = [signing_key] if signing_key else []
-                await self.tx_manager.sign_and_submit(tx, signing_keys)
-                return tx, ProcessStatus.COMPLETED
-
-            if signing_key:
-                self._update_status(ProcessStatus.SIGNING_TRANSACTION)
-                self.tx_manager.sign_tx(tx, signing_key)
-                if not submit:
-                    return tx, ProcessStatus.TRANSACTION_SIGNED
-
-            return tx, (
-                ProcessStatus.TRANSACTION_SIGNED
-                if signing_key
-                else ProcessStatus.TRANSACTION_BUILT
-            )
-
-        except Exception as e:
-            logger.error("Transaction operation failed: %s", str(e))
-            self._update_status(ProcessStatus.FAILED, str(e))
-            return None, ProcessStatus.FAILED

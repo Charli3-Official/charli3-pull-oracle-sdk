@@ -1193,9 +1193,11 @@ websockets = "^13.0"
 
 [package.source]
 type = "git"
+
 url = "https://github.com/xxAVOGADROxx/pycardano.git"
 reference = "chang-fixes"
 resolved_reference = "0b3ba335c1eaaf6e11f3d4328226724225329cb6"
+
 
 [[package]]
 name = "pycparser"
@@ -1817,3 +1819,4 @@ files = [
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
 content-hash = "81e451145d2cb1d9d325968d60abe628ea63c42d12a06e999e66b753bf63bf19"
+
