@@ -123,18 +123,8 @@ def has_required_tokens(utxo: UTxO, policy_id: bytes, token_names: list[str]) ->
 
 
 def validate_token_quantities(utxo: UTxO, expected_quantities: dict[str, int]) -> bool:
-    """Validate token quantities in UTxO match expected amounts.
+    """Validate token quantities in UTxO match expected amounts."""
 
-    Args:
-        utxo: UTxO to validate
-        expected_quantities: Dict mapping token names to expected quantities
-
-    Returns:
-        bool: True if quantities match expectations
-
-    Raises:
-        ValidationError: If validation fails
-    """
     if not expected_quantities:
         raise ValidationError("Expected quantities cannot be empty")
 
@@ -143,14 +133,16 @@ def validate_token_quantities(utxo: UTxO, expected_quantities: dict[str, int]) -
 
     for token_name, expected_qty in expected_quantities.items():
         actual_qty = 0
-        for policy_tokens in utxo.output.amount.multi_asset.values():
-            encoded_name = token_name.encode()
-            if encoded_name in policy_tokens:
-                actual_qty += policy_tokens[encoded_name]
+
+        for _, policy_tokens in utxo.output.amount.multi_asset.items():
+            for asset_name, qty in policy_tokens.items():
+                if bytes(asset_name).decode() == token_name:
+                    actual_qty += qty
 
         if actual_qty != expected_qty:
             return False
 
+    print("Validation successful!")
     return True
 
 

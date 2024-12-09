@@ -25,6 +25,7 @@ from charli3_offchain_core.oracle.config import (
 from charli3_offchain_core.oracle.deployment.orchestrator import (
     OracleDeploymentOrchestrator,
 )
+from charli3_offchain_core.oracle.lifecycle.orchestrator import LifecycleOrchestrator
 from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
 from ..blockchain.chain_query import ChainQuery
@@ -40,6 +41,7 @@ from .base import (
 )
 from .config.deployment import DeploymentConfig
 from .config.keys import KeyManager
+from .config.management import ManagementConfig
 from .config.platform import PlatformAuthConfig
 
 
@@ -198,4 +200,51 @@ def setup_oracle_from_config(
         orchestrator,
         platform_auth_finder,
         configs,
+    )
+
+
+def setup_management_from_config(config: Path) -> tuple[
+    ManagementConfig,
+    PaymentSigningKey,
+    OracleAddresses,
+    ChainQuery,
+    TransactionManager,
+    LifecycleOrchestrator,
+    PlatformAuthFinder,
+]:
+    management_config = ManagementConfig.from_yaml(config)
+    base_contracts = OracleContracts.from_blueprint(management_config.blueprint_path)
+
+    keys = load_keys_with_validation(management_config, base_contracts)
+    addresses = derive_deployment_addresses(management_config, base_contracts)
+
+    platform_address = (
+        management_config.multi_sig.platform_addr or addresses.admin_address
+    )
+
+    oracle_addresses = OracleAddresses(
+        admin_address=addresses.admin_address,
+        script_address=management_config.oracle_address,
+        platform_address=platform_address,
+    )
+
+    chain_query = create_chain_query(management_config.network)
+    tx_manager = TransactionManager(chain_query)
+    platform_auth_finder = PlatformAuthFinder(chain_query)
+
+    orchestrator = LifecycleOrchestrator(
+        chain_query=chain_query,
+        tx_manager=tx_manager,
+        script_address=oracle_addresses.script_address,
+        status_callback=format_status_update,
+    )
+
+    return (
+        management_config,
+        keys.payment_sk,
+        oracle_addresses,
+        chain_query,
+        tx_manager,
+        orchestrator,
+        platform_auth_finder,
     )
