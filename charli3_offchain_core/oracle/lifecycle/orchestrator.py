@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LifecycleResult:
     """Result of lifecycle operation"""
+
     status: ProcessStatus
     transaction: Transaction | None = None
     error: Exception | None = None
@@ -43,7 +44,13 @@ class LifecycleResult:
 class LifecycleOrchestrator:
     """Orchestrates oracle lifecycle operations with proper datum handling"""
 
-    def __init__(self, chain_query: ChainQuery, tx_manager: TransactionManager, script_address:Address, status_callback: Callable | None = None)-> None:
+    def __init__(
+        self,
+        chain_query: ChainQuery,
+        tx_manager: TransactionManager,
+        script_address: Address,
+        status_callback: Callable | None = None,
+    ) -> None:
         self.chain_query = chain_query
         self.tx_manager = tx_manager
         self.script_address = script_address
@@ -55,7 +62,9 @@ class LifecycleOrchestrator:
         if self.status_callback:
             self.status_callback(status, message)
 
-    async def _get_oracle_utxos(self, oracle_policy: str):
+    async def _get_oracle_utxos(
+        self, oracle_policy: str
+    ) -> tuple[UTxO, UTxO | None, list[UTxO], list[UTxO]]:
         """Get oracle UTxOs and filter them based on policy hash."""
         utxos = await self.chain_query.get_utxos(self.script_address)
         logger.info("Found UTxOs count: %d", len(utxos))
@@ -74,17 +83,28 @@ class LifecycleOrchestrator:
         reward_transports = filter_empty_transports(utxos)
         agg_states = filter_empty_agg_states(utxos)
 
-        logger.info("Found reward accounts: %d, transports: %d, agg states: %d",
-                   len(reward_accounts), len(reward_transports or []), len(agg_states or []))
+        logger.info(
+            "Found reward accounts: %d, transports: %d, agg states: %d",
+            len(reward_accounts),
+            len(reward_transports or []),
+            len(agg_states or []),
+        )
 
         return (
             settings_utxo,
             next(iter(reward_accounts), None),
             reward_transports or [],
-            agg_states or []
+            agg_states or [],
         )
 
-    async def close_oracle(self, oracle_policy: str, platform_utxo:UTxO, platform_script:NativeScript, change_address:Address, signing_key:PaymentSigningKey|ExtendedSigningKey)->LifecycleResult:
+    async def close_oracle(
+        self,
+        oracle_policy: str,
+        platform_utxo: UTxO,
+        platform_script: NativeScript,
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+    ) -> LifecycleResult:
         try:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
             policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
@@ -99,7 +119,9 @@ class LifecycleOrchestrator:
                 signing_key=signing_key,
             )
 
-            return LifecycleResult(status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction)
+            return LifecycleResult(
+                status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
+            )
 
         except Exception as e:
             logger.error("Close oracle failed: %s", str(e))
