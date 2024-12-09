@@ -9,10 +9,6 @@ from pycardano import Transaction
 
 from charli3_offchain_core.cli.config.update_settings import PlatformTxConfig
 from charli3_offchain_core.models.oracle_datums import OracleSettingsDatum
-from typing import Any
-
-import click
-from pycardano import Transaction
 
 from ...constants.colors import CliColor
 from ...constants.status import ProcessStatus
@@ -174,7 +170,6 @@ def print_platform_auth_config_prompt(auth_config: any) -> bool:
     for i, party in enumerate(auth_config.multisig.parties, start=1):
         print_address_info(f"PKH {i}", party)
 
-
     return print_confirmation_message_prompt("Proceed with token minting?")
 
 
@@ -288,16 +283,3 @@ async def print_allowed_datum_changes(
         print_information("No Configuration Changes Detected")
 
     return changes_found
-
-
-def oracle_success_callback(tx: Transaction, data: dict) -> None:
-    print_status(
-        "Oracle deployment",
-        "Transaction submitted successfully",
-        success=True,
-    )
-    if "script_address" in data:
-        print_hash_info("Script Address", data["script_address"])
-    return print_confirmation_message_prompt(
-        "Ensure that the above configurations are correct?"
-    )

@@ -16,8 +16,8 @@ from pycardano.backend.kupo import KupoChainContextExtension
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
-from charli3_offchain_core.cli.config.deployment import NetworkConfig, OgmiosKupoConfig
 from charli3_offchain_core.cli.config.keys import KeyManager
+from charli3_offchain_core.cli.config.network import NetworkConfig, OgmiosKupoConfig
 from charli3_offchain_core.cli.config.update_settings import PlatformTxConfig
 from charli3_offchain_core.constants.status import ProcessStatus
 from charli3_offchain_core.oracle.transactions.exceptions import UTxONotFoundError

@@ -1819,4 +1819,3 @@ files = [
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
 content-hash = "81e451145d2cb1d9d325968d60abe628ea63c42d12a06e999e66b753bf63bf19"
-

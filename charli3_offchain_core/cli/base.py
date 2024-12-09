@@ -20,7 +20,7 @@ from pycardano.backend.kupo import KupoChainContextExtension
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 
-from .config.deployment import DeploymentConfig, NetworkConfig
+from .config.deployment import DeploymentConfig
 from .config.keys import KeyManager
 from .config.network import NetworkConfig
 
