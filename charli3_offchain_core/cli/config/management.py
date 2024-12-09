@@ -10,6 +10,7 @@ from .utils import load_yaml_config
 @dataclass
 class ManagementConfig:
     """Minimal config required for lifecycle operations."""
+
     network: NetworkConfig
     tokens: TokenConfig
     oracle_address: str

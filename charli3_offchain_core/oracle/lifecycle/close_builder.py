@@ -1,6 +1,5 @@
 """Close oracle transaction builder."""
 
-
 from typing import Any
 
 from pycardano import (
@@ -34,58 +33,61 @@ class CloseBuilder(BaseBuilder):
     FEE_BUFFER = 10_000
 
     async def build_tx(
-            self,
-            platform_utxo: UTxO,
-            platform_script: NativeScript,
-            policy_hash: Any,
-            utxos: list[UTxO],
-            change_address: Address,
-            signing_key: PaymentSigningKey | ExtendedSigningKey,
-        ) -> LifecycleTxResult:
-            try:
-                settings_datum, settings_utxo = get_oracle_settings_by_policy_id(utxos, policy_hash)
-                script_utxo = get_reference_script_utxo(utxos)
+        self,
+        platform_utxo: UTxO,
+        platform_script: NativeScript,
+        policy_hash: Any,
+        utxos: list[UTxO],
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+    ) -> LifecycleTxResult:
+        try:
+            settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
+                utxos, policy_hash
+            )
+            script_utxo = get_reference_script_utxo(utxos)
 
+            if not script_utxo:
+                raise ValueError("Reference script UTxO not found")
 
-                if not script_utxo:
-                    raise ValueError("Reference script UTxO not found")
+            if is_oracle_closing(settings_datum):
+                raise ClosingError("Oracle already in closing period")
 
-                if is_oracle_closing(settings_datum):
-                    raise ClosingError("Oracle already in closing period")
+            current_time = self.chain_query.get_current_posix_chain_time_ms()
 
-                current_time = self.chain_query.get_current_posix_chain_time_ms()
-
-                updated_settings = OracleSettingsVariant(OracleSettingsDatum(
+            updated_settings = OracleSettingsVariant(
+                OracleSettingsDatum(
                     nodes=settings_datum.nodes,
                     required_node_signatures_count=settings_datum.required_node_signatures_count,
                     fee_info=settings_datum.fee_info,
                     aggregation_liveness_period=settings_datum.aggregation_liveness_period,
                     time_absolute_uncertainty=settings_datum.time_absolute_uncertainty,
                     iqr_fence_multiplier=settings_datum.iqr_fence_multiplier,
-                    closing_period_started_at=current_time
-                ))
-
-                settings_output = TransactionOutput(
-                    address=settings_utxo.output.address,
-                    amount=settings_utxo.output.amount,
-                    datum=updated_settings
+                    closing_period_started_at=current_time,
                 )
+            )
 
-                tx = await self.tx_manager.build_script_tx(
-                    script_inputs=[
-                        (
-                            settings_utxo,
-                            Redeemer(CloseOracle()),
-                            script_utxo,
-                        ),
-                        (platform_utxo, None, platform_script),
-                    ],
-                    script_outputs=[settings_output, platform_utxo.output],
-                    change_address=change_address,
-                    signing_key=signing_key
-                )
+            settings_output = TransactionOutput(
+                address=settings_utxo.output.address,
+                amount=settings_utxo.output.amount,
+                datum=updated_settings,
+            )
 
-                return LifecycleTxResult(transaction=tx, settings_utxo=settings_output)
+            tx = await self.tx_manager.build_script_tx(
+                script_inputs=[
+                    (
+                        settings_utxo,
+                        Redeemer(CloseOracle()),
+                        script_utxo,
+                    ),
+                    (platform_utxo, None, platform_script),
+                ],
+                script_outputs=[settings_output, platform_utxo.output],
+                change_address=change_address,
+                signing_key=signing_key,
+            )
 
-            except Exception as e:
-                raise ValueError(f"Failed to build close transaction: {e!s}") from e
+            return LifecycleTxResult(transaction=tx, settings_utxo=settings_output)
+
+        except Exception as e:
+            raise ValueError(f"Failed to build close transaction: {e!s}") from e
