@@ -1,4 +1,4 @@
-"""Base CLI utilities and helper functions for oracle deployment."""
+"""Base CLI utilities and helper functions."""
 
 import logging
 from dataclasses import dataclass
@@ -18,11 +18,9 @@ from pycardano.backend import OgmiosV6ChainContext
 from pycardano.backend.kupo import KupoChainContextExtension
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
-from charli3_offchain_core.cli.config.deployment import NetworkConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
-from charli3_offchain_core.oracle.deployment.orchestrator import DeploymentStatus
 
-from .config.deployment import DeploymentConfig
+from .config.deployment import DeploymentConfig, NetworkConfig
 from .config.keys import KeyManager
 
 logger = logging.getLogger(__name__)
@@ -131,65 +129,6 @@ def validate_deployment_config(config: DeploymentConfig) -> None:
         raise click.ClickException("Fees must be positive")
 
 
-def create_chain_context(
-    config: DeploymentConfig,
-) -> BlockFrostChainContext | KupoChainContextExtension:
-    """Create chain context from configuration."""
-    try:
-        if config.network.blockfrost:
-            return BlockFrostChainContext(
-                project_id=config.network.blockfrost.project_id,
-                network=config.network.network,
-            )
-
-        # Use Ogmios/Kupo
-        ogmios_url = config.network.ogmios_kupo.ogmios_url
-        host, port, secure = parse_ws_url(ogmios_url)
-
-        ogmios_context = OgmiosV6ChainContext(
-            host=host,
-            port=port,
-            secure=secure,
-            network=config.network.network,
-        )
-        return KupoChainContextExtension(
-            ogmios_context,
-            config.network.ogmios_kupo.kupo_url,
-        )
-    except Exception as e:
-        raise click.ClickException(f"Failed to create chain context: {e}") from e
-
-
-def format_status_update(status: DeploymentStatus, message: str) -> None:
-    """Format and display deployment status updates."""
-    colors = {
-        DeploymentStatus.NOT_STARTED: "white",
-        DeploymentStatus.CHECKING_REFERENCE_SCRIPTS: "blue",
-        DeploymentStatus.CREATING_MANAGER_REFERENCE: "yellow",
-        DeploymentStatus.BUILDING_START_TX: "blue",
-        DeploymentStatus.SUBMITTING_START_TX: "yellow",
-        DeploymentStatus.WAITING_CONFIRMATION: "yellow",
-        DeploymentStatus.COMPLETED: "green",
-        DeploymentStatus.FAILED: "red",
-    }
-
-    click.secho(f"\n[{status}]", fg=colors.get(status, "white"), bold=True)
-    click.secho(message)
-
-
-def parse_ws_url(url: str) -> tuple[str, int, bool]:
-    """Parse WebSocket URL into host, port, and secure flag."""
-    parsed = urlparse(url)
-
-    # Determine if secure based on scheme
-    secure = parsed.scheme in ("wss", "https")
-
-    # Extract host without port if port is in the URL
-    host = parsed.hostname or parsed.netloc.split(":")[0]
-    port = parsed.port or (443 if secure else 1337)
-    return host, port, secure
-
-
 def create_chain_query(config: NetworkConfig) -> ChainQuery:
     """Create chain query from configuration file."""
     try:
@@ -219,3 +158,16 @@ def create_chain_query(config: NetworkConfig) -> ChainQuery:
 
     except Exception as e:
         raise click.ClickException(f"Failed to create chain query: {e}") from e
+
+
+def parse_ws_url(url: str) -> tuple[str, int, bool]:
+    """Parse WebSocket URL into host, port, and secure flag."""
+    parsed = urlparse(url)
+
+    # Determine if secure based on scheme
+    secure = parsed.scheme in ("wss", "https")
+
+    # Extract host without port if port is in the URL
+    host = parsed.hostname or parsed.netloc.split(":")[0]
+    port = parsed.port or (443 if secure else 1337)
+    return host, port, secure

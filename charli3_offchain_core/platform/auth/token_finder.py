@@ -5,7 +5,10 @@ import logging
 from pycardano import Address, NativeScript, ScriptHash, UTxO
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
-from charli3_offchain_core.platform.auth.token_script_builder import ScriptConfig
+from charli3_offchain_core.platform.auth.token_script_builder import (
+    PlatformAuthScript,
+    ScriptConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,3 +59,4 @@ class PlatformAuthFinder:
         """Get signers from script"""
         if not isinstance(script, NativeScript):
             return None
+        return PlatformAuthScript.from_native_script(script)
