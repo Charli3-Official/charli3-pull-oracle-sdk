@@ -97,7 +97,6 @@ class OracleContracts:
                     cls.VALIDATOR_CONFIGS[ValidatorType.MINT],
                 ),
             }
-
             return cls(**contracts)
 
         except (json.JSONDecodeError, FileNotFoundError) as e:

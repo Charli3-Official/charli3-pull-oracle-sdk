@@ -1,9 +1,14 @@
 """CLI output enhancements for oracle deployment."""
 
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, NamedTuple
 
 import click
+from pycardano import Transaction
+
+from charli3_offchain_core.cli.config.update_settings import PlatformTxConfig
+from charli3_offchain_core.models.oracle_datums import OracleSettingsDatum
 
 
 class CliColor(str, Enum):
@@ -25,6 +30,16 @@ def print_header(text: str) -> None:
     click.echo()
     click.secho(f"=== {text} ===", fg=CliColor.HEADER, bold=True)
     click.echo()
+
+
+def print_information(text: str) -> None:
+    """Print styled information text."""
+    click.secho(f"=== {text} ===", fg=CliColor.INFO, bold=True)
+
+
+def print_title(text: str) -> None:
+    """Print styled title text."""
+    click.secho(f"=== {text} ===", fg=CliColor.TITLE, bold=True)
 
 
 def print_address_info(label: str, address: str) -> None:
@@ -145,3 +160,125 @@ def print_platform_auth_config_prompt(auth_config: any) -> bool:
         print_address_info(f"PKH {i}", party)
 
     return print_confirmation_message_prompt("Proceed with token minting?")
+
+
+def print_changes(changes: dict[str, int]) -> None:
+    """Print the final changes that will be applied."""
+    print_header("Changes to be Applied")
+    for option, value in changes.items():
+        print_information(f"Option {option}", f"New value: {value}")
+
+
+class ConfigOptions(str, Enum):
+    """Available configuration options"""
+
+    OPTION_A = "A"
+    OPTION_B = "B"
+    OPTION_C = "C"
+    OPTION_D = "D"
+
+
+update_settings_options = {
+    ConfigOptions.OPTION_A: "Option A",
+    ConfigOptions.OPTION_B: "Option B",
+    ConfigOptions.OPTION_C: "Option C",
+    ConfigOptions.OPTION_D: "Option D",
+}
+
+
+@dataclass
+class ChangeDetail:
+    """Represents a change in datum settings."""
+
+    field_name: str
+    previous_value: Any
+    new_value: Any
+
+    def __str__(self) -> str:
+        return (
+            f"Change detected in {self.field_name}:\n"
+            f"  Previous: {self.previous_value}\n"
+            f"  New: {self.new_value}"
+        )
+
+
+class DatumComparison(NamedTuple):
+    """Defines a comparison between old and new datum values."""
+
+    field_name: str
+    previous_value: Any
+    new_value: Any
+    is_equal: bool
+
+
+async def print_allowed_datum_changes(
+    deployed_core_settings_datum: OracleSettingsDatum, tx_config: PlatformTxConfig
+) -> bool:
+    """
+    Compare and display changes between deployed core settings and current transaction config.
+    Uses styled output to highlight changes.
+
+    Args:
+        deployed_core_settings_datum: The current deployed settings
+        tx_config: The new transaction configuration
+    """
+    # Define comparisons
+    comparisons = [
+        DatumComparison(
+            "Aggregation Liveness Period",
+            deployed_core_settings_datum.aggregation_liveness_period,
+            tx_config.timing.aggregation_liveness,
+            deployed_core_settings_datum.aggregation_liveness_period
+            == tx_config.timing.aggregation_liveness,
+        ),
+        DatumComparison(
+            "Time Absolute Uncertainty",
+            deployed_core_settings_datum.time_absolute_uncertainty,
+            tx_config.timing.time_uncertainty,
+            deployed_core_settings_datum.time_absolute_uncertainty
+            == tx_config.timing.time_uncertainty,
+        ),
+        DatumComparison(
+            "IQR Fence Multiplier",
+            deployed_core_settings_datum.iqr_fence_multiplier,
+            tx_config.timing.iqr_multiplier,
+            deployed_core_settings_datum.iqr_fence_multiplier
+            == tx_config.timing.iqr_multiplier,
+        ),
+        DatumComparison(
+            "Required Node Signatures Count",
+            deployed_core_settings_datum.required_node_signatures_count,
+            tx_config.multi_sig.threshold,
+            deployed_core_settings_datum.required_node_signatures_count
+            == tx_config.multi_sig.threshold,
+        ),
+    ]
+
+    changes_found = False
+
+    for comparison in comparisons:
+        if not comparison.is_equal:
+            if not changes_found:
+                print_information("Configuration Changes Detected")
+                changes_found = True
+
+            change = ChangeDetail(
+                comparison.field_name, comparison.previous_value, comparison.new_value
+            )
+            click.echo(str(change))
+            click.echo()
+
+    if not changes_found:
+        print_information("No Configuration Changes Detected")
+
+    return changes_found
+
+
+def oracle_success_callback(tx: Transaction, data: dict) -> None:
+    print_status(
+        "Oracle deployment",
+        "Transaction submitted successfully",
+        success=True,
+    )
+    if "script_address" in data:
+        print_hash_info("Script Address", data["script_address"])

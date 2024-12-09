@@ -5,6 +5,7 @@ import logging
 from pycardano import Address, NativeScript, ScriptHash, UTxO
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
+from charli3_offchain_core.platform.auth.token_script_builder import ScriptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class PlatformAuthFinder:
         self.chain_query = chain_query
 
     async def find_auth_utxo(
-        self, policy_id: bytes, platform_address: str
+        self, policy_id: str, platform_address: str
     ) -> UTxO | None:
         """Find platform authorization NFT UTxO."""
         try:
@@ -44,5 +45,14 @@ class PlatformAuthFinder:
 
     def _get_script_hash(self, address: str) -> ScriptHash:
         """Extract script hash from script address."""
-        addr = Address.from_primitive(address)
+        if isinstance(address, Address):
+            addr = address
+        else:
+            addr = Address.from_primitive(str(address))
+
         return addr.payment_part
+
+    def get_script_config(self, script: NativeScript) -> ScriptConfig:
+        """Get signers from script"""
+        if not isinstance(script, NativeScript):
+            return None

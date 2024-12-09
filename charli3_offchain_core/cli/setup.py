@@ -39,6 +39,7 @@ def setup_platform_from_config(config: Path, metadata: Path | None) -> tuple[
 
     chain_context = create_chain_context(auth_config)
     chain_query = ChainQuery(chain_context)
+
     tx_manager = TransactionManager(chain_query)
 
     def status_callback(status: ProcessStatus, message: str) -> None:

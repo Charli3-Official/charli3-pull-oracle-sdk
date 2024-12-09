@@ -256,8 +256,10 @@ class OracleStartBuilder:
         """Create settings datum with initial configuration."""
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=Nodes(node_map={}),
-                required_node_signatures_count=0,  # Initial count is 0
+                nodes=Nodes.from_string_list(
+                    ["e06f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070"]
+                ),
+                required_node_signatures_count=1,
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,

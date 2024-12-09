@@ -127,7 +127,7 @@ class TransactionManager:
             builder = TransactionBuilder(self.chain_query.context)
 
             # Add script inputs
-            for utxo, script, redeemer in script_inputs:
+            for utxo, redeemer, script in script_inputs:
                 builder.add_script_input(utxo=utxo, script=script, redeemer=redeemer)
 
             # Add script outputs with datums

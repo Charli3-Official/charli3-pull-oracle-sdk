@@ -17,11 +17,13 @@ from pycardano import (
 from pycardano.backend import OgmiosV6ChainContext
 from pycardano.backend.kupo import KupoChainContextExtension
 
+from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.oracle.deployment.orchestrator import DeploymentStatus
 
 from .config.deployment import DeploymentConfig
 from .config.keys import KeyManager
+from .config.network import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
@@ -186,3 +188,34 @@ def parse_ws_url(url: str) -> tuple[str, int, bool]:
     host = parsed.hostname or parsed.netloc.split(":")[0]
     port = parsed.port or (443 if secure else 1337)
     return host, port, secure
+
+
+def create_chain_query(config: NetworkConfig) -> ChainQuery:
+    """Create chain query from configuration file."""
+    try:
+        # Use Blockfrost
+        if config.blockfrost:
+            context = BlockFrostChainContext(
+                project_id=config.blockfrost.project_id,
+                network=config.network,
+            )
+            return ChainQuery(blockfrost_context=context)
+
+        # Use Ogmios/Kupo
+        ogmios_url = config.ogmios_kupo.ogmios_url
+        host, port, secure = parse_ws_url(ogmios_url)
+
+        ogmios_context = OgmiosV6ChainContext(
+            host=host,
+            port=port,
+            secure=secure,
+            network=config.network,
+        )
+        kupo_context = KupoChainContextExtension(
+            ogmios_context,
+            config.ogmios_kupo.kupo_url,
+        )
+        return ChainQuery(kupo_ogmios_context=kupo_context)
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to create chain query: {e}") from e

@@ -1,48 +1,41 @@
 """CLI commands for oracle deployment and management."""
 
+import json
 import logging
 from pathlib import Path
 
 import click
-from pycardano import BlockFrostChainContext
-from pycardano.backend.kupo import KupoChainContextExtension
 
-from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
-from charli3_offchain_core.contracts.aiken_loader import OracleContracts
-from charli3_offchain_core.models.oracle_datums import (
-    Asset,
-    FeeConfig,
-    NoDatum,
-    OracleConfiguration,
-    RewardPrices,
+from charli3_offchain_core.cli.settings import update_settings
+from charli3_offchain_core.cli.transaction import (
+    create_sign_tx_command,
+    create_submit_tx_command,
 )
+from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.oracle.config import (
-    OracleDeploymentConfig,
     OracleScriptConfig,
 )
-from charli3_offchain_core.oracle.deployment.orchestrator import (
-    DeploymentResult,
-    DeploymentStatus,
-    OracleDeploymentOrchestrator,
-)
-from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
+from ..constants.status import ProcessStatus
 from .base import (
-    create_chain_context,
+    create_chain_query,
     derive_deployment_addresses,
     load_keys_with_validation,
-    validate_deployment_config,
 )
 from .config.deployment import DeploymentConfig
 from .config.formatting import (
     format_deployment_summary,
-    format_status_update,
+    oracle_success_callback,
+    print_confirmation_message_prompt,
     print_confirmation_prompt,
+    print_hash_info,
     print_header,
     print_progress,
+    print_status,
 )
 from .config.utils import async_command
+from .setup import setup_oracle_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +46,22 @@ def oracle() -> None:
     pass
 
 
+oracle.add_command(
+    create_sign_tx_command(
+        status_signed_value=ProcessStatus.TRANSACTION_SIGNED,
+    )
+)
+
+oracle.add_command(
+    create_submit_tx_command(
+        status_success_value=ProcessStatus.TRANSACTION_CONFIRMED,
+        success_callback=oracle_success_callback,
+    )
+)
+
+oracle.add_command(update_settings)
+
+
 @oracle.command()
 @click.option(
     "--config",
@@ -60,166 +69,86 @@ def oracle() -> None:
     required=True,
     help="Path to deployment configuration YAML",
 )
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output file for transaction data",
+)
 @async_command
-async def deploy(config: Path) -> None:
-    """Deploy new oracle instance using configuration file.
-
-    This command will:
-    1. Load configuration from YAML file
-    2. Create reference scripts if needed
-    3. Create oracle UTxOs with proper datums
-    4. Mint oracle NFTs
-
-    Example:
-    \b
-    charli3 oracle deploy --config deploy-testnet.yaml
-    """
+async def deploy(config: Path, output: Path | None) -> None:  # noqa: C901
+    """Deploy new oracle instance using configuration file."""
     try:
-        # Load and validate configuration
         print_header("Deployment Configuration")
         print_progress("Loading configuration")
-        deployment_config = DeploymentConfig.from_yaml(config)
-        validate_deployment_config(deployment_config)
 
-        # Load base contracts
-        print_progress("Loading base contracts from blueprint")
-        base_contracts = OracleContracts.from_blueprint(
-            deployment_config.blueprint_path
-        )
-        logger.debug("Base contract hash: %s", base_contracts.spend.script_hash)
+        # Setup configuration and components
+        setup = setup_oracle_from_config(config)
+        (
+            deployment_config,
+            payment_sk,
+            payment_vk,
+            addresses,
+            chain_query,
+            tx_manager,
+            orchestrator,
+            platform_auth_finder,
+            configs,
+        ) = setup
 
-        # Create oracle configuration
-        print_progress("Creating oracle configuration")
-        oracle_config = OracleConfiguration(
-            platform_auth_nft=bytes.fromhex(
-                deployment_config.tokens.platform_auth_policy
-            ),
-            closing_period_length=deployment_config.timing.closing_period,
-            reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
-            fee_token=Asset(
-                policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
-                name=bytes.fromhex(deployment_config.tokens.fee_token_name),
-            ),
-        )
-
-        # Parameterize contracts
-        logger.info("Parameterizing contracts...")
-        parameterized_contracts = OracleContracts(
-            spend=base_contracts.apply_spend_params(oracle_config),
-            mint=base_contracts.mint,  # Mint policy is parameterized later with UTxO
-        )
-        logger.info(
-            "Parameterized contract hash: %s", parameterized_contracts.spend.script_hash
-        )
-
-        # Load keys and derive addresses using parameterized contracts
-        keys = load_keys_with_validation(deployment_config, parameterized_contracts)
-        addresses = derive_deployment_addresses(
-            deployment_config, parameterized_contracts
-        )
-
-        if deployment_config.multi_sig.platform_addr:
-            platform_address = deployment_config.multi_sig.platform_addr
-        else:
-            platform_address = addresses.admin_address
-
-        # Display addresses and get confirmation
         if not print_confirmation_prompt(
             {
                 "Admin Address": addresses.admin_address,
                 "Script Address": addresses.script_address,
-                "Platform Address": platform_address,
+                "Platform Address": addresses.platform_address,
             }
         ):
             raise click.Abort()
 
-        # Initialize deployment
-        print_progress("Initializing deployment components")
-        chain_context = create_chain_context(deployment_config)
-
-        # Initialize core components
-        chain_query = ChainQuery(
-            blockfrost_context=(
-                chain_context
-                if isinstance(chain_context, BlockFrostChainContext)
-                else None
-            ),
-            kupo_ogmios_context=(
-                chain_context
-                if isinstance(chain_context, KupoChainContextExtension)
-                else None
-            ),
-        )
-
-        tx_manager = TransactionManager(chain_query)
-
-        # Create configurations
-        script_config = OracleScriptConfig(
-            create_manager_reference=deployment_config.create_reference,
-            reference_ada_amount=62_000_000,
-        )
-
-        oracle_deployment_config = OracleDeploymentConfig(
-            network=deployment_config.network.network,
-            reward_transport_count=deployment_config.transport_count,
-        )
-
-        fee_token = Asset(
-            policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
-            name=bytes.fromhex(deployment_config.tokens.fee_token_name),
-        )
-
-        fee_config = FeeConfig(
-            rate_nft=NoDatum(),
-            reward_prices=RewardPrices(
-                node_fee=deployment_config.fees.node_fee,
-                platform_fee=deployment_config.fees.platform_fee,
-            ),
-        )
-
-        platform_auth_finder = PlatformAuthFinder(chain_query)
-
-        # Validate platform auth UTxO
-        logger.info("Validating platform auth UTxO...")
+        # Validate platform auth
+        print_progress("Validating platform auth UTxO...")
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=deployment_config.tokens.platform_auth_policy,
-            platform_address=platform_address,
+            platform_address=addresses.platform_address,
         )
-
-        if platform_utxo is None:
-            logger.error(
-                "No UTxO found with platform auth NFT (policy: %s)",
-                deployment_config.tokens.platform_auth_policy,
+        if not platform_utxo:
+            raise click.ClickException(
+                f"No UTxO found with platform auth NFT (policy: {deployment_config.tokens.platform_auth_policy})"
             )
-            return
 
-        multisig_script = await platform_auth_finder.get_platform_script(
-            platform_address
+        platform_script = await platform_auth_finder.get_platform_script(
+            addresses.platform_address
         )
-
+        platform_multisig_config = platform_auth_finder.get_script_config(
+            platform_script
+        )
         logger.info(
-            "Using platform UTxO: %s#%s",
-            platform_utxo.input.transaction_id,
-            platform_utxo.input.index,
+            f"Using platform UTxO: {platform_utxo.input.transaction_id}#{platform_utxo.input.index}"
         )
 
-        # Deploy oracle using parameterized contracts
-        logger.info("Initializing deployment orchestrator...")
-        orchestrator = OracleDeploymentOrchestrator(
-            chain_query=chain_query,
-            contracts=parameterized_contracts,  # Using parameterized contracts
-            tx_manager=tx_manager,
-            status_callback=format_status_update,
+        # Handle reference scripts
+        reference_result, needs_reference = await orchestrator.handle_reference_scripts(
+            script_config=configs["script"],
+            script_address=addresses.script_address,
+            admin_address=addresses.admin_address,
+            signing_key=payment_sk,
         )
 
-        print_progress("Starting oracle deployment")
-        result: DeploymentResult = await orchestrator.deploy_oracle(
+        if needs_reference:
+            if not print_confirmation_message_prompt(
+                "Reference Script was not found! Would you like to proceed with reference script creation now?"
+            ):
+                raise click.Abort()
+            await orchestrator.submit_reference_script_tx(reference_result, payment_sk)
+        else:
+            print_progress("Reference script already exists, Proceeding...")
+
+        # Build deployment transaction
+        result = await orchestrator.build_tx(
             platform_auth_policy_id=bytes.fromhex(
                 deployment_config.tokens.platform_auth_policy
             ),
-            fee_token=fee_token,
-            platform_script=multisig_script,
-            script_config=script_config,
+            fee_token=configs["fee_token"],
+            platform_script=platform_script,
             admin_address=addresses.admin_address,
             script_address=addresses.script_address,
             closing_period_length=deployment_config.timing.closing_period,
@@ -227,17 +156,49 @@ async def deploy(config: Path) -> None:
             aggregation_liveness_period=deployment_config.timing.aggregation_liveness,
             time_absolute_uncertainty=deployment_config.timing.time_uncertainty,
             iqr_fence_multiplier=deployment_config.timing.iqr_multiplier,
-            deployment_config=oracle_deployment_config,
-            fee_config=fee_config,
-            signing_key=keys.payment_sk,
+            deployment_config=configs["deployment"],
+            fee_config=configs["fee"],
+            signing_key=payment_sk,
             platform_utxo=platform_utxo,
         )
 
-        # Display results
-        if result.status == DeploymentStatus.COMPLETED:
-            format_deployment_summary(result)
-        else:
+        if result.status != ProcessStatus.TRANSACTION_BUILT:
             raise click.ClickException(f"Deployment failed: {result.error}")
+
+        # Handle transaction signing based on threshold
+        if platform_multisig_config.threshold == 1:
+            if print_confirmation_message_prompt(
+                "You can deploy the oracle with the configured Platform Auth NFT right away. Would you like to continue?"
+            ):
+                status, _ = await tx_manager.sign_and_submit(
+                    result.start_result.transaction,
+                    [payment_sk],
+                    wait_confirmation=True,
+                )
+                if status == ProcessStatus.TRANSACTION_CONFIRMED:
+                    format_deployment_summary(result)
+                else:
+                    raise click.ClickException(f"Deployment failed: {status}")
+        elif print_confirmation_message_prompt(
+            "PlatformAuth NFT being used requires multisigatures and thus will be stored. Would you like to continue?"
+        ):
+            output_path = output or Path("tx_oracle_deploy.json")
+            with output_path.open("w") as f:
+                json.dump(
+                    {
+                        "transaction": result.start_result.transaction.to_cbor_hex(),
+                        "script_address": str(addresses.script_address),
+                        "signed_by": [],
+                        "threshold": platform_multisig_config.threshold,
+                    },
+                    f,
+                )
+            print_status("Transaction", "saved successfully", success=True)
+            print_hash_info("Output file", str(output_path))
+            print_hash_info(
+                "Next steps",
+                f"Transaction requires {platform_multisig_config.threshold} signatures",
+            )
 
     except Exception as e:
         logger.error("Deployment failed", exc_info=e)
@@ -269,29 +230,15 @@ async def create_reference_script(config: Path, force: bool) -> None:
         keys = load_keys_with_validation(deployment_config, contracts)
         addresses = derive_deployment_addresses(deployment_config, contracts)
 
-        # Initialize chain context
-        chain_context = create_chain_context(deployment_config)
-
-        # Initialize core components
-        chain_query = ChainQuery(
-            blockfrost_context=(
-                chain_context
-                if isinstance(chain_context, BlockFrostChainContext)
-                else None
-            ),
-            kupo_ogmios_context=(
-                chain_context
-                if isinstance(chain_context, KupoChainContextExtension)
-                else None
-            ),
-        )
+        # Initialize chain query
+        chain_query = create_chain_query(deployment_config.network)
 
         tx_manager = TransactionManager(chain_query)
 
         # Create script config
         script_config = OracleScriptConfig(
             create_manager_reference=True,
-            reference_ada_amount=62_000_000,
+            reference_ada_amount=64_000_000,
         )
 
         # Check for existing script
