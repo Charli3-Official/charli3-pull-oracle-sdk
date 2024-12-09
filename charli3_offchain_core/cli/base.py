@@ -18,12 +18,12 @@ from pycardano.backend import OgmiosV6ChainContext
 from pycardano.backend.kupo import KupoChainContextExtension
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
+from charli3_offchain_core.cli.config.deployment import NetworkConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.oracle.deployment.orchestrator import DeploymentStatus
 
 from .config.deployment import DeploymentConfig
 from .config.keys import KeyManager
-from .config.network import NetworkConfig
 
 logger = logging.getLogger(__name__)
 

@@ -108,6 +108,7 @@ async def update_settings(config: Path, verbose: bool, output: Path | None) -> N
                     ],
                     script_outputs=[modified_core_utxo.output, auth_utxo.output],
                     change_address=addr,
+                    signing_key=sk,
                 )
 
                 if update_settings.required_single_signature:
