@@ -3,14 +3,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
 from .multisig import MultisigConfig
 from .network import NetworkConfig
+from .nodes import NodesConfig
 from .settings import FeeConfig, TimingConfig
 from .token import TokenConfig
-from .nodes import NodesConfig
-from .keys import WalletConfig
 from .utils import load_yaml_config
 
 

@@ -61,7 +61,6 @@ class OracleStartBuilder:
     MIN_UTXO_VALUE = 2_500_000
     FEE_BUFFER = 10_000
 
-
     def __init__(
         self,
         chain_query: ChainQuery,
