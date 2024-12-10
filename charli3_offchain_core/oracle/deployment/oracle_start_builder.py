@@ -24,6 +24,7 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.deployment import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
+    MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE,
     AggStateVariant,
     FeeConfig,
     NoDatum,
@@ -58,7 +59,8 @@ class OracleStartBuilder:
 
     # Constants for clarity and reuse
     MIN_UTXO_VALUE = 2_500_000
-    FEE_BUFFER = 500
+    FEE_BUFFER = 10_000
+
 
     def __init__(
         self,
@@ -108,7 +110,7 @@ class OracleStartBuilder:
             raise ValueError("Invalid platform auth NFT")
 
         # Get minting UTxO
-        minting_utxo = await self._get_minting_utxo(change_address, platform_utxo)
+        minting_utxo = await self._get_minting_utxo(change_address)
         if not minting_utxo:
             raise ValueError(
                 "No suitable UTxO found for minting policy parameterization"
@@ -129,7 +131,8 @@ class OracleStartBuilder:
         # Add inputs and preserve platform auth
         builder.add_input(platform_utxo)
         builder.native_scripts = [platform_script]
-        builder.add_input(minting_utxo)
+        if minting_utxo.input != platform_utxo.input:
+            builder.add_input(minting_utxo)
 
         builder.add_output(
             TransactionOutput(
@@ -152,6 +155,7 @@ class OracleStartBuilder:
             deployment_config.token_names.core_settings,
             mint_policy.policy_id,
             self._create_settings_datum(
+                config,
                 fee_config,
                 nodes_config,
                 aggregation_liveness_period,
@@ -234,24 +238,17 @@ class OracleStartBuilder:
             and ScriptHash(policy_id) in utxo.output.amount.multi_asset
         )
 
-    async def _get_minting_utxo(
-        self, address: Address, platform_utxo: UTxO
-    ) -> UTxO | None:
+    async def _get_minting_utxo(self, address: Address) -> UTxO | None:
         """Find suitable UTxO for minting policy parameterization."""
         utxos = await self.chain_query.get_utxos(address)
         return next(
-            (
-                utxo
-                for utxo in utxos
-                if not utxo.output.amount.multi_asset
-                and utxo.output.amount.coin >= self.MIN_UTXO_VALUE
-                and utxo.input != platform_utxo.input
-            ),
+            (utxo for utxo in utxos),
             None,
         )
 
     def _create_settings_datum(
         self,
+        config: OracleConfiguration,
         fee_config: FeeConfig,
         nodes_config: NodesConfig,
         aggregation_liveness_period: int,
@@ -261,6 +258,15 @@ class OracleStartBuilder:
         """Create settings datum with initial configuration."""
         node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
 
+        if config.fee_token == NoDatum():
+            # If fee token is ada then we need to set buffer to a minimum ada amount held at maximum expected reward account utxo size
+            utxo_size_safety_buffer = (
+                MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE
+            )
+        else:
+            # If fee token is some native token then there is no need to manage leftover fee token amount
+            utxo_size_safety_buffer = 0
+
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
                 nodes=Nodes(node_map=node_map),
@@ -269,6 +275,7 @@ class OracleStartBuilder:
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,
                 iqr_fence_multiplier=iqr_fence_multiplier,
+                utxo_size_safety_buffer=utxo_size_safety_buffer,
                 closing_period_started_at=NoDatum(),
             )
         )

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any, NamedTuple
 
 from pycardano import (
     Address,
@@ -9,16 +10,43 @@ from pycardano import (
 )
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.contracts.aiken_loader import OracleContracts
+from charli3_offchain_core.models.oracle_datums import (
+    Asset,
+    FeeConfig,
+    NoDatum,
+    OracleConfiguration,
+    RewardPrices,
+)
+from charli3_offchain_core.oracle.config import (
+    OracleDeploymentConfig,
+    OracleScriptConfig,
+)
+from charli3_offchain_core.oracle.deployment.orchestrator import (
+    OracleDeploymentOrchestrator,
+)
+from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
 from ..blockchain.chain_query import ChainQuery
 from ..blockchain.transactions import TransactionManager
 from ..platform.auth.orchestrator import (
     PlatformAuthOrchestrator,
-    ProcessStatus,
 )
-from .base import create_chain_context
+from .base import (
+    create_chain_query,
+    derive_deployment_addresses,
+    load_keys_with_validation,
+    validate_deployment_config,
+)
+from .config.deployment import DeploymentConfig
 from .config.keys import KeyManager
 from .config.platform import PlatformAuthConfig
+
+
+class OracleAddresses(NamedTuple):
+    admin_address: str
+    script_address: str
+    platform_address: str
 
 
 def setup_platform_from_config(config: Path, metadata: Path | None) -> tuple[
@@ -30,6 +58,7 @@ def setup_platform_from_config(config: Path, metadata: Path | None) -> tuple[
     ChainQuery,
     TransactionManager,
     PlatformAuthOrchestrator,
+    Any,
 ]:
     """Set up all required modules that are common across platform functions from config file."""
     auth_config = PlatformAuthConfig.from_yaml(config)
@@ -37,17 +66,13 @@ def setup_platform_from_config(config: Path, metadata: Path | None) -> tuple[
         auth_config.network.wallet
     )
 
-    chain_context = create_chain_context(auth_config)
-    chain_query = ChainQuery(chain_context)
+    chain_query = create_chain_query(auth_config.network)
     tx_manager = TransactionManager(chain_query)
-
-    def status_callback(status: ProcessStatus, message: str) -> None:
-        format_status_update(status.name, message)
 
     orchestrator = PlatformAuthOrchestrator(
         chain_query=chain_query,
         tx_manager=tx_manager,
-        status_callback=status_callback,
+        status_callback=format_status_update,
     )
     meta_data = None
     if metadata:
@@ -64,4 +89,113 @@ def setup_platform_from_config(config: Path, metadata: Path | None) -> tuple[
         tx_manager,
         orchestrator,
         meta_data,
+    )
+
+
+def setup_oracle_from_config(
+    config: Path,
+) -> tuple[
+    DeploymentConfig,
+    PaymentSigningKey,
+    PaymentVerificationKey,
+    OracleAddresses,
+    ChainQuery,
+    TransactionManager,
+    OracleDeploymentOrchestrator,
+    PlatformAuthFinder,
+    dict,
+]:
+    """Set up all required modules for oracle deployment from config file."""
+    # Load and validate configuration
+    deployment_config = DeploymentConfig.from_yaml(config)
+    validate_deployment_config(deployment_config)
+
+    # Load base contracts
+    base_contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
+
+    # Create fee token
+    if (
+        deployment_config.tokens.fee_token_policy == ""
+        and deployment_config.tokens.fee_token_name == ""
+    ):
+        fee_token = NoDatum()
+    else:
+        fee_token = Asset(
+            policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
+            name=bytes.fromhex(deployment_config.tokens.fee_token_name),
+        )
+
+    # Create oracle configuration
+    oracle_config = OracleConfiguration(
+        platform_auth_nft=bytes.fromhex(deployment_config.tokens.platform_auth_policy),
+        closing_period_length=deployment_config.timing.closing_period,
+        reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
+        fee_token=fee_token,
+    )
+
+    # Parameterize contracts
+    parameterized_contracts = OracleContracts(
+        spend=base_contracts.apply_spend_params(oracle_config),
+        mint=base_contracts.mint,
+    )
+
+    # Load keys and derive addresses
+    keys = load_keys_with_validation(deployment_config, parameterized_contracts)
+    addresses = derive_deployment_addresses(deployment_config, parameterized_contracts)
+    platform_address = (
+        deployment_config.multi_sig.platform_addr or addresses.admin_address
+    )
+
+    # In your setup function, replace the dictionary creation with:
+    oracle_addresses = OracleAddresses(
+        admin_address=addresses.admin_address,
+        script_address=addresses.script_address,
+        platform_address=platform_address,
+    )
+
+    chain_query = create_chain_query(deployment_config.network)
+
+    tx_manager = TransactionManager(chain_query)
+
+    # Create configurations
+    configs = {
+        "script": OracleScriptConfig(
+            create_manager_reference=deployment_config.create_reference,
+            reference_ada_amount=64_000_000,
+        ),
+        "deployment": OracleDeploymentConfig(
+            network=deployment_config.network.network,
+            reward_transport_count=deployment_config.transport_count,
+        ),
+        "fee": FeeConfig(
+            rate_nft=NoDatum(),
+            reward_prices=RewardPrices(
+                node_fee=deployment_config.fees.node_fee,
+                platform_fee=deployment_config.fees.platform_fee,
+            ),
+        ),
+        "fee_token": fee_token,
+    }
+
+    # Initialize platform auth finder
+    platform_auth_finder = PlatformAuthFinder(chain_query)
+
+    # Initialize orchestrator
+    orchestrator = OracleDeploymentOrchestrator(
+        chain_query=chain_query,
+        contracts=parameterized_contracts,
+        tx_manager=tx_manager,
+        status_callback=format_status_update,
+    )
+
+    return (
+        deployment_config,
+        keys.payment_sk,
+        keys.payment_vk,
+        oracle_addresses,
+        chain_query,
+        tx_manager,
+        orchestrator,
+        platform_auth_finder,
+        configs,
     )

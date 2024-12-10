@@ -88,3 +88,34 @@ class PlatformAuthScript:
         """Get script address."""
         script = self.build_spending_script()
         return Address(payment_part=script.hash(), network=self.config.network)
+
+    @staticmethod
+    def from_native_script(
+        script: NativeScript, network: str | None = None
+    ) -> ScriptConfig:
+        """Extract ScriptConfig from a native script."""
+        try:
+            if isinstance(script, ScriptAll):
+                for inner_script in script.native_scripts:
+                    if isinstance(inner_script, ScriptNofK):
+                        signers = []
+                        for pub_script in inner_script.native_scripts:
+                            if isinstance(pub_script, ScriptPubkey):
+                                signers.append(pub_script.key_hash)
+                        return ScriptConfig(
+                            signers=signers, threshold=inner_script.n, network=network
+                        )
+
+            elif isinstance(script, ScriptNofK):
+                signers = []
+                for pub_script in script.native_scripts:
+                    if isinstance(pub_script, ScriptPubkey):
+                        signers.append(pub_script.key_hash)
+                return ScriptConfig(
+                    signers=signers, threshold=script.n, network=network
+                )
+
+            raise ValueError("Unsupported script structure")
+
+        except Exception as e:
+            raise ValueError(f"Failed to deserialize script: {e}") from e

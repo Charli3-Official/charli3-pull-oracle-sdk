@@ -1,23 +1,12 @@
 """CLI output enhancements for oracle deployment."""
 
-from enum import Enum
 from typing import Any
 
 import click
+from pycardano import Transaction
 
-
-class CliColor(str, Enum):
-    """CLI color scheme"""
-
-    SUCCESS = "green"
-    ERROR = "red"
-    WARNING = "yellow"
-    INFO = "blue"
-    HEADER = "cyan"
-    ADDRESS = "bright_blue"
-    HASH = "bright_black"
-    PROGRESS = "yellow"
-    TITLE = "bright_cyan"
+from ...constants.colors import CliColor
+from ...constants.status import ProcessStatus
 
 
 def print_header(text: str) -> None:
@@ -80,22 +69,23 @@ def format_deployment_summary(result: Any) -> None:
         )
 
 
-def format_status_update(status: str, message: str) -> None:
-    """Format deployment status updates with colors."""
-    status_colors = {
-        "NOT_STARTED": CliColor.INFO,
-        "CHECKING_REFERENCE_SCRIPTS": CliColor.INFO,
-        "CREATING_MANAGER_REFERENCE": CliColor.PROGRESS,
-        "BUILDING_START_TX": CliColor.PROGRESS,
-        "SUBMITTING_START_TX": CliColor.WARNING,
-        "WAITING_CONFIRMATION": CliColor.WARNING,
-        "COMPLETED": CliColor.SUCCESS,
-        "FAILED": CliColor.ERROR,
+def format_status_update(status: ProcessStatus, message: str) -> None:
+    """Format and display deployment status updates."""
+    colors = {
+        ProcessStatus.NOT_STARTED: CliColor.INFO,
+        ProcessStatus.CHECKING_REFERENCE_SCRIPTS: CliColor.INFO,
+        ProcessStatus.CREATING_SCRIPT: CliColor.WARNING,
+        ProcessStatus.BUILDING_TRANSACTION: CliColor.INFO,
+        ProcessStatus.SUBMITTING_TRANSACTION: CliColor.WARNING,
+        ProcessStatus.WAITING_CONFIRMATION: CliColor.WARNING,
+        ProcessStatus.TRANSACTION_SIGNED: CliColor.SUCCESS,
+        ProcessStatus.TRANSACTION_SUBMITTED: CliColor.SUCCESS,
+        ProcessStatus.COMPLETED: CliColor.SUCCESS,
+        ProcessStatus.FAILED: CliColor.ERROR,
     }
 
-    click.echo()
-    click.secho(f"[{status}]", fg=status_colors.get(status, CliColor.INFO), bold=True)
-    click.secho(f"└─ {message}", fg=CliColor.INFO)
+    click.secho(f"\n[{status}]", fg=colors.get(status, CliColor.INFO), bold=True)
+    click.secho(message, fg=colors.get(status, CliColor.INFO))
 
 
 def print_confirmation_prompt(addresses: dict[str, str]) -> bool:
@@ -108,6 +98,27 @@ def print_confirmation_prompt(addresses: dict[str, str]) -> bool:
     return click.confirm(
         click.style("Continue with these addresses?", fg=CliColor.WARNING, bold=True)
     )
+
+
+def oracle_success_callback(tx: Transaction, data: dict) -> None:
+    print_status(
+        "Oracle deployment",
+        "Transaction submitted successfully",
+        success=True,
+    )
+    if "script_address" in data:
+        print_hash_info("Script Address", data["script_address"])
+
+
+def platform_success_callback(tx: Transaction, data: dict) -> None:
+    print_status(
+        "Platform authorization token",
+        "Transaction submitted successfully",
+        success=True,
+    )
+    print_hash_info("Transaction ID", tx.id)
+    print_hash_info("Platform Address", data["platform_address"])
+    print_hash_info("Policy ID", data["policy_id"])
 
 
 # Example usage in cli/oracle.py:
@@ -144,4 +155,6 @@ def print_platform_auth_config_prompt(auth_config: any) -> bool:
     for i, party in enumerate(auth_config.multisig.parties, start=1):
         print_address_info(f"PKH {i}", party)
 
-    return print_confirmation_message_prompt("Proceed with token minting?")
+    return print_confirmation_message_prompt(
+        "Ensure that the above configurations are correct?"
+    )

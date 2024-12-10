@@ -3,18 +3,20 @@ import logging
 from pathlib import Path
 
 import click
-from pycardano import Transaction
 
 from charli3_offchain_core.cli.config.formatting import (
+    platform_success_callback,
     print_confirmation_message_prompt,
     print_hash_info,
     print_platform_auth_config_prompt,
     print_status,
 )
-
-from ..platform.auth.orchestrator import (
-    ProcessStatus,
+from charli3_offchain_core.cli.transaction import (
+    create_sign_tx_command,
+    create_submit_tx_command,
 )
+
+from ..constants.status import ProcessStatus
 from .config.utils import async_command
 from .setup import setup_platform_from_config
 
@@ -31,6 +33,20 @@ def platform() -> None:
 def token() -> None:
     """Platform authorization commands."""
     pass
+
+
+token.add_command(
+    create_sign_tx_command(
+        status_signed_value=ProcessStatus.TRANSACTION_SIGNED,
+    )
+)
+
+token.add_command(
+    create_submit_tx_command(
+        status_success_value=ProcessStatus.TRANSACTION_CONFIRMED,
+        success_callback=platform_success_callback,
+    )
+)
 
 
 @token.command()
@@ -65,7 +81,7 @@ async def mint(
             _,
             default_addr,
             _,
-            _,
+            tx_manager,
             orchestrator,
             meta_data,
         ) = setup_platform_from_config(config, metadata)
@@ -98,186 +114,43 @@ async def mint(
             }
 
             if print_confirmation_message_prompt(
-                "Would you like to sign the transaction now?"
+                "The built tx requires multisignatures. Would you like to sign the transaction now?"
             ):
-                signed_tx, status = await orchestrator.handle_tx(
-                    result.transaction, payment_sk, submit=False
-                )
-                result.status = status
-                if status == ProcessStatus.TRANSACTION_SIGNED:
-                    data["transaction"] = signed_tx.to_cbor_hex()
-                    data["signed_by"].append(str(payment_vk.payload.hex()))
-                else:
-                    raise click.ClickException("Transaction failed: ")
+                tx_manager.sign_tx(result.transaction, payment_sk)
+                data["transaction"] = result.transaction.to_cbor_hex()
+                data["signed_by"].append(str(payment_vk.payload.hex()))
 
             with output.open("w") as f:
                 json.dump(data, f)
 
-            if result.status == ProcessStatus.TRANSACTION_SIGNED:
-                print_status("Status", "Tx built and signed successfully", success=True)
-                print_hash_info("Output file", str(output))
-                print_hash_info(
-                    "Reminder",
-                    "Tx requires more than 1 signatures for successful submission",
-                )
-
-        else:
-            submitted_tx, status = await orchestrator.handle_tx(
-                result.transaction, payment_sk, submit=True
+            print_status("Status", "Tx built and signed successfully", success=True)
+            print_hash_info("Output file", str(output))
+            print_hash_info(
+                "Reminder",
+                "Tx requires more than 1 signatures for successful submission",
             )
-
-            if status == ProcessStatus.COMPLETED:
+        elif print_confirmation_message_prompt(
+            "You can proceed with minting right away. Would you like to continue?"
+        ):
+            status, _ = await tx_manager.sign_and_submit(
+                result.transaction, [payment_sk]
+            )
+            if status == ProcessStatus.TRANSACTION_CONFIRMED:
                 print_status(
-                    "Platform authorization token", "Minted successfully", success=True
+                    "Platform authorization token",
+                    "Minted successfully",
+                    success=True,
                 )
-                print_hash_info("Transaction ID", submitted_tx.id)
+                print_hash_info("Transaction ID", result.transaction.id)
                 print_hash_info("Platform Address", result.platform_address)
                 print_hash_info("Policy ID", result.policy_id)
             else:
                 raise click.ClickException("Transaction failed")
+        else:
+            raise click.Abort
 
     except click.Abort:
         click.echo("Process aborted by the user.")
     except Exception as e:
         logger.error("Failed to process transaction", exc_info=e)
-        raise click.ClickException(str(e)) from e
-
-
-@token.command()
-@click.option(
-    "--config",
-    type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Path to platform configuration YAML",
-)
-@click.option(
-    "--tx-file",
-    type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Path to signed transaction JSON file",
-)
-@async_command
-async def submit_tx(
-    config: Path,
-    tx_file: Path,
-) -> None:
-    """Submit a fully signed platform auth token transaction."""
-    try:
-        (
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            orchestrator,
-            _,
-        ) = setup_platform_from_config(config, None)
-
-        with tx_file.open() as f:
-            data = json.load(f)
-
-        if len(data.get("signed_by", [])) < data.get("threshold", 1):
-            raise click.ClickException(
-                "Transaction does not have enough signatures to meet threshold"
-            )
-
-        tx = Transaction.from_cbor(data["transaction"])
-
-        submitted_tx, status = await orchestrator.handle_tx(tx, None, submit=True)
-
-        if status == ProcessStatus.COMPLETED:
-            print_status(
-                "Platform authorization token",
-                "Transaction submitted successfully",
-                success=True,
-            )
-            print_hash_info("Transaction ID", submitted_tx.id)
-            print_hash_info("Platform Address", data["platform_address"])
-            print_hash_info("Policy ID", data["policy_id"])
-        else:
-            raise click.ClickException("Transaction submission failed")
-    except click.Abort:
-        click.echo("Process aborted by the user.")
-    except Exception as e:
-        logger.error("Failed to submit transaction", exc_info=e)
-        raise click.ClickException(str(e)) from e
-
-
-@token.command()
-@click.option(
-    "--config",
-    type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Path to platform configuration YAML",
-)
-@click.option(
-    "--tx-file",
-    type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Path to transaction JSON file to sign",
-)
-@async_command
-async def sign_tx(
-    config: Path,
-    tx_file: Path,
-) -> None:
-    """Sign a platform auth token transaction and update the file."""
-    try:
-        (
-            _,
-            payment_sk,
-            payment_vk,
-            _,
-            _,
-            _,
-            _,
-            orchestrator,
-            _,
-        ) = setup_platform_from_config(config, None)
-
-        with tx_file.open() as f:
-            data = json.load(f)
-
-        signer_id = payment_vk.payload.hex()
-        if signer_id in data.get("signed_by", []):
-            raise click.ClickException("Transaction already signed by this key")
-
-        if len(data.get("signed_by", [])) >= data.get("threshold", 1):
-            raise click.ClickException(
-                "Transaction already has required number of signatures"
-            )
-
-        transaction = Transaction.from_cbor(data["transaction"])
-
-        signed_tx, status = await orchestrator.handle_tx(
-            transaction, payment_sk, submit=False
-        )
-
-        if status == ProcessStatus.TRANSACTION_SIGNED:
-            data["transaction"] = signed_tx.to_cbor_hex()
-            data["signed_by"].append(signer_id)
-
-            with tx_file.open("w") as f:
-                json.dump(data, f)
-
-            print_status("Transaction", "Signed successfully", success=True)
-            print_hash_info("Signer", signer_id)
-            print_hash_info(
-                "Signatures", f"{len(data['signed_by'])}/{data['threshold']}"
-            )
-
-            if len(data["signed_by"]) >= data["threshold"]:
-                print_hash_info(
-                    "Reminder",
-                    "Transaction has all required signatures and is ready for submission",
-                )
-        else:
-            raise click.ClickException("Transaction signing failed")
-
-    except click.Abort:
-        click.echo("Process aborted by the user.")
-    except Exception as e:
-        logger.error("Failed to sign transaction", exc_info=e)
         raise click.ClickException(str(e)) from e
