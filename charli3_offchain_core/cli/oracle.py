@@ -244,7 +244,7 @@ async def close(config: Path, output: Path | None) -> None:
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
-            change_address=oracle_addresses.script_address,
+            change_address=oracle_addresses.admin_address,
             signing_key=payment_sk,
         )
 

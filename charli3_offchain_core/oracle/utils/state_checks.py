@@ -190,6 +190,7 @@ def get_oracle_settings_by_policy_id(
             settings_utxo_datum = OracleSettingsVariant.from_cbor(
                 settings_utxo.output.datum.cbor
             )
+            settings_utxo.output.datum = settings_utxo_datum
 
         return settings_utxo_datum.datum, settings_utxo
 

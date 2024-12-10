@@ -1,5 +1,6 @@
 """Close oracle transaction builder."""
 
+from copy import deepcopy
 from typing import Any
 
 from pycardano import (
@@ -8,7 +9,6 @@ from pycardano import (
     NativeScript,
     PaymentSigningKey,
     Redeemer,
-    TransactionOutput,
     UTxO,
 )
 
@@ -68,11 +68,8 @@ class CloseBuilder(BaseBuilder):
                 )
             )
 
-            settings_output = TransactionOutput(
-                address=settings_utxo.output.address,
-                amount=settings_utxo.output.amount,
-                datum=updated_settings,
-            )
+            settings_modified_utxo = deepcopy(settings_utxo)
+            settings_modified_utxo.output.datum = updated_settings
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -83,12 +80,14 @@ class CloseBuilder(BaseBuilder):
                     ),
                     (platform_utxo, None, platform_script),
                 ],
-                script_outputs=[settings_output, platform_utxo.output],
+                script_outputs=[settings_modified_utxo.output, platform_utxo.output],
                 change_address=change_address,
                 signing_key=signing_key,
             )
 
-            return LifecycleTxResult(transaction=tx, settings_utxo=settings_output)
+            return LifecycleTxResult(
+                transaction=tx, settings_utxo=settings_modified_utxo
+            )
 
         except Exception as e:
             raise ValueError(f"Failed to build close transaction: {e!s}") from e
