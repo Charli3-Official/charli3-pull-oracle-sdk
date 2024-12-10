@@ -121,6 +121,10 @@ class Nodes(PlutusData):
         """
         return cls(node_map={})
 
+    @property
+    def length(self) -> int:
+        return len(self.node_map)
+
 
 @dataclass
 class RewardPrices(PlutusData):

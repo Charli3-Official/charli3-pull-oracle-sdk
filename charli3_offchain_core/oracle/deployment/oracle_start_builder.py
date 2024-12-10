@@ -257,7 +257,10 @@ class OracleStartBuilder:
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
                 nodes=Nodes.from_string_list(
-                    ["e06f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070"]
+                    [
+                        "e06f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070",
+                        "ac7add7f734aa0074c2813eff8472a54263dd8f350ed0dc680934256",
+                    ]
                 ),
                 required_node_signatures_count=1,
                 fee_info=fee_config,

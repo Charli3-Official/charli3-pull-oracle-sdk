@@ -132,8 +132,7 @@ def platform_success_callback(tx: Transaction, data: dict) -> None:
         success=True,
     )
     print_hash_info("Transaction ID", tx.id)
-    print_hash_info("Platform Address", data["platform_address"])
-    print_hash_info("Policy ID", data["policy_id"])
+    print_hash_info("Platform Address", data["script_addr"])
 
 
 # Example usage in cli/oracle.py:

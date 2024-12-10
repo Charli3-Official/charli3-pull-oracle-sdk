@@ -135,7 +135,7 @@ class UpdateCoreSettings(BaseTransaction):
 
         # Extract configuration values for better readability
         threshold = self.tx_config.multi_sig.threshold
-        parties = self.tx_config.multi_sig.parties
+        parties = deployed_core_settings.datum.nodes
         timing_config = self.tx_config.timing
 
         # Validate timing parameters
@@ -154,8 +154,10 @@ class UpdateCoreSettings(BaseTransaction):
         if not threshold > 0:
             raise ValueError("Threshold must be positive")
 
-        if not threshold <= len(parties):
-            raise ValueError("Threshold cannot be greater than number of parties")
+        if not threshold <= parties.length:
+            raise ValueError(
+                "Threshold cannot be greater than number of deployed parties"
+            )
 
         # Create new settings with validated parameters
         return OracleSettingsVariant(

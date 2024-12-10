@@ -39,6 +39,7 @@ class TransactionConfig:
     extra_collateral: int = 6_000_000
     min_utxo_value: int = 2_000_000
     default_script_utxo_cost: int = 5_000_000
+    fee_buffer = 10_000
 
 
 class TransactionManager:
@@ -120,11 +121,16 @@ class TransactionManager:
         required_signers: list[VerificationKeyHash] | None = None,
         change_address: Address = None,
         signing_key: PaymentSigningKey | ExtendedSigningKey = None,
+        fee_buffer: int | None = None,
         metadata: dict | None = None,
     ) -> Transaction:
         """Build script interaction transaction."""
+        if fee_buffer is None:
+            fee_buffer = self.config.fee_buffer
         try:
-            builder = TransactionBuilder(self.chain_query.context)
+            builder = TransactionBuilder(
+                self.chain_query.context, fee_buffer=fee_buffer
+            )
 
             # Add script inputs
             for utxo, redeemer, script in script_inputs:
