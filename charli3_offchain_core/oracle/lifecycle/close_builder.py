@@ -63,6 +63,7 @@ class CloseBuilder(BaseBuilder):
                     aggregation_liveness_period=settings_datum.aggregation_liveness_period,
                     time_absolute_uncertainty=settings_datum.time_absolute_uncertainty,
                     iqr_fence_multiplier=settings_datum.iqr_fence_multiplier,
+                    utxo_size_safety_buffer=settings_datum.utxo_size_safety_buffer,
                     closing_period_started_at=current_time,
                 )
             )
