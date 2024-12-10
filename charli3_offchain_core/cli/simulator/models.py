@@ -249,11 +249,20 @@ class SimulationConfig(TxConfig):
         network: NetworkConfig,
         script_address: str,
         policy_id: str,
+        fee_token_policy_id: str,
+        fee_token_name: str,
         wallet: WalletConfig,
         simulation: SimulationSettings,
     ) -> None:
         """Initialize simulation config with base config and simulation settings."""
-        super().__init__(network, script_address, policy_id, wallet)
+        super().__init__(
+            network,
+            script_address,
+            policy_id,
+            fee_token_policy_id,
+            fee_token_name,
+            wallet,
+        )
         self.simulation = simulation
 
     @classmethod
@@ -283,6 +292,8 @@ class SimulationConfig(TxConfig):
             network=NetworkConfig.from_dict(data.get("network", {})),
             script_address=data["script_address"],
             policy_id=data["policy_id"],
+            fee_token_policy_id=data["fee_token"]["fee_token_policy"],
+            fee_token_name=data["fee_token"]["fee_token_name"],
             wallet=WalletConfig.from_dict(data["wallet"]),
             simulation=sim_settings,
         )

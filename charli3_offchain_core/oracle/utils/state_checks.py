@@ -175,7 +175,7 @@ def filter_oracle_settings_utxo(utxos: Sequence[UTxO], policy_id: ScriptHash) ->
 
 def get_oracle_settings_by_policy_id(
     utxos: Sequence[UTxO], policy_id: ScriptHash
-) -> OracleSettingsDatum:
+) -> tuple[OracleSettingsDatum, UTxO]:
     """Get oracle settings datum by policy ID.
 
     Args:
@@ -184,6 +184,7 @@ def get_oracle_settings_by_policy_id(
 
     Returns:
         OracleSettingsDatum: Oracle settings datum
+        UTxO: Oracle settings UTxO
 
     Raises:
         StateValidationError: If no oracle settings datum is found
@@ -197,7 +198,7 @@ def get_oracle_settings_by_policy_id(
                 settings_utxo.output.datum.cbor
             )
 
-        return settings_utxo_datum.datum
+        return settings_utxo_datum.datum, settings_utxo
 
     except Exception as e:
         raise StateValidationError(f"Failed to get oracle settings: {e}") from e

@@ -98,6 +98,28 @@ class RewardCalculator:
         except Exception as e:
             raise DistributionError(f"Failed to calculate rewards: {e}") from e
 
+    def calculate_min_fee_amount(self, node_count: int) -> int:
+        """Calculate minimum fee amount for a given number of nodes.
+
+        Args:
+            node_count: Number of nodes to calculate for
+
+        Returns:
+            Minimum fee amount
+
+        Raises:
+            DistributionError: If calculation fails
+        """
+        try:
+            # Calculate minimum fee
+            min_fee = self.fee_config.reward_prices.platform_fee
+            min_fee += self.fee_config.reward_prices.node_fee * node_count
+
+            return min_fee
+
+        except Exception as e:
+            raise DistributionError(f"Failed to calculate minimum fee: {e}") from e
+
     def validate_distribution(
         self, distribution: RewardDistribution, total_fees: int
     ) -> bool:

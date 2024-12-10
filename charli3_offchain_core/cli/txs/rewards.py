@@ -63,19 +63,13 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
+            fee_token_hash=ctx.fee_token_policy_id,
+            fee_token_name=ctx.fee_token_name,
         )
-
-        # Get settings from script address
-        settings_utxos = await ctx.chain_query.get_utxos(ctx.script_address)
-        if not settings_utxos:
-            raise click.ClickException("No settings UTxO found")
-
-        settings = settings_utxos[0].output.datum.datum
 
         # Build rewards transaction
         print_progress("Building rewards transaction...")
         result = await builder.build_rewards_tx(
-            settings=settings,
             signing_key=signing_key,
             max_inputs=batch_size,
             change_address=change_address,

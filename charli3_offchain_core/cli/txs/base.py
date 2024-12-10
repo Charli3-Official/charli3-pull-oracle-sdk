@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 import yaml
-from pycardano import Address, PaymentSigningKey, ScriptHash
+from pycardano import Address, AssetName, PaymentSigningKey, ScriptHash
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
@@ -25,6 +25,8 @@ class TxConfig:
     network: NetworkConfig
     script_address: str  # Oracle script address
     policy_id: str  # Oracle NFT policy ID
+    fee_token_policy_id: str  # Fee token policy ID
+    fee_token_name: str  # Fee token name
     wallet: WalletConfig  # Wallet configuration with mnemonic
 
     @classmethod
@@ -40,6 +42,8 @@ class TxConfig:
             network=NetworkConfig.from_dict(data.get("network", {})),
             script_address=data["script_address"],
             policy_id=data["policy_id"],
+            fee_token_policy_id=data["fee_token"]["fee_token_policy_id"],
+            fee_token_name=data["fee_token"]["fee_token_name"],
             wallet=WalletConfig.from_dict(data["wallet"]),
         )
 
@@ -71,6 +75,8 @@ class TransactionContext:
         self.tx_manager = TransactionManager(self.chain_query)
         self.script_address = config.get_script_address()
         self.policy_id = config.get_policy_id()
+        self.fee_token_policy_id = ScriptHash(bytes.fromhex(config.fee_token_policy_id))
+        self.fee_token_name = AssetName(bytes.fromhex(config.fee_token_name))
 
     def load_keys(self) -> tuple[PaymentSigningKey, Address]:
         """Load keys from mnemonic."""

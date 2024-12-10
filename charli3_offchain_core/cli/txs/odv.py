@@ -69,6 +69,8 @@ async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
+            fee_token_hash=ctx.fee_token_policy_id,
+            fee_token_name=ctx.fee_token_name,
         )
 
         # Build ODV transaction

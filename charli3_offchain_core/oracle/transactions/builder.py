@@ -1,12 +1,18 @@
 """Oracle transaction builder leveraging comprehensive validation utilities."""
 
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
+from statistics import median
 
 from pycardano import (
     Address,
+    Asset,
+    AssetName,
     ExtendedSigningKey,
+    MultiAsset,
     PaymentSigningKey,
+    ScriptHash,
     Transaction,
     TransactionOutput,
     UTxO,
@@ -18,7 +24,6 @@ from charli3_offchain_core.models.oracle_datums import (
     AggStateDatum,
     AggStateVariant,
     NoRewards,
-    OracleSettingsDatum,
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
@@ -30,7 +35,6 @@ from charli3_offchain_core.models.oracle_redeemers import (
 from charli3_offchain_core.oracle.exceptions import (
     ConsensusError,
     StateValidationError,
-    TimeValidationError,
     TransactionError,
     ValidationError,
 )
@@ -40,7 +44,6 @@ from charli3_offchain_core.oracle.utils import (
     rewards,
     signature_checks,
     state_checks,
-    time_checks,
     value_checks,
 )
 
@@ -75,6 +78,8 @@ class OracleTransactionBuilder:
         tx_manager: TransactionManager,
         script_address: Address,
         policy_id: bytes,
+        fee_token_hash: ScriptHash,
+        fee_token_name: AssetName,
     ) -> None:
         """Initialize transaction builder.
 
@@ -86,6 +91,8 @@ class OracleTransactionBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
+        self.fee_token_hash = fee_token_hash
+        self.fee_token_name = fee_token_name
         self.consensus_calculator = None
         self.reward_calculator = None
         self.reward_accumulator = rewards.RewardAccumulator()
@@ -121,16 +128,20 @@ class OracleTransactionBuilder:
             TransactionError: If transaction building fails
         """
         try:
-            # Get and validate UTxOs
+            # Get current network time
+            current_time = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
+
+            # Get UTxOs and settings
             utxos = await self._get_script_utxos()
             transport, agg_state = state_checks.find_transport_pair(
                 utxos, self.policy_id
             )
-            settings: OracleSettingsDatum = (
+            settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
             # Update calculators with current settings
-            self.consensus_calculator = consensus.ConsensusCalculator(settings)
+            self.consensus_calculator = consensus.ConsensusCalculator(settings_datum)
+            self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
 
             # Validate message content
             if not self.consensus_calculator.validate_aggregate_message(
@@ -139,44 +150,69 @@ class OracleTransactionBuilder:
                 raise ValidationError("Invalid aggregate message")
 
             # Validate signatures
-            if not signature_checks.validate_message_nodes(message, settings):
+            if not signature_checks.validate_message_nodes(message, settings_datum):
                 raise ValidationError("Invalid node signatures")
 
             # Validate oracle state
-            if state_checks.is_oracle_closing(settings):
+            if state_checks.is_oracle_closing(settings_datum):
                 raise StateValidationError("Oracle is in closing period")
 
-            # Validate timestamp
-            current_time = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-            if not time_checks.is_valid_timestamp(
-                message.timestamp, current_time, settings.time_absolute_uncertainty
-            ):
-                raise TimeValidationError("Invalid message timestamp")
+            # Calculate median
+            feeds = [feed for _, feed in message.node_feeds_sorted_by_feed]
+            median_value = int(median(feeds))
 
-            # Create outputs with updated datums
+            # Get reward prices and calculate fees
+            minimum_fee = self.reward_calculator.calculate_min_fee_amount(
+                len(message.node_feeds_sorted_by_feed)
+            )
+
+            # Create message with current timestamp
+            current_message = AggregateMessage(
+                node_feeds_sorted_by_feed=message.node_feeds_sorted_by_feed,
+                node_feeds_count=message.node_feeds_count,
+                timestamp=current_time,
+            )
+
+            # Create transport output with fees
+            transport_output = deepcopy(transport.output)
+
+            # Use class attributes directly
+            if (
+                self.fee_token_hash in transport_output.amount.multi_asset
+                and self.fee_token_name
+                in transport_output.amount.multi_asset[self.fee_token_hash]
+            ):
+                transport_output.amount.multi_asset[self.fee_token_hash][
+                    self.fee_token_name
+                ] += minimum_fee
+            else:
+                fee_asset = MultiAsset(
+                    {self.fee_token_hash: Asset({self.fee_token_name: minimum_fee})}
+                )
+                transport_output.amount.multi_asset += fee_asset
+
             transport_output = TransactionOutput(
                 address=self.script_address,
-                amount=transport.output.amount,
+                amount=transport_output.amount,
                 datum=RewardTransportVariant(
                     datum=RewardConsensusPending(
-                        oracle_feed=0,  # Set by validator
-                        message=message,
-                        node_reward_price=0,
+                        oracle_feed=median_value,
+                        message=current_message,
+                        node_reward_price=minimum_fee,
                     )
                 ),
             )
 
-            expiry_time = time_checks.calculate_expiry_time(
-                message.timestamp, settings.aggregation_liveness_period
-            )
+            # Create agg state output
+            expiry_time = current_time + settings_datum.aggregation_liveness_period
             agg_state_output = TransactionOutput(
                 address=self.script_address,
                 amount=agg_state.output.amount,
                 datum=AggStateVariant(
                     datum=AggStateDatum(
-                        oracle_feed=0,  # Set by validator
+                        oracle_feed=median_value,
                         expiry_timestamp=expiry_time,
-                        created_at=message.timestamp,
+                        created_at=current_time,
                     )
                 ),
             )
@@ -188,6 +224,7 @@ class OracleTransactionBuilder:
                     (agg_state, OdvAggregate(), None),
                 ],
                 script_outputs=[transport_output, agg_state_output],
+                reference_inputs=[settings_utxo],
                 change_address=change_address,
                 signing_key=signing_key,
             )
@@ -224,12 +261,12 @@ class OracleTransactionBuilder:
         try:
             # Get and validate UTxOs
             utxos = await self._get_script_utxos()
-            settings: OracleSettingsDatum = (
+            settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
             # Update calculators with current settings
-            self.consensus_calculator = consensus.ConsensusCalculator(settings)
-            self.reward_calculator = rewards.RewardCalculator(settings.fee_info)
+            self.consensus_calculator = consensus.ConsensusCalculator(settings_datum)
+            self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
 
             # Find pending transports
             transports = state_checks.filter_pending_transports(
@@ -284,7 +321,7 @@ class OracleTransactionBuilder:
                 distribution = self.reward_calculator.calculate_rewards(
                     participants=set(message.node_feeds_sorted_by_feed.keys()),
                     outliers=outliers,
-                    total_fees=settings.fee_info.reward_prices.node_fee,
+                    total_fees=settings_datum.fee_info.reward_prices.node_fee,
                 )
 
                 # Update total distribution
@@ -335,6 +372,7 @@ class OracleTransactionBuilder:
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=script_inputs,
                 script_outputs=[*new_transports, reward_account_output],
+                reference_inputs=[settings_utxo],
                 change_address=change_address,
                 signing_key=signing_key,
             )

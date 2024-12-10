@@ -25,6 +25,10 @@ wallet:
 script_address: "addr1..."
 policy_id: "..."
 
+fee_token:
+  fee_token_policy: "hex_policy_id_here"
+  fee_token_name: "hex_token_name_here"
+
 # Simulation-specific settings
 simulation:
   node_keys_dir: "node_keys"
