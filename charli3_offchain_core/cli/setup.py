@@ -113,15 +113,24 @@ def setup_oracle_from_config(
     # Load base contracts
     base_contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
 
+    # Create fee token
+    if (
+        deployment_config.tokens.fee_token_policy == ""
+        and deployment_config.tokens.fee_token_name == ""
+    ):
+        fee_token = NoDatum()
+    else:
+        fee_token = Asset(
+            policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
+            name=bytes.fromhex(deployment_config.tokens.fee_token_name),
+        )
+
     # Create oracle configuration
     oracle_config = OracleConfiguration(
         platform_auth_nft=bytes.fromhex(deployment_config.tokens.platform_auth_policy),
         closing_period_length=deployment_config.timing.closing_period,
         reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
-        fee_token=Asset(
-            policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
-            name=bytes.fromhex(deployment_config.tokens.fee_token_name),
-        ),
+        fee_token=fee_token,
     )
 
     # Parameterize contracts
@@ -165,10 +174,7 @@ def setup_oracle_from_config(
                 platform_fee=deployment_config.fees.platform_fee,
             ),
         ),
-        "fee_token": Asset(
-            policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
-            name=bytes.fromhex(deployment_config.tokens.fee_token_name),
-        ),
+        "fee_token": fee_token,
     }
 
     # Initialize platform auth finder

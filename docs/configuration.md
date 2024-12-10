@@ -65,6 +65,7 @@ tokens:
   platform_auth_policy: "hex_policy_id"
 
   # Fee token details
+  # Use empty strings for ada (lovelace)
   fee_token_policy: "hex_policy_id"  # 28 bytes
   fee_token_name: "hex_asset_name"   # Asset name in hex
 ```
