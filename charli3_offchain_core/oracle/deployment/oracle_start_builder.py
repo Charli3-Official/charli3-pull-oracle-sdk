@@ -106,7 +106,7 @@ class OracleStartBuilder:
             raise ValueError("Invalid platform auth NFT")
 
         # Get minting UTxO
-        minting_utxo = await self._get_minting_utxo(change_address, platform_utxo)
+        minting_utxo = await self._get_minting_utxo(change_address)
         if not minting_utxo:
             raise ValueError(
                 "No suitable UTxO found for minting policy parameterization"
@@ -127,7 +127,8 @@ class OracleStartBuilder:
         # Add inputs and preserve platform auth
         builder.add_input(platform_utxo)
         builder.native_scripts = [platform_script]
-        builder.add_input(minting_utxo)
+        if minting_utxo.input != platform_utxo.input:
+            builder.add_input(minting_utxo)
 
         builder.add_output(
             TransactionOutput(
@@ -232,19 +233,11 @@ class OracleStartBuilder:
             and ScriptHash(policy_id) in utxo.output.amount.multi_asset
         )
 
-    async def _get_minting_utxo(
-        self, address: Address, platform_utxo: UTxO
-    ) -> UTxO | None:
+    async def _get_minting_utxo(self, address: Address) -> UTxO | None:
         """Find suitable UTxO for minting policy parameterization."""
         utxos = await self.chain_query.get_utxos(address)
         return next(
-            (
-                utxo
-                for utxo in utxos
-                if not utxo.output.amount.multi_asset
-                and utxo.output.amount.coin >= self.MIN_UTXO_VALUE
-                and utxo.input != platform_utxo.input
-            ),
+            (utxo for utxo in utxos),
             None,
         )
 
