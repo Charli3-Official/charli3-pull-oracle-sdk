@@ -7,8 +7,7 @@ import click
 import yaml
 from pycardano import ExtendedSigningKey, HDWallet, PaymentVerificationKey
 
-from charli3_offchain_core.cli.config.deployment import NodeConfig, NodesConfig
-from charli3_offchain_core.cli.config.utils import async_command
+from charli3_offchain_core.cli.config import NodeConfig, NodesConfig, async_command
 
 logger = logging.getLogger(__name__)
 

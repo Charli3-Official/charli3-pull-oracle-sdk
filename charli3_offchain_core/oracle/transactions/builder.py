@@ -21,6 +21,7 @@ from pycardano import (
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
+    Aggregation,
     AggStateDatum,
     AggStateVariant,
     NoRewards,
@@ -196,9 +197,12 @@ class OracleTransactionBuilder:
                 amount=transport_output.amount,
                 datum=RewardTransportVariant(
                     datum=RewardConsensusPending(
-                        oracle_feed=median_value,
-                        message=current_message,
-                        node_reward_price=minimum_fee,
+                        aggregation=Aggregation(
+                            oracle_feed=median_value,
+                            message=current_message,
+                            node_reward_price=minimum_fee,
+                            rewards_amount_paid=minimum_fee,
+                        )
                     )
                 ),
             )

@@ -9,9 +9,8 @@ import click
 import yaml
 from pycardano import Address, AssetName, PaymentSigningKey, ScriptHash
 
-from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
-from charli3_offchain_core.cli.base import create_chain_context
+from charli3_offchain_core.cli.base import create_chain_query
 from charli3_offchain_core.cli.config.deployment import NetworkConfig
 from charli3_offchain_core.cli.config.keys import KeyManager, WalletConfig
 
@@ -61,17 +60,7 @@ class TransactionContext:
 
     def __init__(self, config: TxConfig) -> None:
         self.config = config
-        self.chain_context = create_chain_context(config)
-        self.chain_query = ChainQuery(
-            blockfrost_context=(
-                self.chain_context if hasattr(self.chain_context, "api") else None
-            ),
-            kupo_ogmios_context=(
-                self.chain_context
-                if hasattr(self.chain_context, "_wrapped_backend")
-                else None
-            ),
-        )
+        self.chain_query = create_chain_query(config.network)
         self.tx_manager = TransactionManager(self.chain_query)
         self.script_address = config.get_script_address()
         self.policy_id = config.get_policy_id()

@@ -12,7 +12,7 @@ from nacl.encoding import RawEncoder
 from nacl.signing import SigningKey, VerifyKey
 from pycardano import PaymentSigningKey, PaymentVerificationKey, VerificationKeyHash
 
-from charli3_offchain_core.cli.config.deployment import NetworkConfig, WalletConfig
+from charli3_offchain_core.cli.config import NetworkConfig, WalletConfig
 from charli3_offchain_core.cli.txs.base import TxConfig
 from charli3_offchain_core.oracle.transactions.builder import RewardsResult
 from charli3_offchain_core.oracle.utils.signature_checks import encode_oracle_feed
