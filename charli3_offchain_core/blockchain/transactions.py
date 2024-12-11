@@ -71,7 +71,10 @@ class TransactionManager:
         """Prepare transaction builder with inputs, collateral, and metadata."""
         # Add required signers
         if required_signers:
-            builder.required_signers.extend(required_signers)
+            if builder.required_signers is None:
+                builder.required_signers = required_signers
+            else:
+                builder.required_signers.extend(required_signers)
 
         # Add metadata if provided
         if metadata:

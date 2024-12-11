@@ -44,7 +44,6 @@ from charli3_offchain_core.oracle.utils import (
     asset_checks,
     consensus,
     rewards,
-    signature_checks,
     state_checks,
     value_checks,
 )
@@ -131,7 +130,7 @@ class OracleTransactionBuilder:
         """
         try:
             # Get current network time
-            current_time = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
+            current_time = message.timestamp
 
             # Get UTxOs and settings
             utxos = await self._get_script_utxos()
@@ -152,10 +151,6 @@ class OracleTransactionBuilder:
                 message, self.tx_manager.chain_query.get_current_posix_chain_time_ms()
             ):
                 raise ValidationError("Invalid aggregate message")
-
-            # Validate signatures
-            if not signature_checks.validate_message_nodes(message, settings_datum):
-                raise ValidationError("Invalid node signatures")
 
             # Validate oracle state
             if state_checks.is_oracle_closing(settings_datum):
@@ -226,6 +221,9 @@ class OracleTransactionBuilder:
                 ),
             )
 
+            # Extract VKHs from message nodes
+            node_vkhs = list(message.node_feeds_sorted_by_feed.keys())
+
             # Build transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -234,6 +232,7 @@ class OracleTransactionBuilder:
                 ],
                 script_outputs=[transport_output, agg_state_output],
                 reference_inputs=[settings_utxo],
+                required_signers=node_vkhs,
                 change_address=change_address,
                 signing_key=signing_key,
             )

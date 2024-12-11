@@ -108,9 +108,11 @@ class OracleSimulator:
             change_address=change_address,
         )
 
+        all_signing_keys = [signing_key] + [node.signing_key for node in self.nodes]
+
         status, _ = await self.ctx.tx_manager.sign_and_submit(
             result.transaction,
-            [signing_key],
+            all_signing_keys,
             wait_confirmation=True,
         )
 
