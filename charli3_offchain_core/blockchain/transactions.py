@@ -117,14 +117,21 @@ class TransactionManager:
         mint: MultiAsset | None = None,
         mint_redeemer: Redeemer | None = None,
         mint_script: PlutusV3Script | None = None,
+        validity_start: int | None = None,
+        validity_end: int | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
         change_address: Address = None,
         signing_key: PaymentSigningKey | ExtendedSigningKey = None,
+        fee_buffer: int | None = None,
         metadata: dict | None = None,
     ) -> Transaction:
         """Build script interaction transaction."""
+        if fee_buffer is None:
+            fee_buffer = self.config.fee_buffer
         try:
-            builder = TransactionBuilder(self.chain_query.context)
+            builder = TransactionBuilder(
+                self.chain_query.context, fee_buffer=fee_buffer
+            )
 
             # Add script inputs
             for utxo, redeemer, script in script_inputs:
@@ -142,6 +149,11 @@ class TransactionManager:
             if mint and mint_script and mint_redeemer:
                 builder.mint = mint
                 builder.add_minting_script(script=mint_script, redeemer=mint_redeemer)
+
+            if validity_start is not None:
+                builder.validity_start = validity_start
+            if validity_end is not None:
+                builder.ttl = validity_end
 
             return await self.build_tx(
                 builder=builder,

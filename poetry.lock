@@ -1194,8 +1194,8 @@ websockets = "^13.0"
 [package.source]
 type = "git"
 url = "https://github.com/talhahussain7/pycardano.git"
-reference = "23d46a45b23ce229aa5d67382b0df4ef8620ef66"
-resolved_reference = "23d46a45b23ce229aa5d67382b0df4ef8620ef66"
+reference = "fix/odv-multisig-offchain"
+resolved_reference = "ef528df31dad596be6f08dba8469ff71cbdf781a"
 
 [[package]]
 name = "pycparser"
@@ -1816,4 +1816,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
-content-hash = "1ef5ed3c8cdf0b8dcac4844420ddde99b0b5d49bb175df90890320e427ddbf95"
+content-hash = "5776c72d4363b4ca5cb08ccd4552c4b26a99e9ec4b39406ffc7d7c8b1d19ad6c"

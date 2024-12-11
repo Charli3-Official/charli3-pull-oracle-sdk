@@ -20,7 +20,6 @@ class BaseBuilder:
     """Base builder for lifecycle transactions"""
 
     MIN_UTXO_VALUE = 2_000_000
-    FEE_BUFFER = 10_000
 
     def __init__(self, chain_query: ChainQuery, tx_manager: TransactionManager) -> None:
         self.chain_query = chain_query

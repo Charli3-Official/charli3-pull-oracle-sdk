@@ -11,7 +11,7 @@ packages = [
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
 opshin = "^0.23.1"
-pycardano = { git = "https://github.com/talhahussain7/pycardano.git", rev = "23d46a45b23ce229aa5d67382b0df4ef8620ef66" }
+pycardano = { git = "https://github.com/talhahussain7/pycardano.git", branch="fix/odv-multisig-offchain" }
 
 
 [tool.poetry.group.dev.dependencies]

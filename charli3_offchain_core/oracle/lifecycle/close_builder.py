@@ -54,23 +54,19 @@ class CloseBuilder(BaseBuilder):
             if is_oracle_closing(settings_datum):
                 raise ClosingError("Oracle already in closing period")
 
-            current_time = self.chain_query.get_current_posix_chain_time_ms()
-
-            updated_settings = OracleSettingsVariant(
-                OracleSettingsDatum(
-                    nodes=settings_datum.nodes,
-                    required_node_signatures_count=settings_datum.required_node_signatures_count,
-                    fee_info=settings_datum.fee_info,
-                    aggregation_liveness_period=settings_datum.aggregation_liveness_period,
-                    time_absolute_uncertainty=settings_datum.time_absolute_uncertainty,
-                    iqr_fence_multiplier=settings_datum.iqr_fence_multiplier,
-                    utxo_size_safety_buffer=settings_datum.utxo_size_safety_buffer,
-                    closing_period_started_at=PosixTime(current_time),
-                )
+            closing_time_ms, validity_start, validity_end = (
+                self._get_closing_time_and_slot_ranges(settings_datum)
             )
 
-            settings_modified_utxo = deepcopy(settings_utxo)
-            settings_modified_utxo.output.datum = updated_settings
+            modified_settings_utxo = deepcopy(settings_utxo)
+            modified_settings_datum = deepcopy(settings_datum)
+            modified_settings_datum.closing_period_started_at = PosixTime(
+                closing_time_ms
+            )
+
+            modified_settings_utxo.output.datum = OracleSettingsVariant(
+                modified_settings_datum
+            )
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -81,14 +77,27 @@ class CloseBuilder(BaseBuilder):
                     ),
                     (platform_utxo, None, platform_script),
                 ],
-                script_outputs=[settings_modified_utxo.output, platform_utxo.output],
+                script_outputs=[modified_settings_utxo.output, platform_utxo.output],
+                validity_start=validity_start,
+                validity_end=validity_end,
+                fee_buffer=self.FEE_BUFFER,
                 change_address=change_address,
                 signing_key=signing_key,
             )
 
             return LifecycleTxResult(
-                transaction=tx, settings_utxo=settings_modified_utxo
+                transaction=tx, settings_utxo=modified_settings_utxo
             )
 
         except Exception as e:
             raise ValueError(f"Failed to build close transaction: {e!s}") from e
+
+    def _get_closing_time_and_slot_ranges(
+        self, settings_datum: OracleSettingsDatum
+    ) -> tuple[int, int, int]:
+        """Get closing time and slot ranges."""
+        current_slot = self.chain_query.last_block_slot
+        validity_end = current_slot + (settings_datum.time_absolute_uncertainty // 1000)
+        conversion = self.chain_query.config.network_config.slot_to_posix
+        closing_time_ms = (conversion(current_slot) + conversion(validity_end)) // 2
+        return closing_time_ms, current_slot, validity_end
