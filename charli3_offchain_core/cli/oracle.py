@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.utils import parse_nodes_file
 from charli3_offchain_core.cli.settings import update_settings
 from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
@@ -66,7 +67,7 @@ oracle.add_command(update_settings)
 @click.option(
     "--config",
     type=click.Path(exists=True, path_type=Path),
-    required=True,
+    required=False,
     help="Path to deployment configuration YAML",
 )
 @click.option(
@@ -74,8 +75,14 @@ oracle.add_command(update_settings)
     type=click.Path(path_type=Path),
     help="Output file for transaction data",
 )
+@click.option(
+    "--nodes-file",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="JSON file containing node feeds and signatures",
+)
 @async_command
-async def deploy(config: Path, output: Path | None) -> None:  # noqa: C901
+async def deploy(config: Path, nodes_file: Path, output: Path | None) -> None:  # noqa
     """Deploy new oracle instance using configuration file."""
     try:
         print_header("Deployment Configuration")
@@ -142,6 +149,8 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa: C901
         else:
             print_progress("Reference script already exists, Proceeding...")
 
+        count, nodes = parse_nodes_file(nodes_file)
+
         # Build deployment transaction
         result = await orchestrator.build_tx(
             platform_auth_policy_id=bytes.fromhex(
@@ -160,6 +169,8 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa: C901
             fee_config=configs["fee"],
             signing_key=payment_sk,
             platform_utxo=platform_utxo,
+            count=count,
+            nodes=nodes,
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:

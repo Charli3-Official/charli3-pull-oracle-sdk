@@ -7,7 +7,6 @@ from pycardano import PlutusData, VerificationKeyHash
 
 PolicyId = bytes
 AssetName = bytes
-PosixTime = int
 PosixTimeDiff = int
 OracleFeed = int
 NodeFeed = int
@@ -15,6 +14,12 @@ FeedVkh = VerificationKeyHash
 PaymentVkh = VerificationKeyHash
 
 MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE = 5_500_000
+
+
+@dataclass
+class PosixTime(PlutusData):
+    CONSTR_ID = 0
+    value: int
 
 
 @dataclass
@@ -62,50 +67,25 @@ class Nodes(PlutusData):
     @classmethod
     def from_string_list(
         cls,
-        parties: List[str],
+        parties: List[List[str]],
     ) -> "Nodes":
-        """
-        Converts a list of strings into a Nodes instance. If a single list is provided,
-        each value is used as both the feed VKH and payment VKH (duplicated).
-        The resulting map is sorted by keys to match Aiken's requirements.
-
-        Args:
-            parties: List of strings representing verification key hashes.
-                    Each string should be a valid VKH.
-
-        Returns:
-            Nodes: A new Nodes instance with the sorted node_map.
-
-        Raises:
-            ValueError: If parties is not a list or if any VKH conversion fails.
-
-        Example:
-            parties = ["vkh1", "vkh2"]
-            nodes = Nodes.from_string_list(parties)
-            # Results in a map where each vkh maps to itself:
-            # {
-            #   VKH("vkh1"): VKH("vkh1"),
-            #   VKH("vkh2"): VKH("vkh2")
-            # }
-            # The map is sorted by the string representation of the keys
-        """
         if not isinstance(parties, list):
             raise ValueError("parties must be a list")
 
-        # Convert strings to VKHs and create mapping
         node_map = {}
-        for idx, party in enumerate(parties):
-            try:
-                vkh = VerificationKeyHash.from_primitive(party)
-                node_map[vkh] = vkh  # Use same VKH as both key and value
-            except Exception as err:
+        for idx, party_pair in enumerate(parties):
+            if not isinstance(party_pair, list) or len(party_pair) != 2:
                 raise ValueError(
-                    "Failed to convert party at index idx: %s", idx
-                ) from err
+                    f"Each party must be a list of exactly 2 VKHs. Error at index {idx}"
+                )
+            try:
+                feed_vkh = VerificationKeyHash.from_primitive(party_pair[0])
+                payment_vkh = VerificationKeyHash.from_primitive(party_pair[1])
+                node_map[feed_vkh] = payment_vkh
+            except Exception as err:
+                raise ValueError(f"Failed to convert VKH pair at index {idx}") from err
 
-        # Sort the map by string representation of keys as required by Aiken
         sorted_map = dict(sorted(node_map.items(), key=lambda x: str(x[0])))
-
         return cls(node_map=sorted_map)
 
     def to_primitive(self) -> Dict[Any, Any]:

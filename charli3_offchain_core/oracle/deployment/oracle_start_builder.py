@@ -83,6 +83,8 @@ class OracleStartBuilder:
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
+        count: int,
+        nodes: list[str],
     ) -> StartTransactionResult:
         """
         Build oracle start transaction that mints NFTs and creates initial UTxOs.
@@ -156,6 +158,8 @@ class OracleStartBuilder:
                 aggregation_liveness_period,
                 time_absolute_uncertainty,
                 iqr_fence_multiplier,
+                count,
+                nodes,
             ),
         )
 
@@ -248,6 +252,8 @@ class OracleStartBuilder:
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
+        count: int,
+        nodes: list[str],
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
 
@@ -262,13 +268,8 @@ class OracleStartBuilder:
 
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=Nodes.from_string_list(
-                    [
-                        "e06f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070",
-                        "ac7add7f734aa0074c2813eff8472a54263dd8f350ed0dc680934256",
-                    ]
-                ),
-                required_node_signatures_count=1,
+                nodes=Nodes.from_string_list(nodes),
+                required_node_signatures_count=count,
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,

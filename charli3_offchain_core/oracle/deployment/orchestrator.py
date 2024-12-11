@@ -108,6 +108,9 @@ class OracleDeploymentOrchestrator:
         # Transaction signing
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         platform_utxo: UTxO,
+        # Nodes
+        count: int,
+        nodes: list[list[str]],
     ) -> DeploymentResult:
         """Deploy new oracle with reference scripts and start transaction.
 
@@ -156,6 +159,8 @@ class OracleDeploymentOrchestrator:
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,
                 iqr_fence_multiplier=iqr_fence_multiplier,
+                count=count,
+                nodes=nodes,
             )
 
             self._update_status(
@@ -220,6 +225,8 @@ class OracleDeploymentOrchestrator:
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
+        count: int,
+        nodes: list[str],
     ) -> StartTransactionResult:
         """Build and submit oracle start transaction."""
         self._update_status(
@@ -238,4 +245,6 @@ class OracleDeploymentOrchestrator:
             aggregation_liveness_period=aggregation_liveness_period,
             time_absolute_uncertainty=time_absolute_uncertainty,
             iqr_fence_multiplier=iqr_fence_multiplier,
+            count=count,
+            nodes=nodes,
         )
