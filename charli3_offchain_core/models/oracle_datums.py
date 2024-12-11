@@ -7,7 +7,6 @@ from pycardano import PlutusData, VerificationKeyHash
 
 PolicyId = bytes
 AssetName = bytes
-PosixTime = int
 PosixTimeDiff = int
 OracleFeed = int
 NodeFeed = int
@@ -15,6 +14,12 @@ FeedVkh = VerificationKeyHash
 PaymentVkh = VerificationKeyHash
 
 MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE = 5_500_000
+
+
+@dataclass
+class PosixTime(PlutusData):
+    CONSTR_ID = 0
+    value: int
 
 
 @dataclass

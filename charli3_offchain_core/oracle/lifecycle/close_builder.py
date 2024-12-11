@@ -15,6 +15,7 @@ from pycardano import (
 from charli3_offchain_core.models.oracle_datums import (
     OracleSettingsDatum,
     OracleSettingsVariant,
+    PosixTime,
 )
 from charli3_offchain_core.models.oracle_redeemers import CloseOracle
 from charli3_offchain_core.oracle.exceptions import ClosingError
@@ -64,7 +65,7 @@ class CloseBuilder(BaseBuilder):
                     time_absolute_uncertainty=settings_datum.time_absolute_uncertainty,
                     iqr_fence_multiplier=settings_datum.iqr_fence_multiplier,
                     utxo_size_safety_buffer=settings_datum.utxo_size_safety_buffer,
-                    closing_period_started_at=current_time,
+                    closing_period_started_at=PosixTime(current_time),
                 )
             )
 
