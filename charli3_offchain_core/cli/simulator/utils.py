@@ -23,18 +23,15 @@ def create_aggregate_message(feed_data: dict) -> AggregateMessage:
         AggregateMessage for ODV submission
     """
     # Extract timestamp from first feed (they should all be the same)
-    timestamp = feed_data[0]["timestamp"]
+    timestamp = next(iter(feed_data.values()))["timestamp"]
 
-    # Create list of (vkh_hex, feed) tuples
-    feeds = []
-    for _, data in feed_data.items():
-        # Convert verification key to VKH
-        vkh = VerificationKeyHash(bytes.fromhex(data["verification_key"]))
-        feed = data["feed"]
-        feeds.append((vkh, feed))
+    # Create and sort feeds dictionary by feed value
+    feeds = {
+        VerificationKeyHash(bytes.fromhex(data["verification_key"])): data["feed"]
+        for _, data in feed_data.items()
+    }
 
-    # Sort by feed value
-    feeds.sort(key=lambda x: x[1])
+    feeds = dict(sorted(feeds.items(), key=lambda x: x[1]))
 
     return AggregateMessage(
         node_feeds_sorted_by_feed=feeds,

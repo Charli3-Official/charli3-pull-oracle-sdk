@@ -206,7 +206,11 @@ class TransactionManager:
             )
 
             # Build transaction components
-            tx_body = builder.build(change_address=change_address)
+            tx_body = builder.build(
+                change_address=change_address,
+                auto_validity_start_offset=self.config.validity_offset,
+                auto_ttl_offset=self.config.ttl_offset,
+            )
 
             # Create initial witness set
             witness_set = builder.build_witness_set()

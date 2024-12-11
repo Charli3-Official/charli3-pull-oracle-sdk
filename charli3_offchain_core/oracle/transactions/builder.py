@@ -28,6 +28,7 @@ from charli3_offchain_core.models.oracle_datums import (
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
+    SomeAggStateDatum,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     CalculateRewards,
@@ -140,6 +141,8 @@ class OracleTransactionBuilder:
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
+            script_utxo = state_checks.get_reference_script_utxo(utxos)
+
             # Update calculators with current settings
             self.consensus_calculator = consensus.ConsensusCalculator(settings_datum)
             self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
@@ -159,7 +162,7 @@ class OracleTransactionBuilder:
                 raise StateValidationError("Oracle is in closing period")
 
             # Calculate median
-            feeds = [feed for _, feed in message.node_feeds_sorted_by_feed]
+            feeds = list(message.node_feeds_sorted_by_feed.values())
             median_value = int(median(feeds))
 
             # Get reward prices and calculate fees
@@ -213,10 +216,12 @@ class OracleTransactionBuilder:
                 address=self.script_address,
                 amount=agg_state.output.amount,
                 datum=AggStateVariant(
-                    datum=AggStateDatum(
-                        oracle_feed=median_value,
-                        expiry_timestamp=expiry_time,
-                        created_at=current_time,
+                    datum=SomeAggStateDatum(
+                        aggstate=AggStateDatum(
+                            oracle_feed=median_value,
+                            expiry_timestamp=expiry_time,
+                            created_at=current_time,
+                        )
                     )
                 ),
             )
@@ -224,8 +229,8 @@ class OracleTransactionBuilder:
             # Build transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
-                    (transport, OdvAggregate(), None),
-                    (agg_state, OdvAggregate(), None),
+                    (transport, OdvAggregate(), script_utxo),
+                    (agg_state, OdvAggregate(), script_utxo),
                 ],
                 script_outputs=[transport_output, agg_state_output],
                 reference_inputs=[settings_utxo],
@@ -268,6 +273,8 @@ class OracleTransactionBuilder:
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
+            script_utxo = state_checks.get_reference_script_utxo(utxos)
+
             # Update calculators with current settings
             self.consensus_calculator = consensus.ConsensusCalculator(settings_datum)
             self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
@@ -370,8 +377,8 @@ class OracleTransactionBuilder:
             )
 
             # Build transaction
-            script_inputs = [(t, CalculateRewards(), None) for t in transports]
-            script_inputs.append((reward_account, CalculateRewards(), None))
+            script_inputs = [(t, CalculateRewards(), script_utxo) for t in transports]
+            script_inputs.append((reward_account, CalculateRewards(), script_utxo))
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=script_inputs,
