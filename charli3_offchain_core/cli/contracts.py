@@ -8,7 +8,11 @@ from opshin import PlutusContract
 from pycardano import Address, ScriptHash, TransactionOutput
 
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
-from charli3_offchain_core.models.oracle_datums import Asset, OracleConfiguration
+from charli3_offchain_core.models.oracle_datums import (
+    Asset,
+    OracleConfiguration,
+    SomeAsset,
+)
 
 
 def safe_dump_artifacts(contract: PlutusContract, target_dir: Path) -> None:
@@ -118,7 +122,9 @@ def main() -> None:
         platform_auth_nft=bytes.fromhex("00" * 28),
         closing_period_length=3600,
         reward_dismissing_period_length=7200,
-        fee_token=Asset(policy_id=bytes.fromhex("00" * 28), name=b"TOKEN"),
+        fee_token=SomeAsset(
+            asset=Asset(policy_id=bytes.fromhex("00" * 28), name=b"TOKEN"),
+        ),
     )
 
     # Create sample UTxO ref and script hash for mint policy

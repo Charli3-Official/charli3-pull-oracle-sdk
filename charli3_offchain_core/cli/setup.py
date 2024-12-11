@@ -17,6 +17,7 @@ from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     OracleConfiguration,
     RewardPrices,
+    SomeAsset,
 )
 from charli3_offchain_core.oracle.config import (
     OracleDeploymentConfig,
@@ -120,9 +121,11 @@ def setup_oracle_from_config(
     ):
         fee_token = NoDatum()
     else:
-        fee_token = Asset(
-            policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
-            name=bytes.fromhex(deployment_config.tokens.fee_token_name),
+        fee_token = SomeAsset(
+            asset=Asset(
+                policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
+                name=bytes.fromhex(deployment_config.tokens.fee_token_name),
+            )
         )
 
     # Create oracle configuration
@@ -161,7 +164,7 @@ def setup_oracle_from_config(
     configs = {
         "script": OracleScriptConfig(
             create_manager_reference=deployment_config.create_reference,
-            reference_ada_amount=64_000_000,
+            reference_ada_amount=70_000_000,
         ),
         "deployment": OracleDeploymentConfig(
             network=deployment_config.network.network,

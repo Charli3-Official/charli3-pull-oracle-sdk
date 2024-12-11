@@ -194,8 +194,8 @@ def get_oracle_settings_by_policy_id(
         settings_utxo_datum = None
 
         if settings_utxo.output.datum:
-            settings_utxo_datum = OracleSettingsVariant.from_cbor(
-                settings_utxo.output.datum.cbor
+            settings_utxo_datum = settings_utxo.output.datum = (
+                OracleSettingsVariant.from_cbor(settings_utxo.output.datum.cbor)
             )
 
         return settings_utxo_datum.datum, settings_utxo
@@ -357,3 +357,22 @@ def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
 
     except Exception as e:
         raise StateValidationError(f"Failed to validate UTxO pair: {e}") from e
+
+
+def get_reference_script_utxo(utxos: Sequence[UTxO]) -> UTxO:
+    """Find reference script UTxO.
+
+    Args:
+        utxos: List of UTxOs to search
+
+    Returns:
+        UTxO: Reference script UTxO
+
+    Raises:
+        StateValidationError: If no reference script UTxO is found
+    """
+    for utxo in utxos:
+        if utxo.output.script:
+            return utxo
+
+    raise StateValidationError("No reference script UTxO found")

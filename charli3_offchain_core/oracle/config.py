@@ -68,4 +68,4 @@ class OracleScriptConfig:
     """Configuration for oracle reference scripts."""
 
     create_manager_reference: bool = True
-    reference_ada_amount: int = 64_000_000  # 64 ADA for reference scripts
+    reference_ada_amount: int = 70_000_000  # 70 ADA for reference scripts

@@ -48,7 +48,7 @@ class ConsensusCalculator:
         """
         try:
             # Extract feed values and create VKH mapping
-            feeds = dict(message.node_feeds_sorted_by_feed)
+            feeds = message.node_feeds_sorted_by_feed
 
             # Validate feed count
             if len(feeds) < self.settings.required_node_signatures_count:
@@ -177,7 +177,7 @@ class ConsensusCalculator:
                 return False
 
             # Validate feed sorting - checking that feeds are sorted by value
-            feed_values = [feed for _, feed in msg.node_feeds_sorted_by_feed]
+            feed_values = list(msg.node_feeds_sorted_by_feed.values())
             if feed_values != sorted(feed_values):
                 logger.warning("Feeds not properly sorted")
                 return False
