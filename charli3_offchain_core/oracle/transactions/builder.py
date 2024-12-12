@@ -175,6 +175,7 @@ class OracleTransactionBuilder:
                 transport=transport,
                 current_message=current_message,
                 median_value=median_value,
+                node_reward_price=settings_datum.fee_info.reward_prices.node_fee,
                 minimum_fee=minimum_fee,
             )
 
@@ -366,6 +367,7 @@ class OracleTransactionBuilder:
         transport: UTxO,
         current_message: AggregateMessage,
         median_value: int,
+        node_reward_price: int,
         minimum_fee: int,
     ) -> TransactionOutput:
         """Helper method to create transport output with consistent data."""
@@ -394,7 +396,7 @@ class OracleTransactionBuilder:
                     aggregation=Aggregation(
                         oracle_feed=median_value,
                         message=current_message,
-                        node_reward_price=minimum_fee,
+                        node_reward_price=node_reward_price,
                         rewards_amount_paid=minimum_fee,
                     )
                 )

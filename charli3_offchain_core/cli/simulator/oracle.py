@@ -67,13 +67,10 @@ class OracleSimulator:
             )
             feed_value = self.config.simulation.base_feed + int(variance_amount)
 
-            # Sign feed value
-            msg_timestamp, signature = node.sign_feed(feed_value, timestamp)
             node_feeds[idx] = {
                 "feed": feed_value,
-                "signature": signature.hex(),
                 "verification_key": node.verify_key_bytes.hex(),
-                "timestamp": msg_timestamp,
+                "timestamp": timestamp,
             }
 
         # Create aggregate message

@@ -10,7 +10,11 @@ import cbor2
 import yaml
 from nacl.encoding import RawEncoder
 from nacl.signing import SigningKey, VerifyKey
-from pycardano import PaymentSigningKey, PaymentVerificationKey, VerificationKeyHash
+from pycardano import (
+    PaymentExtendedSigningKey,
+    PaymentVerificationKey,
+    VerificationKeyHash,
+)
 
 from charli3_offchain_core.cli.config import NetworkConfig, WalletConfig
 from charli3_offchain_core.cli.txs.base import TxConfig
@@ -25,7 +29,7 @@ class SimulatedNode:
 
     def __init__(
         self,
-        signing_key: PaymentSigningKey,
+        signing_key: PaymentExtendedSigningKey,
         verification_key: PaymentVerificationKey,
         feed_vkh: VerificationKeyHash,
         payment_vkh: VerificationKeyHash,
@@ -87,7 +91,7 @@ class SimulatedNode:
         """
         try:
             # Load keys from files
-            signing_key = PaymentSigningKey.load(node_dir / "feed.skey")
+            signing_key = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
             verification_key = PaymentVerificationKey.load(node_dir / "feed.vkey")
 
             # Process verification key
@@ -104,7 +108,11 @@ class SimulatedNode:
 
             # Create instance using __init__
             return cls(
-                signing_key, verification_key, feed_vkh, payment_vkh, nacl_verify_key
+                signing_key=signing_key,
+                verification_key=verification_key,
+                feed_vkh=feed_vkh,
+                payment_vkh=payment_vkh,
+                nacl_verify_key=nacl_verify_key,
             )
 
         except FileNotFoundError as e:
