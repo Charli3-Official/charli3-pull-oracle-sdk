@@ -97,6 +97,7 @@ class OracleTransactionBuilder:
         self.consensus_calculator = None
         self.reward_calculator = None
         self.reward_accumulator = rewards.RewardAccumulator()
+        self.network_config = self.tx_manager.chain_query.config.network_config
 
     async def _get_script_utxos(self) -> list[UTxO]:
         """Get and validate UTxOs at script address."""
@@ -129,10 +130,7 @@ class OracleTransactionBuilder:
             TransactionError: If transaction building fails
         """
         try:
-            # Get current network time
-            current_time = message.timestamp
-
-            # Get UTxOs and settings
+            # Get UTxOs and settings first
             utxos = await self._get_script_utxos()
             transport, agg_state = state_checks.find_transport_pair(
                 utxos, self.policy_id
@@ -146,85 +144,48 @@ class OracleTransactionBuilder:
             self.consensus_calculator = consensus.ConsensusCalculator(settings_datum)
             self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
 
-            # Validate message content
-            if not self.consensus_calculator.validate_aggregate_message(
-                message, self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-            ):
-                raise ValidationError("Invalid aggregate message")
-
-            # Validate oracle state
-            if state_checks.is_oracle_closing(settings_datum):
-                raise StateValidationError("Oracle is in closing period")
-
-            # Calculate median
-            feeds = list(message.node_feeds_sorted_by_feed.values())
-            median_value = int(median(feeds))
-
-            # Get reward prices and calculate fees
-            minimum_fee = self.reward_calculator.calculate_min_fee_amount(
-                len(message.node_feeds_sorted_by_feed)
+            # Calculate the transaction time window and current time ONCE
+            validity_start = (
+                self.tx_manager.chain_query.get_current_posix_chain_time_ms()
             )
+            validity_end = validity_start + settings_datum.time_absolute_uncertainty
+            current_time = (validity_end + validity_start) // 2
 
-            # Create message with current timestamp
+            validity_start_slot = self.network_config.posix_to_slot(validity_start)
+            validity_end_slot = self.network_config.posix_to_slot(validity_end)
+
+            # Create a new message with the current timestamp
             current_message = AggregateMessage(
                 node_feeds_sorted_by_feed=message.node_feeds_sorted_by_feed,
                 node_feeds_count=message.node_feeds_count,
                 timestamp=current_time,
             )
 
-            # Create transport output with fees
-            transport_output = deepcopy(transport.output)
+            # Calculate median using the current message
+            feeds = list(current_message.node_feeds_sorted_by_feed.values())
+            median_value = int(median(feeds))
 
-            # Use class attributes directly
-            if (
-                self.fee_token_hash in transport_output.amount.multi_asset
-                and self.fee_token_name
-                in transport_output.amount.multi_asset[self.fee_token_hash]
-            ):
-                transport_output.amount.multi_asset[self.fee_token_hash][
-                    self.fee_token_name
-                ] += minimum_fee
-            else:
-                fee_asset = MultiAsset(
-                    {self.fee_token_hash: Asset({self.fee_token_name: minimum_fee})}
-                )
-                transport_output.amount.multi_asset += fee_asset
-
-            transport_output = TransactionOutput(
-                address=self.script_address,
-                amount=transport_output.amount,
-                datum=RewardTransportVariant(
-                    datum=RewardConsensusPending(
-                        aggregation=Aggregation(
-                            oracle_feed=median_value,
-                            message=current_message,
-                            node_reward_price=minimum_fee,
-                            rewards_amount_paid=minimum_fee,
-                        )
-                    )
-                ),
+            # Calculate minimum fee
+            minimum_fee = self.reward_calculator.calculate_min_fee_amount(
+                len(current_message.node_feeds_sorted_by_feed)
             )
 
-            # Create agg state output
-            expiry_time = current_time + settings_datum.aggregation_liveness_period
-            agg_state_output = TransactionOutput(
-                address=self.script_address,
-                amount=agg_state.output.amount,
-                datum=AggStateVariant(
-                    datum=SomeAggStateDatum(
-                        aggstate=AggStateDatum(
-                            oracle_feed=median_value,
-                            expiry_timestamp=expiry_time,
-                            created_at=current_time,
-                        )
-                    )
-                ),
+            # Create outputs using helper methods
+            transport_output = self._create_transport_output(
+                transport=transport,
+                current_message=current_message,
+                median_value=median_value,
+                minimum_fee=minimum_fee,
             )
 
-            # Extract VKHs from message nodes
-            node_vkhs = list(message.node_feeds_sorted_by_feed.keys())
+            agg_state_output = self._create_agg_state_output(
+                agg_state=agg_state,
+                median_value=median_value,
+                current_time=current_time,
+                liveness_period=settings_datum.aggregation_liveness_period,
+            )
 
-            # Build transaction
+            # Build and return transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
                     (transport, OdvAggregate(), script_utxo),
@@ -232,9 +193,11 @@ class OracleTransactionBuilder:
                 ],
                 script_outputs=[transport_output, agg_state_output],
                 reference_inputs=[settings_utxo],
-                required_signers=node_vkhs,
+                required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
                 change_address=change_address,
                 signing_key=signing_key,
+                validity_start=validity_start_slot,
+                validity_end=validity_end_slot,
             )
 
             return OdvResult(tx, transport_output, agg_state_output)
@@ -397,3 +360,65 @@ class OracleTransactionBuilder:
 
         except Exception as e:
             raise TransactionError(f"Failed to build rewards transaction: {e}") from e
+
+    def _create_transport_output(
+        self,
+        transport: UTxO,
+        current_message: AggregateMessage,
+        median_value: int,
+        minimum_fee: int,
+    ) -> TransactionOutput:
+        """Helper method to create transport output with consistent data."""
+        transport_output = deepcopy(transport.output)
+
+        # Add fees to output
+        if (
+            self.fee_token_hash in transport_output.amount.multi_asset
+            and self.fee_token_name
+            in transport_output.amount.multi_asset[self.fee_token_hash]
+        ):
+            transport_output.amount.multi_asset[self.fee_token_hash][
+                self.fee_token_name
+            ] += minimum_fee
+        else:
+            fee_asset = MultiAsset(
+                {self.fee_token_hash: Asset({self.fee_token_name: minimum_fee})}
+            )
+            transport_output.amount.multi_asset += fee_asset
+
+        return TransactionOutput(
+            address=self.script_address,
+            amount=transport_output.amount,
+            datum=RewardTransportVariant(
+                datum=RewardConsensusPending(
+                    aggregation=Aggregation(
+                        oracle_feed=median_value,
+                        message=current_message,
+                        node_reward_price=minimum_fee,
+                        rewards_amount_paid=minimum_fee,
+                    )
+                )
+            ),
+        )
+
+    def _create_agg_state_output(
+        self,
+        agg_state: UTxO,
+        median_value: int,
+        current_time: int,
+        liveness_period: int,
+    ) -> TransactionOutput:
+        """Helper method to create agg state output with consistent timestamp."""
+        return TransactionOutput(
+            address=self.script_address,
+            amount=agg_state.output.amount,
+            datum=AggStateVariant(
+                datum=SomeAggStateDatum(
+                    aggstate=AggStateDatum(
+                        oracle_feed=median_value,
+                        expiry_timestamp=current_time + liveness_period,
+                        created_at=current_time,
+                    )
+                )
+            ),
+        )

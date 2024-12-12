@@ -123,6 +123,8 @@ class TransactionManager:
         required_signers: list[VerificationKeyHash] | None = None,
         change_address: Address = None,
         signing_key: PaymentSigningKey | ExtendedSigningKey = None,
+        validity_start: int | None = None,
+        validity_end: int | None = None,
         metadata: dict | None = None,
     ) -> Transaction:
         """Build script interaction transaction."""
@@ -154,6 +156,8 @@ class TransactionManager:
                 signing_key=signing_key,
                 metadata=metadata,
                 required_signers=required_signers,
+                validity_start=validity_start,
+                validity_end=validity_end,
             )
 
         except Exception as e:
@@ -196,6 +200,8 @@ class TransactionManager:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         metadata: dict | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
+        validity_start: int | None = None,
+        validity_end: int | None = None,
     ) -> Transaction:
         """Build transaction with proper inputs and collateral."""
         try:
@@ -208,11 +214,21 @@ class TransactionManager:
                 required_signers=required_signers,
             )
 
+            # Set manual validity period if provided
+            if validity_start is not None:
+                builder.validity_start = validity_start
+            if validity_end is not None:
+                builder.ttl = validity_end
+
             # Build transaction components
             tx_body = builder.build(
                 change_address=change_address,
-                auto_validity_start_offset=self.config.validity_offset,
-                auto_ttl_offset=self.config.ttl_offset,
+                auto_validity_start_offset=(
+                    None if validity_start is not None else self.config.validity_offset
+                ),
+                auto_ttl_offset=(
+                    None if validity_end is not None else self.config.ttl_offset
+                ),
             )
 
             # Create initial witness set
