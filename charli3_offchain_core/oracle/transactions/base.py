@@ -1,29 +1,54 @@
 """Core transactions encompassing common blockchain query operations."""
 
+import json
 import logging
 from collections.abc import Callable
+from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import urlparse
 
+import click
 from pycardano import (
     Address,
+    Asset,
+    AssetName,
     BlockFrostChainContext,
     MultiAsset,
     NativeScript,
     OgmiosV6ChainContext,
+    ScriptHash,
+    Transaction,
     UTxO,
 )
 from pycardano.backend.kupo import KupoChainContextExtension
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.formatting import (
+    print_confirmation_message_prompt,
+)
 from charli3_offchain_core.cli.config.keys import KeyManager
 from charli3_offchain_core.cli.config.network import NetworkConfig, OgmiosKupoConfig
 from charli3_offchain_core.cli.config.update_settings import PlatformTxConfig
 from charli3_offchain_core.constants.status import ProcessStatus
-from charli3_offchain_core.oracle.transactions.exceptions import UTxONotFoundError
+from charli3_offchain_core.models.oracle_datums import OracleSettingsVariant
+from charli3_offchain_core.oracle.transactions.exceptions import (
+    UTxONotFoundError,
+    ValidationError,
+)
 from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
 logger = logging.getLogger(__name__)
+
+
+class TransactionResult(NamedTuple):
+    tx_id: str
+    status: ProcessStatus
+
+
+class MultisigResult(NamedTuple):
+    output_path: Path
+    threshold: int
 
 
 class BaseTransaction:
@@ -118,49 +143,15 @@ class BaseTransaction:
         except Exception as err:
             raise ValueError("Error initializing chain query") from err
 
-    @property
-    async def get_contract_reference_utxo(self) -> UTxO:
-        """Get the reference script UTxO for core settings"""
-        utxo = await self.chain_query.get_reference_script_utxo(
-            self.tx_config.contract_address,
-            self.tx_config.contract_reference,
-            self.tx_config.contract_address.payment_part,
-        )
-
-        if utxo is None:
-            raise UTxONotFoundError(
-                f"Reference script UTxO not found for contract: {self.tx_config.contract_address}"
-            )
-
-        return utxo
-
-    @property
-    async def get_native_script(self) -> NativeScript:
-        return await self.platform_auth_finder.get_platform_script(
-            self.tx_config.multi_sig.platform_addr
-        )
-
-    @property
-    async def required_single_signature(self) -> bool:
+    async def required_single_signature(self, script: NativeScript) -> bool:
         """
         Verify if a single signature matches the platform's multisig configuration.
         """
         vk = self.key_manager[1]
 
         try:
-            platform_addr = self.tx_config.multi_sig.platform_addr
-            if platform_addr is None:
-                raise ValueError("platform_addr is None and cannot be used.")
-
-            try:
-                platform_script = await self.platform_auth_finder.get_platform_script(
-                    platform_addr
-                )
-            except Exception as err:
-                raise ValueError("Failed to retrieve platform script") from err
-
             platform_multisig_config = self.platform_auth_finder.get_script_config(
-                platform_script
+                script
             )
             signers = platform_multisig_config.signers
             if not signers:
@@ -171,3 +162,146 @@ class BaseTransaction:
         except ValueError as e:
             logger.error("Signature verification failed %s", e)
             return False
+
+    async def fetch_reference_script_utxo(self) -> UTxO:
+        """Find and validate reference script UTxO."""
+        try:
+            addr = self.tx_config.contract_address
+            utxos = await self.chain_query.get_utxos(addr)
+            script_utxos = [utxo for utxo in utxos if utxo.output.script]
+
+            if not script_utxos:
+                raise ValueError("No UTxO with reference script found")
+
+            return script_utxos[0]
+        except Exception as e:
+            logger.error("Error finding auth Script UTxO: %s", str(e))
+            raise
+
+    async def fetch_auth_utxo_and_script(
+        self,
+    ) -> tuple[UTxO | None, NativeScript]:
+        auth_utxo = await self.platform_auth_finder.find_auth_utxo(
+            policy_id=self.tx_config.tokens.platform_auth_policy,
+            platform_address=self.tx_config.multi_sig.platform_addr,
+        )
+        auth_native_script = await self.platform_auth_finder.get_platform_script(
+            self.tx_config.multi_sig.platform_addr
+        )
+        return auth_utxo, auth_native_script
+
+    async def _process_single_signature(
+        self, tx_manager: Transaction
+    ) -> TransactionResult:
+        """Handle single signature transaction processing."""
+
+        print_confirmation_message_prompt(
+            "The transaction requires a single signature. Would you like to continue?"
+        )
+        self._update_status(ProcessStatus.SIGNING_TRANSACTION, "Signing transaction...")
+        try:
+            status, _ = await self.transaction_manager.sign_and_submit(
+                tx_manager, [self.key_manager[0]]
+            )
+            if status == ProcessStatus.TRANSACTION_CONFIRMED:
+                return TransactionResult(str(tx_manager.id), status)
+
+            self._update_status(ProcessStatus.FAILED)
+            raise click.ClickException(f"Deployment failed: {status}")
+        except Exception as e:
+            logger.error("Deployment failed: %s", str(e))
+            raise click.ClickException("Transaction signing failed.") from e
+
+    async def _process_multisig(
+        self, tx_manager: Transaction, output: Path | None
+    ) -> MultisigResult:
+        """Handle multisig transaction processing."""
+
+        print_confirmation_message_prompt(
+            "PlatformAuth NFT being used requires multisigatures and thus will be stored. Would you like to continue?"
+        )
+        deployed_core_utxo = await self.get_core_settings_utxo()
+        threshold = deployed_core_utxo.output.datum.datum.required_node_signatures_count
+        output_path = output or Path("tx_oracle_update_settings.json")
+
+        with output_path.open("w") as f:
+            json.dump(
+                {
+                    "transaction": tx_manager.to_cbor_hex(),
+                    "script_address": str(self.tx_config.contract_address),
+                    "signed_by": [],
+                    "threshold": threshold,
+                },
+                f,
+            )
+
+        return MultisigResult(output_path, threshold)
+
+    async def _build_update_transaction(
+        self,
+        modified_core_utxo: UTxO,
+        platform_utxo: UTxO,
+        platform_script: NativeScript,
+        contract_reference_utxo: UTxO,
+    ) -> Transaction:
+        """Build the update transaction."""
+        deployed_core_utxo = await self.get_core_settings_utxo()
+
+        return await self.transaction_manager.build_script_tx(
+            script_inputs=[
+                (deployed_core_utxo, self.REDEEMER, contract_reference_utxo),
+                (platform_utxo, None, platform_script),
+            ],
+            script_outputs=[modified_core_utxo.output, platform_utxo.output],
+            change_address=self.key_manager[3],
+            signing_key=self.key_manager[0],
+        )
+
+    async def get_core_settings_utxo(self) -> UTxO:
+        if not hasattr(self, "core_settings_asset"):
+            self.core_settings_asset = self.get_core_settings_asset
+
+        try:
+            utxo = await self.retrieve_utxo_by_asset(
+                self.core_settings_asset, self.tx_config.contract_address
+            )
+
+            if utxo is None:
+                raise UTxONotFoundError(
+                    f"Core settings UTxO not found for asset: {self.core_settings_asset}"
+                )
+
+            utxo.output.datum = self.parse_settings_datum(utxo)
+            return utxo
+
+        except ValidationError as e:
+            raise ValidationError(f"Invalid UTxO data for core settings: {e!s}") from e
+
+        except Exception as e:
+            raise UTxONotFoundError(
+                f"Error retrieving core settings UTxO: {e!s}"
+            ) from e
+
+    @property
+    def get_core_settings_asset(self) -> MultiAsset:
+        name = self.tx_config.token_names.core_settings
+        asset_name = AssetName(name.encode())
+
+        minting_policy = ScriptHash.from_primitive(self.tx_config.tokens.oracle_policy)
+        asset = Asset({asset_name: 1})
+
+        return MultiAsset({minting_policy: asset})
+
+    def parse_settings_datum(self, utxo: UTxO | None) -> OracleSettingsVariant:
+
+        if utxo is None or utxo.output.datum is None:
+            raise ValueError("Invalid core settings UTxO")
+
+        if isinstance(utxo.output.datum, OracleSettingsVariant):
+            return utxo.output.datum
+        try:
+            if hasattr(utxo.output.datum, "cbor"):
+                return OracleSettingsVariant.from_cbor(utxo.output.datum.cbor)
+            raise ValueError("Datum missing CBOR")
+        except Exception as e:
+            logger.error("Error %s", e)

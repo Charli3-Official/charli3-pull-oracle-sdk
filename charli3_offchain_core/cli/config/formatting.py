@@ -1,17 +1,38 @@
 """CLI output enhancements for oracle deployment."""
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, NamedTuple
 
 import click
 from pycardano import Transaction
 
-from charli3_offchain_core.cli.config.update_settings import PlatformTxConfig
-from charli3_offchain_core.models.oracle_datums import OracleSettingsDatum
-
 from ...constants.colors import CliColor
 from ...constants.status import ProcessStatus
+
+
+@dataclass
+class ChangeDetail:
+    """Represents a change in datum settings."""
+
+    field_name: str
+    previous_value: Any
+    new_value: Any
+
+    def __str__(self) -> str:
+        return (
+            f"Change detected in {self.field_name}:\n"
+            f"  Previous: {self.previous_value}\n"
+            f"  New: {self.new_value}"
+        )
+
+
+class DatumComparison(NamedTuple):
+    """Defines a comparison between old and new datum values."""
+
+    field_name: str
+    previous_value: Any
+    new_value: Any
+    is_equal: bool
 
 
 def print_header(text: str) -> None:
@@ -179,106 +200,57 @@ def print_changes(changes: dict[str, int]) -> None:
         print_information(f"Option {option}", f"New value: {value}")
 
 
-class ConfigOptions(str, Enum):
-    """Available configuration options"""
-
-    OPTION_A = "A"
-    OPTION_B = "B"
-    OPTION_C = "C"
-    OPTION_D = "D"
-
-
-update_settings_options = {
-    ConfigOptions.OPTION_A: "Option A",
-    ConfigOptions.OPTION_B: "Option B",
-    ConfigOptions.OPTION_C: "Option C",
-    ConfigOptions.OPTION_D: "Option D",
-}
-
-
-@dataclass
-class ChangeDetail:
-    """Represents a change in datum settings."""
-
-    field_name: str
-    previous_value: Any
-    new_value: Any
-
-    def __str__(self) -> str:
-        return (
-            f"Change detected in {self.field_name}:\n"
-            f"  Previous: {self.previous_value}\n"
-            f"  New: {self.new_value}"
-        )
-
-
-class DatumComparison(NamedTuple):
-    """Defines a comparison between old and new datum values."""
-
-    field_name: str
-    previous_value: Any
-    new_value: Any
-    is_equal: bool
-
-
-async def print_allowed_datum_changes(
-    deployed_core_settings_datum: OracleSettingsDatum, tx_config: PlatformTxConfig
-) -> bool:
-    """
-    Compare and display changes between deployed core settings and current transaction config.
-    Uses styled output to highlight changes.
-
-    Args:
-        deployed_core_settings_datum: The current deployed settings
-        tx_config: The new transaction configuration
-    """
-    # Define comparisons
-    comparisons = [
-        DatumComparison(
-            "Aggregation Liveness Period",
-            deployed_core_settings_datum.aggregation_liveness_period,
-            tx_config.timing.aggregation_liveness,
-            deployed_core_settings_datum.aggregation_liveness_period
-            == tx_config.timing.aggregation_liveness,
-        ),
-        DatumComparison(
-            "Time Absolute Uncertainty",
-            deployed_core_settings_datum.time_absolute_uncertainty,
-            tx_config.timing.time_uncertainty,
-            deployed_core_settings_datum.time_absolute_uncertainty
-            == tx_config.timing.time_uncertainty,
-        ),
-        DatumComparison(
-            "IQR Fence Multiplier",
-            deployed_core_settings_datum.iqr_fence_multiplier,
-            tx_config.timing.iqr_multiplier,
-            deployed_core_settings_datum.iqr_fence_multiplier
-            == tx_config.timing.iqr_multiplier,
-        ),
-        DatumComparison(
-            "Required Node Signatures Count",
-            deployed_core_settings_datum.required_node_signatures_count,
-            tx_config.multi_sig.threshold,
-            deployed_core_settings_datum.required_node_signatures_count
-            == tx_config.multi_sig.threshold,
-        ),
+def get_configuration_method() -> str:
+    """Prompt user to choose how to configure settings."""
+    options = [
+        "Load settings from configuration file",
+        "Input settings manually via CLI",
     ]
 
-    changes_found = False
+    click.echo(
+        click.style(
+            "\nHow would you like to configure the settings?",
+            fg=CliColor.WARNING,
+            bold=True,
+        )
+    )
+    for idx, option in enumerate(options, 1):
+        click.echo(f"{idx}. {option}")
 
-    for comparison in comparisons:
-        if not comparison.is_equal:
-            if not changes_found:
-                print_information("Configuration Changes Detected")
-                changes_found = True
+    choice = click.prompt(
+        "",  # Empty prompt since we displayed the question above
+        type=click.Choice(["1", "2"]),
+    )
 
-            change = ChangeDetail(
-                comparison.field_name, comparison.previous_value, comparison.new_value
+    return options[int(choice) - 1]
+
+
+def print_validation_results(validator: Any) -> bool:
+    """Print validation results with appropriate styling and return if changes were found."""
+    if not validator.has_changes:
+        print_information("Ndddo changes detected in configuration")
+        return False
+
+    print_information("Detected changes")
+
+    for field, result in validator.results.items():
+        if result.has_changed:
+            if not result.is_valid:
+                print_information(result.message)
+                print_status(
+                    field.display_name,
+                    f"{result.previous_value} ==> {result.new_value}",
+                    success=False,
+                )
+            else:
+                print_status(
+                    field.display_name,
+                    f"{result.previous_value} ==> {result.new_value}",
+                    success=True,
+                )
+        else:
+            click.secho(
+                f"= {field.display_name}: {result.previous_value}", fg=CliColor.WARNING
             )
-            click.echo(str(change))
-            click.echo()
 
-    if not changes_found:
-        print_information("No Configuration Changes Detected")
-
-    return changes_found
+    return validator.has_changes

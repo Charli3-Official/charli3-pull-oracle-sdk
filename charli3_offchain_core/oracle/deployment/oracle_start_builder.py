@@ -84,7 +84,7 @@ class OracleStartBuilder:
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
         count: int,
-        nodes: list[str],
+        nodes: list[list[str]],
     ) -> StartTransactionResult:
         """
         Build oracle start transaction that mints NFTs and creates initial UTxOs.
@@ -253,7 +253,7 @@ class OracleStartBuilder:
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
         count: int,
-        nodes: list[str],
+        nodes: list[list[str]],
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
 

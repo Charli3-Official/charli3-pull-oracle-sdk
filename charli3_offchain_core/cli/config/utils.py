@@ -102,7 +102,7 @@ def parse_nodes_file(feeds_file: Path) -> tuple[int, list[list[str]]]:
 
     # Process nodes
     nodes = []
-    for _, node_data in data["node"].items():
+    for _, node_data in data["nodes"].items():
         # Skip nodes that don't have 'deploy' status
         if node_data.get("status") != "deploy":
             continue

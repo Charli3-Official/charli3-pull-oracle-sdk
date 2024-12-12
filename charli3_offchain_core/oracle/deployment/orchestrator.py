@@ -226,7 +226,7 @@ class OracleDeploymentOrchestrator:
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
         count: int,
-        nodes: list[str],
+        nodes: list[list[str]],
     ) -> StartTransactionResult:
         """Build and submit oracle start transaction."""
         self._update_status(

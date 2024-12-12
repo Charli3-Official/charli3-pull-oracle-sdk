@@ -15,8 +15,6 @@ from charli3_offchain_core.oracle.config import OracleTokenNames
 @dataclass
 class PlatformTxConfig(DeploymentConfig):
     contract_address: Address | None = None
-    contract_reference: TransactionInput | None = None
-    contract_token_hash: bytes | None = None
     token_names: OracleTokenNames | None = None
 
     @classmethod
@@ -33,9 +31,7 @@ class PlatformTxConfig(DeploymentConfig):
         except FileNotFoundError as err:
             raise FileNotFoundError("Configuration file not found") from err
 
-        contract_address = cls._parse_contract_address(data.get("script_address"))
-        contract_reference = cls._parse_reference_input(data.get("script_reference"))
-        contract_token_hash = cls._parse_token_hash(data.get("script_hash"))
+        contract_address = cls._parse_contract_address(data.get("oracle_address"))
         token_names = OracleTokenNames.from_network(parent_config.network.network)
 
         instance = cls(
@@ -48,8 +44,6 @@ class PlatformTxConfig(DeploymentConfig):
             blueprint_path=parent_config.blueprint_path,
             create_reference=False,
             contract_address=contract_address,
-            contract_reference=contract_reference,
-            contract_token_hash=contract_token_hash,
             token_names=token_names,
         )
         return instance
