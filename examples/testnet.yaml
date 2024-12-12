@@ -35,6 +35,7 @@ multisig:
 tokens:
   # Test NFT policy ID - can be generated for testing
   platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  # Oracle NFT policy ID (hex)
   oracle_policy: "7d6687ae264f367dcd803851a7c899ccf0f6740b1b37705018c8799d"
   # Test fee token - can use any token for testing
   # Use empty strings for ada (lovelace)
