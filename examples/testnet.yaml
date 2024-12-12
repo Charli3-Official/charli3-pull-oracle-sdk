@@ -35,11 +35,13 @@ multisig:
 tokens:
   # Test NFT policy ID - can be generated for testing
   platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
+  oracle_policy: "7d6687ae264f367dcd803851a7c899ccf0f6740b1b37705018c8799d"
   # Test fee token - can use any token for testing
   # Use empty strings for ada (lovelace)
   fee_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   fee_token_name: "544553544348524923"  # "TESTCHRI#" in hex
+
+oracle_address: "addr_test1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"
 
 fees:
   # Lower fees for testnet
@@ -51,7 +53,7 @@ timing:
   closing_period: 1800000              # 30 minutes
   reward_dismissing_period: 3600000    # 1 hour
   aggregation_liveness: 180000         # 3 minutes
-  time_uncertainty: 30000              # 30 seconds
+  time_uncertainty: 600000             # 10 minutes
   iqr_multiplier: 150                  # 1.5x multiplier for outlier detection
 
 # Can use fewer transport UTxOs on testnet
