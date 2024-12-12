@@ -23,7 +23,6 @@ from pycardano import (
     Transaction,
     TransactionBuilder,
     TransactionId,
-    TransactionInput,
     TransactionOutput,
     UTxO,
 )
@@ -526,28 +525,3 @@ class ChainQuery:
 
         except Exception as e:
             raise ScriptQueryError(f"Failed to get script: {e}") from e
-
-    async def get_reference_script_utxo(
-        self,
-        addr: Address,
-        reference_script_input: TransactionInput,
-        oracle_script_hash: ScriptHash,
-    ) -> UTxO | None:
-        """function to get reference script utxo
-        Args:
-            oracle_addr (Address): oracle address
-            reference_script_input (TransactionInput): reference script input
-            oracle_script_hash (ScriptHash): oracle script hash
-
-        Returns:
-            UTxO: utxo with plutus script
-        """
-        utxo = None
-        utxos = await self.get_utxos(addr)
-        if len(utxos) > 0:
-            for utxo in utxos:
-                if utxo.input == reference_script_input:
-                    if isinstance(self.context, BlockFrostChainContext):
-                        script = await self.get_plutus_script(oracle_script_hash)
-                        utxo.output.script = script
-                    return utxo

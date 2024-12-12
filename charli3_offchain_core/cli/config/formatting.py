@@ -1,38 +1,12 @@
 """CLI output enhancements for oracle deployment."""
 
-from dataclasses import dataclass
-from typing import Any, NamedTuple
+from typing import Any
 
 import click
 from pycardano import Transaction
 
 from ...constants.colors import CliColor
 from ...constants.status import ProcessStatus
-
-
-@dataclass
-class ChangeDetail:
-    """Represents a change in datum settings."""
-
-    field_name: str
-    previous_value: Any
-    new_value: Any
-
-    def __str__(self) -> str:
-        return (
-            f"Change detected in {self.field_name}:\n"
-            f"  Previous: {self.previous_value}\n"
-            f"  New: {self.new_value}"
-        )
-
-
-class DatumComparison(NamedTuple):
-    """Defines a comparison between old and new datum values."""
-
-    field_name: str
-    previous_value: Any
-    new_value: Any
-    is_equal: bool
 
 
 def print_header(text: str) -> None:
@@ -191,13 +165,6 @@ def print_platform_auth_config_prompt(auth_config: any) -> bool:
         print_address_info(f"PKH {i}", party)
 
     return print_confirmation_message_prompt("Proceed with token minting?")
-
-
-def print_changes(changes: dict[str, int]) -> None:
-    """Print the final changes that will be applied."""
-    print_header("Changes to be Applied")
-    for option, value in changes.items():
-        print_information(f"Option {option}", f"New value: {value}")
 
 
 def get_configuration_method() -> str:
