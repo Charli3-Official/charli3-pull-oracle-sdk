@@ -67,7 +67,7 @@ oracle.add_command(update_settings)
 @click.option(
     "--config",
     type=click.Path(exists=True, path_type=Path),
-    required=False,
+    required=True,
     help="Path to deployment configuration YAML",
 )
 @click.option(

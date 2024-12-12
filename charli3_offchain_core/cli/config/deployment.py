@@ -20,7 +20,7 @@ class DeploymentConfig:
     timing: TimingConfig
     transport_count: int = 4
     multi_sig: MultisigConfig | None = None
-    blueprint_path: Path = Path("artifacts/testnet_plutus.json")
+    blueprint_path: Path = Path("artifacts/plutus.json")
     create_reference: bool = True
 
     @classmethod
@@ -35,8 +35,6 @@ class DeploymentConfig:
             fees=FeeConfig.from_dict(data.get("fees", {})),
             timing=TimingConfig.from_dict(data.get("timing", {})),
             transport_count=data.get("transport_count", 4),
-            blueprint_path=Path(
-                data.get("blueprint_path", "artifacts/testnet_plutus.json")
-            ),
+            blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),
             create_reference=data.get("create_reference", True),
         )
