@@ -15,7 +15,7 @@ from pycardano import (
 from charli3_offchain_core.models.oracle_datums import (
     OracleSettingsDatum,
     OracleSettingsVariant,
-    PosixTime,
+    SomePosixTime,
 )
 from charli3_offchain_core.models.oracle_redeemers import CloseOracle
 from charli3_offchain_core.oracle.exceptions import ClosingError
@@ -60,7 +60,7 @@ class CloseBuilder(BaseBuilder):
 
             modified_settings_utxo = deepcopy(settings_utxo)
             modified_settings_datum = deepcopy(settings_datum)
-            modified_settings_datum.closing_period_started_at = PosixTime(
+            modified_settings_datum.closing_period_started_at = SomePosixTime(
                 closing_time_ms
             )
 
