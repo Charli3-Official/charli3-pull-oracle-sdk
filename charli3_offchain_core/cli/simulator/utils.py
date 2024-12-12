@@ -76,14 +76,8 @@ def print_simulation_results(result: "SimulationResult") -> None:
         )
 
     # Show rewards
-    click.echo("\nReward Distribution:")
-    for node_id, amount in result.rewards.reward_distribution.node_rewards.items():
-        click.echo(f"Node {node_id}: {amount}")
-
-    click.echo(f"\nPlatform Fee: {result.rewards.reward_distribution.platform_fee}")
-    click.echo(
-        f"Total Distributed: {result.rewards.reward_distribution.total_distributed}"
-    )
+    click.echo("\nReward Distribution Transaction:")
+    click.echo(f"ID: {result.rewards.transaction.id}")
 
 
 def save_simulation_results(result: "SimulationResult", output_file: str) -> None:
@@ -98,11 +92,6 @@ def save_simulation_results(result: "SimulationResult", output_file: str) -> Non
         "odv_transaction": result.odv_tx,
         "nodes": [node.to_dict() for node in result.nodes],
         "feeds": result.feeds,
-        "rewards": {
-            "distribution": result.rewards.reward_distribution.node_rewards,
-            "platform_fee": result.rewards.reward_distribution.platform_fee,
-            "total_distributed": result.rewards.reward_distribution.total_distributed,
-        },
     }
 
     with open(output_file, "w", encoding="utf-8") as f:

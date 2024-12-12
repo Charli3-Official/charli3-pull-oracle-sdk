@@ -173,6 +173,21 @@ def filter_oracle_settings_utxo(utxos: Sequence[UTxO], policy_id: ScriptHash) ->
     return oracle_settings_utxos[0]
 
 
+def filter_reward_account_utxo(utxos: Sequence[UTxO], policy_id: ScriptHash) -> UTxO:
+    """Filter UTxOs for reward account.
+
+    Args:
+        utxos: List of UTxOs to filter
+
+    Returns:
+        Reward account UTxO
+    """
+    reward_account_utxos = asset_checks.filter_utxos_by_token_name(
+        utxos, policy_id, "RewardAccount"
+    )
+    return reward_account_utxos[0]
+
+
 def get_oracle_settings_by_policy_id(
     utxos: Sequence[UTxO], policy_id: ScriptHash
 ) -> tuple[OracleSettingsDatum, UTxO]:
@@ -202,6 +217,37 @@ def get_oracle_settings_by_policy_id(
 
     except Exception as e:
         raise StateValidationError(f"Failed to get oracle settings: {e}") from e
+
+
+def get_reward_account_by_policy_id(
+    utxos: Sequence[UTxO], policy_id: ScriptHash
+) -> tuple[RewardAccountDatum, UTxO]:
+    """Get reward account datum by policy ID.
+
+    Args:
+        utxos: List of UTxOs to search
+        policy_id: Policy ID
+
+    Returns:
+        RewardAccountDatum: Reward account datum
+        UTxO: Reward account UTxO
+
+    Raises:
+        StateValidationError: If no reward account datum is found
+    """
+    try:
+        reward_account_utxo = filter_reward_account_utxo(utxos, policy_id)
+        reward_account_datum = None
+
+        if reward_account_utxo.output.datum:
+            reward_account_datum = reward_account_utxo.output.datum = (
+                RewardAccountVariant.from_cbor(reward_account_utxo.output.datum.cbor)
+            )
+
+        return reward_account_datum.datum, reward_account_utxo
+
+    except Exception as e:
+        raise StateValidationError(f"Failed to get reward account: {e}") from e
 
 
 def find_transport_pair(utxos: Sequence[UTxO], policy_id: bytes) -> tuple[UTxO, UTxO]:

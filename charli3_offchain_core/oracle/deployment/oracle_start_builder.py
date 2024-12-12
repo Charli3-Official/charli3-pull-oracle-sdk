@@ -167,7 +167,9 @@ class OracleStartBuilder:
             script_address,
             deployment_config.token_names.reward_account,
             mint_policy.policy_id,
-            RewardAccountVariant(datum=RewardAccountDatum(nodes_to_rewards=[])),
+            RewardAccountVariant(
+                datum=RewardAccountDatum(nodes_to_rewards=[0] * len(nodes_config.nodes))
+            ),
         )
 
         # Create reward transport and agg state UTxOs

@@ -25,6 +25,8 @@ from charli3_offchain_core.models.oracle_datums import (
     AggStateDatum,
     AggStateVariant,
     NoRewards,
+    OracleSettingsDatum,
+    RewardAccountDatum,
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
@@ -35,7 +37,6 @@ from charli3_offchain_core.models.oracle_redeemers import (
     OdvAggregate,
 )
 from charli3_offchain_core.oracle.exceptions import (
-    ConsensusError,
     StateValidationError,
     TransactionError,
     ValidationError,
@@ -45,7 +46,6 @@ from charli3_offchain_core.oracle.utils import (
     consensus,
     rewards,
     state_checks,
-    value_checks,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,8 +67,6 @@ class RewardsResult:
     transaction: Transaction
     new_transports: list[TransactionOutput]
     new_reward_account: TransactionOutput
-    consensus_values: dict[int, int]  # Feed index -> consensus value
-    reward_distribution: rewards.RewardDistribution
 
 
 class OracleTransactionBuilder:
@@ -209,19 +207,15 @@ class OracleTransactionBuilder:
     async def build_rewards_tx(
         self,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        max_inputs: int = 8,
-        min_feed_value: int = 0,
-        max_feed_value: int = 10**15,
         change_address: Address | None = None,
+        max_inputs: int = 10,
     ) -> RewardsResult:
         """Build rewards calculation transaction with consensus processing.
 
         Args:
             signing_key: Signing key for transaction
-            max_inputs: Maximum number of transport UTxOs to process
-            min_feed_value: Minimum valid feed value
-            max_feed_value: Maximum valid feed value
             change_address: Optional change address
+            max_inputs: Maximum number of transport inputs to process
 
         Returns:
             RewardsResult containing transaction and processing results
@@ -243,105 +237,35 @@ class OracleTransactionBuilder:
             self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
 
             # Find pending transports
-            transports = state_checks.filter_pending_transports(
+            pending_transports = state_checks.filter_pending_transports(
                 asset_checks.filter_utxos_by_token_name(
-                    utxos, self.policy_id, "transport"
+                    utxos, self.policy_id, "RewardTransport"
                 )
             )[:max_inputs]
-            if not transports:
+            if not pending_transports:
                 raise StateValidationError("No pending transport UTxOs found")
 
             # Find reward account
-            reward_accounts = state_checks.filter_reward_accounts(
-                asset_checks.filter_utxos_by_token_name(
-                    utxos, self.policy_id, "rewardaccount"
-                )
+            _, reward_account_utxo = state_checks.get_reward_account_by_policy_id(
+                utxos, self.policy_id
             )
-            if not reward_accounts:
-                raise StateValidationError("No reward account UTxO found")
-            reward_account = reward_accounts[0]
-
-            # Process feeds and calculate rewards
-            consensus_values = {}
-            total_distribution = None
-
-            for idx, transport in enumerate(transports):
-                if not isinstance(
-                    transport.output.datum.variant.datum, RewardConsensusPending
-                ):
-                    continue
-
-                message = transport.output.datum.variant.datum.message
-
-                # Validate feed values
-                if not value_checks.validate_feed_values(
-                    message.node_feeds_sorted_by_feed,
-                    min_feed_value,
-                    max_feed_value,
-                ):
-                    continue
-
-                # Calculate consensus
-                consensus_value, outliers = (
-                    self.consensus_calculator.calculate_consensus(
-                        message.node_feeds_sorted_by_feed,
-                        min_feed_value,
-                        max_feed_value,
-                    )
-                )
-                consensus_values[idx] = consensus_value
-
-                # Calculate rewards
-                distribution = self.reward_calculator.calculate_rewards(
-                    participants=set(message.node_feeds_sorted_by_feed.keys()),
-                    outliers=outliers,
-                    total_fees=settings_datum.fee_info.reward_prices.node_fee,
-                )
-
-                # Update total distribution
-                if total_distribution is None:
-                    total_distribution = distribution
-                else:
-                    # Use reward accumulator to combine distributions
-                    accumulated_rewards = self.reward_accumulator.accumulate_rewards(
-                        total_distribution.node_rewards, distribution.node_rewards
-                    )
-                    total_distribution = rewards.RewardDistribution(
-                        node_rewards=accumulated_rewards,
-                        platform_fee=total_distribution.platform_fee
-                        + distribution.platform_fee,
-                        total_distributed=total_distribution.total_distributed
-                        + distribution.total_distributed,
-                    )
-
-            if not consensus_values:
-                raise ConsensusError("No valid consensus values calculated")
 
             # Create new transport outputs
             new_transports = [
-                TransactionOutput(
-                    address=self.script_address,
-                    amount=t.output.amount,
-                    datum=RewardTransportVariant(datum=NoRewards()),
-                )
-                for t in transports
+                self._create_empty_transport(transport)
+                for transport in pending_transports
             ]
 
             # Create new reward account output
-            reward_account_output = TransactionOutput(
-                address=self.script_address,
-                amount=reward_account.output.amount,
-                datum=RewardAccountVariant(
-                    datum=self.reward_accumulator.update_reward_account(
-                        reward_account.output.datum.variant.datum,
-                        total_distribution,
-                    )
-                ),
+            reward_account_output = self._create_reward_account(
+                reward_account_utxo, pending_transports, settings_datum
             )
 
             # Build transaction
-            script_inputs = [(t, CalculateRewards(), script_utxo) for t in transports]
-            script_inputs.append((reward_account, CalculateRewards(), script_utxo))
+            script_inputs = [
+                (t, CalculateRewards(), script_utxo) for t in pending_transports
+            ]
+            script_inputs.append((reward_account_utxo, CalculateRewards(), script_utxo))
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=script_inputs,
@@ -355,8 +279,6 @@ class OracleTransactionBuilder:
                 transaction=tx,
                 new_transports=new_transports,
                 new_reward_account=reward_account_output,
-                consensus_values=consensus_values,
-                reward_distribution=total_distribution,
             )
 
         except Exception as e:
@@ -422,5 +344,93 @@ class OracleTransactionBuilder:
                         created_at=current_time,
                     )
                 )
+            ),
+        )
+
+    def _create_empty_transport(self, transport: UTxO) -> TransactionOutput:
+        """Create empty reward transport output."""
+        output_amount = deepcopy(transport.output.amount)
+
+        # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
+        if (
+            output_amount.multi_asset
+            and self.fee_token_hash in output_amount.multi_asset
+        ):
+            output_amount.multi_asset[self.fee_token_hash][self.fee_token_name] = 0
+
+        return TransactionOutput(
+            address=self.script_address,
+            amount=output_amount,
+            datum=RewardTransportVariant(datum=NoRewards()),
+        )
+
+    def _create_reward_account(
+        self,
+        reward_account: UTxO,
+        transports: list[UTxO],
+        settings: OracleSettingsDatum,
+    ) -> TransactionOutput:
+        """Create updated reward account output.
+
+        The nodes_to_rewards list contains only the reward amounts, which map positionally
+        to the nodes list in oracle settings.
+        """
+        # Calculate rewards from transports
+        output_amount = deepcopy(reward_account.output.amount)
+        current_datum = reward_account.output.datum.datum
+        nodes = list(settings.nodes.node_map.keys())
+
+        total_fee_tokens = 0
+        node_rewards = {}
+
+        for transport in transports:
+            pending = transport.output.datum.datum
+            aggregation = pending.aggregation
+
+            # Accumulate total fees (includes both node and platform portions)
+            if (
+                transport.output.amount.multi_asset
+                and self.fee_token_hash in transport.output.amount.multi_asset
+            ):
+                fee_tokens = transport.output.amount.multi_asset[self.fee_token_hash][
+                    self.fee_token_name
+                ]
+                total_fee_tokens += fee_tokens
+
+            # Use node_reward_price from aggregation - this already accounts for the split
+            reward_per_node = aggregation.node_reward_price
+
+            # Add reward for each participating node
+            for node_id in aggregation.message.node_feeds_sorted_by_feed:
+                node_rewards[node_id] = node_rewards.get(node_id, 0) + reward_per_node
+
+        # Create rewards list matching nodes order
+        new_rewards = []
+        for node_id in nodes:
+            current_idx = len(new_rewards)
+            current_reward = (
+                current_datum.nodes_to_rewards[current_idx]
+                if current_idx < len(current_datum.nodes_to_rewards)
+                else 0
+            )
+            new_reward = current_reward + node_rewards.get(node_id, 0)
+            new_rewards.append(new_reward)
+
+        # Update fee tokens in output (total amount includes both node and platform portions)
+        if total_fee_tokens > 0:
+            if self.fee_token_hash not in output_amount.multi_asset:
+                output_amount.multi_asset[self.fee_token_hash] = Asset()
+            output_amount.multi_asset[self.fee_token_hash][self.fee_token_name] = (
+                output_amount.multi_asset[self.fee_token_hash].get(
+                    self.fee_token_name, 0
+                )
+                + total_fee_tokens
+            )
+
+        return TransactionOutput(
+            address=self.script_address,
+            amount=output_amount,
+            datum=RewardAccountVariant(
+                datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
             ),
         )
