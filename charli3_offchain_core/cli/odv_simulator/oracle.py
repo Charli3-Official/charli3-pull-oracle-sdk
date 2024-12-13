@@ -7,9 +7,9 @@ import time
 
 from pycardano import Address
 
-from charli3_offchain_core.cli.txs.base import TransactionContext
+from charli3_offchain_core.cli.aggregate_txs.base import TransactionContext
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
-from charli3_offchain_core.oracle.transactions.builder import (
+from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,
     OracleTransactionBuilder,
     RewardsResult,

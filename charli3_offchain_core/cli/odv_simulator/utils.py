@@ -6,7 +6,7 @@ import time
 import click
 from pycardano import VerificationKeyHash
 
-from charli3_offchain_core.cli.simulator.models import (
+from charli3_offchain_core.cli.odv_simulator.models import (
     SimulationConfig,
     SimulationResult,
 )

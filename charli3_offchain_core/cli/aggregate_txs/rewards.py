@@ -7,11 +7,11 @@ import click
 from pycardano import UTxO
 
 from charli3_offchain_core.models.oracle_datums import RewardAccountDatum
-from charli3_offchain_core.oracle.exceptions import TransactionError
-from charli3_offchain_core.oracle.transactions.builder import (
+from charli3_offchain_core.oracle.aggregate.builder import (
     OracleTransactionBuilder,
     RewardsResult,
 )
+from charli3_offchain_core.oracle.exceptions import TransactionError
 from charli3_offchain_core.oracle.utils import state_checks
 
 from ..config.formatting import print_confirmation_prompt, print_header, print_progress

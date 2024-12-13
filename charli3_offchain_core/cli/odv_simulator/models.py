@@ -16,9 +16,9 @@ from pycardano import (
     VerificationKeyHash,
 )
 
+from charli3_offchain_core.cli.aggregate_txs.base import TxConfig
 from charli3_offchain_core.cli.config import NetworkConfig, WalletConfig
-from charli3_offchain_core.cli.txs.base import TxConfig
-from charli3_offchain_core.oracle.transactions.builder import RewardsResult
+from charli3_offchain_core.oracle.aggregate.builder import RewardsResult
 from charli3_offchain_core.oracle.utils.signature_checks import encode_oracle_feed
 
 logger = getLogger(__name__)

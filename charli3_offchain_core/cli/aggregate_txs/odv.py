@@ -8,11 +8,11 @@ import click
 from pycardano import UTxO
 
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
-from charli3_offchain_core.oracle.exceptions import TransactionError
-from charli3_offchain_core.oracle.transactions.builder import (
+from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,
     OracleTransactionBuilder,
 )
+from charli3_offchain_core.oracle.exceptions import TransactionError
 
 from ..config.formatting import print_confirmation_prompt, print_header, print_progress
 from ..config.utils import async_command
