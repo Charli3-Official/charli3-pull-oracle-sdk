@@ -79,5 +79,5 @@ class GovernanceOrchestrator:
             )
 
         except Exception as e:
-            logger.error("Close oracle failed: %s", str(e))
+            logger.error("Update oracle failed: %s", str(e))
             return GovernanceResult(status=ProcessStatus.FAILED, error=e)

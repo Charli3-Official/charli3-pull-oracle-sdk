@@ -202,18 +202,18 @@ async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
         print_header("Available Options")
         for option in SettingOption:
             click.echo(f"{option.id}. {option.label}")
-        click.echo("q. Quit without saving")
 
         # Get user choice
+        choices = [opt.id for opt in SettingOption] + ["q"]
         choice = click.prompt(
             click.style("\nSelect option", fg=CliColor.WARNING, bold=True),
-            type=click.Choice([opt.id for opt in SettingOption] + ["q"]),
+            type=click.Choice(choices),
         )
-
         if choice == "q":
             if print_confirmation_message_prompt(
                 "Are you sure you want to quit without saving?"
             ):
+                click.echo(click.style("\nUpdate cancelled", fg=CliColor.WARNING))
                 raise click.Abort()
             continue
 
