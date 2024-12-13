@@ -9,6 +9,8 @@ Core off-chain infrastructure for Charli3's Oracle Data Verification (ODV) syste
   - Multi-signature validation
   - Reward distribution management
   - Oracle node operations
+  - Oracle lifecycle management
+    - Oracle closing with multisig support
 
 - **Smart Contract Integration**
   - Aiken blueprint parsing and handling
@@ -151,6 +153,48 @@ charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle
 # - Shows deployment status and script address
 charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_deploy.json
 ```
+##  Governance Operations
+### Update Oracle Settings
+
+This transaction allows you to modify the following settings:
+
+1. **Aggregation Liveness Period**
+2. **Time Absolute Uncertainty**
+3. **IQR Fence Multiplier**
+4. **UTxO Size Safety Buffer**
+5. **Required Node Signature Count**
+
+Command: `charli3 oracle update-settings --config platform-config.yaml`
+
+### Oracle Closing
+
+#### Option 1: Single Signature Flow (threshold = 1)
+```bash
+# Complete flow in single command
+# - Builds close transaction
+# - Signs with configured wallet
+# - Submits to network immediately
+charli3 oracle close --config deploy-testnet.yaml
+```
+
+#### Option 2: Multi-Signature Flow (threshold > 1)
+```bash
+# 1. First Wallet: Build transaction
+# - Creates close transaction
+# - Generates tx_oracle_close.json
+charli3 oracle close --config deploy-testnet-wallet-1.yaml
+
+# 2. Additional Wallets: Add signatures
+# - Validates key hasn't signed
+# - Updates transaction file
+# - Shows signature progress
+charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_close.json
+
+# 3. Submit when signature threshold is met
+# - Validates all required signatures are present
+# - Submits close transaction to network
+charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_close.json
+```
 
 ### Reference Scripts Management
 
@@ -250,13 +294,35 @@ odv-multisig-charli3-offchain-core/
 │   ├── oracle/               # Oracle operations
 │   │   ├── __init__.py
 │   │   ├── config.py         # Oracle configuration
+│   │   ├── exceptions.py     # Oracle-specific exceptions
 │   │   │
-│   │   └── deployment/       # Deployment operations
+│   │   ├── deployment/                     # Deployment operations
+│   │   │   ├── __init__.py
+│   │   │   ├── orchestrator.py             # Deployment coordination
+│   │   │   ├── oracle_start_builder.py     # Start transaction
+│   │   │   ├── reference_script_builder.py # Script creation
+│   │   │   └── reference_script_finder.py  # Script lookup
+│   │   ├── governance/                     # Governance operations
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py                     # Base Governance classes
+│   │   │   ├── orchestrator.py             # Governance coordination
+│   │   │   └── updater_builder.py          # Governance transaction builder
+│   │   ├── lifecycle/                      # Lifecycle operations
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py                     # Base lifecycle classes
+│   │   │   ├── orchestrator.py             # Lifecycle coordination
+│   │   │   └── close_builder.py            # Close transaction builder
+│   │   └── utils/                          # Oracle utilities
 │   │       ├── __init__.py
-│   │       ├── orchestrator.py # Deployment coordination
-│   │       ├── oracle_start_builder.py  # Start transaction
-│   │       ├── reference_script_builder.py  # Script creation
-│   │       └── reference_script_finder.py   # Script lookup
+│   │       ├── asset_checks.py             # Asset validation
+│   │       ├── common.py                   # Common utilities
+│   │       ├── consensus.py                # Consensus calculations
+│   │       ├── fee_checks.py               # Fee validation
+│   │       ├── rewards.py                  # Reward calculations
+│   │       ├── signature_checks.py         # Signature validation
+│   │       ├── state_checks.py             # State validation
+│   │       ├── time_checks.py              # Time validation
+│   │       └── value_checks.py             # Value validation
 │   │
 │   ├── platform/             # Platform operations
 │   │   ├── __init__.py
@@ -273,9 +339,9 @@ odv-multisig-charli3-offchain-core/
 │       ├── oracle.py         # Oracle commands
 │       ├── platform.py       # Platform commands
 │       ├── transaction.py    # Transaction processing
-│       ├── setup.py         # Setup utilities
-│       │
-│       └── config/          # CLI configuration
+│       ├── governance.py     # Governance utilities
+│       ├── setup.py          # Setup utilities
+│       └── config/           # CLI configuration
 │           ├── __init__.py
 │           ├── deployment.py  # Deployment config
 │           ├── platform.py    # Platform config
@@ -283,22 +349,23 @@ odv-multisig-charli3-offchain-core/
 │           ├── token.py       # Token config
 │           ├── settings.py    # Settings config
 │           ├── formatting.py  # Output formatting
-│           ├── utils.py      # Config utilities
-│           ├── keys.py      # Key management
-│           └── multisig.py  # Multisig config
+│           ├── utils.py       # Config utilities
+│           ├── keys.py        # Key management
+│           ├── multisig.py    # Multisig config
+│           └── management.py  # Management config
 │
-├── docs/                     # Documentation
-│   ├── configuration.md      # Configuration guide
-│   └── deployment.md         # Deployment guide
+├── docs/                   # Documentation
+│   ├── configuration.md    # Configuration guide
+│   └── deployment.md       # Deployment guide
 │
-├── examples/                 # Example configurations
-│   ├── mainnet.yaml         # Mainnet deployment config
-│   └── testnet.yaml         # Testnet deployment config
+├── examples/               # Example configurations
+│   ├── mainnet.yaml        # Mainnet deployment config
+│   └── testnet.yaml        # Testnet deployment config
 │
-├── .gitignore               # Git ignore rules
-├── .pre-commit-config.yaml  # Pre-commit hooks
-├── pyproject.toml           # Project configuration
-├── poetry.lock              # Dependency lock file
+├── .gitignore              # Git ignore rules
+├── .pre-commit-config.yaml # Pre-commit hooks
+├── pyproject.toml          # Project configuration
+├── poetry.lock             # Dependency lock file
 └── README.md               # Project readme
 ```
 
