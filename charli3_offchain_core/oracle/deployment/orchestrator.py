@@ -14,12 +14,13 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.deployment import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
-    Asset,
     FeeConfig,
     NoDatum,
     OracleConfiguration,
+    SomeAsset,
 )
 from charli3_offchain_core.oracle.config import (
     OracleDeploymentConfig,
@@ -92,7 +93,7 @@ class OracleDeploymentOrchestrator:
         self,
         # Network, platform and admin configuration
         platform_auth_policy_id: bytes,
-        fee_token: Asset | NoDatum,
+        fee_token: SomeAsset | NoDatum,
         platform_script: NativeScript,
         admin_address: Address,
         script_address: Address,
@@ -104,6 +105,7 @@ class OracleDeploymentOrchestrator:
         iqr_fence_multiplier: int,
         # Deployment configuration
         deployment_config: OracleDeploymentConfig,
+        nodes_config: NodesConfig,
         fee_config: FeeConfig,
         # Transaction signing
         signing_key: PaymentSigningKey | ExtendedSigningKey,
@@ -124,6 +126,7 @@ class OracleDeploymentOrchestrator:
             time_absolute_uncertainty: Allowed time uncertainty
             iqr_fence_multiplier: IQR multiplier for outlier detection
             deployment_config: Deployment parameters
+            nodes_config: Configuration for oracle nodes
             fee_config: Fee configuration
             signing_key: Key for signing transactions
             platform_utxo: UTxO containing platform auth NFT
@@ -147,6 +150,7 @@ class OracleDeploymentOrchestrator:
             start_result = await self._handle_start_transaction(
                 config=config,
                 deployment_config=deployment_config,
+                nodes_config=nodes_config,
                 script_address=script_address,
                 platform_utxo=platform_utxo,
                 platform_script=platform_script,
@@ -211,6 +215,7 @@ class OracleDeploymentOrchestrator:
         self,
         config: OracleConfiguration,
         deployment_config: OracleDeploymentConfig,
+        nodes_config: NodesConfig,
         script_address: Address,
         platform_utxo: UTxO,
         platform_script: NativeScript,
@@ -228,6 +233,7 @@ class OracleDeploymentOrchestrator:
 
         return await self.start_builder.build_start_transaction(
             config=config,
+            nodes_config=nodes_config,
             deployment_config=deployment_config,
             script_address=script_address,
             platform_utxo=platform_utxo,

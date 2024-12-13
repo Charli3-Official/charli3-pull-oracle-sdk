@@ -22,6 +22,7 @@ class TimingConfig:
     reward_dismissing_period: int = 7200000
     aggregation_liveness: int = 300000
     time_uncertainty: int = 60000
+    utxo_size_safety_buffer: int = 0
     iqr_multiplier: int = 150
 
     @classmethod
@@ -32,5 +33,6 @@ class TimingConfig:
             reward_dismissing_period=data.get("reward_dismissing_period", 7200000),
             aggregation_liveness=data.get("aggregation_liveness", 300000),
             time_uncertainty=data.get("time_uncertainty", 60000),
+            utxo_size_safety_buffer=data.get("utxo_size_safety_buffer", 0),
             iqr_multiplier=data.get("iqr_multiplier", 150),
         )

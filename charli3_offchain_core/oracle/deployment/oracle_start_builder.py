@@ -21,6 +21,7 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.deployment import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE,
@@ -57,7 +58,7 @@ class OracleStartBuilder:
     """Builds oracle start transaction for initial deployment"""
 
     # Constants for clarity and reuse
-    MIN_UTXO_VALUE = 2_000_000
+    MIN_UTXO_VALUE = 4_000_000
     FEE_BUFFER = 10_000
 
     def __init__(
@@ -73,6 +74,7 @@ class OracleStartBuilder:
     async def build_start_transaction(
         self,
         config: OracleConfiguration,
+        nodes_config: NodesConfig,
         deployment_config: OracleDeploymentConfig,
         script_address: Address,
         platform_utxo: UTxO,
@@ -89,6 +91,7 @@ class OracleStartBuilder:
 
         Args:
             config: Oracle configuration parameters
+            nodes_config: Nodes configuration with node keys
             deployment_config: Deployment configuration with token names
             script_address: Address for oracle script UTxOs
             platform_utxo: UTxO containing platform auth NFT
@@ -153,6 +156,7 @@ class OracleStartBuilder:
             self._create_settings_datum(
                 config,
                 fee_config,
+                nodes_config,
                 aggregation_liveness_period,
                 time_absolute_uncertainty,
                 iqr_fence_multiplier,
@@ -163,7 +167,9 @@ class OracleStartBuilder:
             script_address,
             deployment_config.token_names.reward_account,
             mint_policy.policy_id,
-            RewardAccountVariant(datum=RewardAccountDatum(nodes_to_rewards=[])),
+            RewardAccountVariant(
+                datum=RewardAccountDatum(nodes_to_rewards=[0] * len(nodes_config.nodes))
+            ),
         )
 
         # Create reward transport and agg state UTxOs
@@ -245,11 +251,13 @@ class OracleStartBuilder:
         self,
         config: OracleConfiguration,
         fee_config: FeeConfig,
+        nodes_config: NodesConfig,
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
+        node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
 
         if config.fee_token == NoDatum():
             # If fee token is ada then we need to set buffer to a minimum ada amount held at maximum expected reward account utxo size
@@ -262,8 +270,8 @@ class OracleStartBuilder:
 
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=Nodes(node_map={}),
-                required_node_signatures_count=0,  # Initial count is 0
+                nodes=Nodes(node_map=node_map),
+                required_node_signatures_count=nodes_config.required_signatures,
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,
