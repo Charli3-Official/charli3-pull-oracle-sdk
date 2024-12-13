@@ -12,6 +12,7 @@ from pycardano import (
     ScriptHash,
     Transaction,
     UTxO,
+    VerificationKeyHash,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -58,6 +59,7 @@ class GovernanceOrchestrator:
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        required_signers: list[VerificationKeyHash],
     ) -> GovernanceResult:
         try:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
@@ -72,6 +74,7 @@ class GovernanceOrchestrator:
                 utxos=utxos,
                 change_address=change_address,
                 signing_key=signing_key,
+                required_signers=required_signers,
             )
             if result.transaction is None and result.settings_utxo is None:
                 return GovernanceResult(ProcessStatus.CANCELLED_BY_USER)

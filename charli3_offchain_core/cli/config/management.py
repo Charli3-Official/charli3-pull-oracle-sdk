@@ -1,3 +1,5 @@
+"""Config for lifecycle operations."""
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +21,7 @@ class ManagementConfig:
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "ManagementConfig":
+        """Load config from a yaml file."""
         data = load_yaml_config(path)
         return cls(
             network=NetworkConfig.from_dict(data.get("network", {})),

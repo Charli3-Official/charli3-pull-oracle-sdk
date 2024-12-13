@@ -1,3 +1,5 @@
+""" Common utility functions for oracle operations. """
+
 from pycardano import ScriptHash, UTxO
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager

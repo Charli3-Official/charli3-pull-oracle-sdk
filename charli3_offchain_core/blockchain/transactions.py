@@ -35,11 +35,10 @@ class TransactionConfig:
     """Transaction building configuration."""
 
     validity_offset: int = 0
-    ttl_offset: int = 120
+    ttl_offset: int = 180
     extra_collateral: int = 6_000_000
     min_utxo_value: int = 2_000_000
     default_script_utxo_cost: int = 5_000_000
-    fee_buffer = 10_000
 
 
 class TransactionManager:
@@ -72,7 +71,10 @@ class TransactionManager:
         """Prepare transaction builder with inputs, collateral, and metadata."""
         # Add required signers
         if required_signers:
-            builder.required_signers.extend(required_signers)
+            if builder.required_signers is None:
+                builder.required_signers = required_signers
+            else:
+                builder.required_signers.extend(required_signers)
 
         # Add metadata if provided
         if metadata:
@@ -121,16 +123,13 @@ class TransactionManager:
         required_signers: list[VerificationKeyHash] | None = None,
         change_address: Address = None,
         signing_key: PaymentSigningKey | ExtendedSigningKey = None,
-        fee_buffer: int | None = None,
+        validity_start: int | None = None,
+        validity_end: int | None = None,
         metadata: dict | None = None,
     ) -> Transaction:
         """Build script interaction transaction."""
-        if fee_buffer is None:
-            fee_buffer = self.config.fee_buffer
         try:
-            builder = TransactionBuilder(
-                self.chain_query.context, fee_buffer=fee_buffer
-            )
+            builder = TransactionBuilder(self.chain_query.context)
 
             # Add script inputs
             for utxo, redeemer, script in script_inputs:
@@ -155,6 +154,8 @@ class TransactionManager:
                 signing_key=signing_key,
                 metadata=metadata,
                 required_signers=required_signers,
+                validity_start=validity_start,
+                validity_end=validity_end,
             )
 
         except Exception as e:
@@ -197,6 +198,8 @@ class TransactionManager:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         metadata: dict | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
+        validity_start: int | None = None,
+        validity_end: int | None = None,
     ) -> Transaction:
         """Build transaction with proper inputs and collateral."""
         try:
@@ -209,8 +212,22 @@ class TransactionManager:
                 required_signers=required_signers,
             )
 
+            # Set manual validity period if provided
+            if validity_start is not None:
+                builder.validity_start = validity_start
+            if validity_end is not None:
+                builder.ttl = validity_end
+
             # Build transaction components
-            tx_body = builder.build(change_address=change_address)
+            tx_body = builder.build(
+                change_address=change_address,
+                auto_validity_start_offset=(
+                    None if validity_start is not None else self.config.validity_offset
+                ),
+                auto_ttl_offset=(
+                    None if validity_end is not None else self.config.ttl_offset
+                ),
+            )
 
             # Create initial witness set
             witness_set = builder.build_witness_set()

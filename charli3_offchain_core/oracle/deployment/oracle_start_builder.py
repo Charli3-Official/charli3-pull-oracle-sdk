@@ -58,7 +58,7 @@ class OracleStartBuilder:
     """Builds oracle start transaction for initial deployment"""
 
     # Constants for clarity and reuse
-    MIN_UTXO_VALUE = 2_000_000
+    MIN_UTXO_VALUE = 4_000_000
     FEE_BUFFER = 10_000
 
     def __init__(
@@ -74,8 +74,8 @@ class OracleStartBuilder:
     async def build_start_transaction(
         self,
         config: OracleConfiguration,
-        deployment_config: OracleDeploymentConfig,
         nodes_config: NodesConfig,
+        deployment_config: OracleDeploymentConfig,
         script_address: Address,
         platform_utxo: UTxO,
         platform_script: NativeScript,
@@ -91,6 +91,7 @@ class OracleStartBuilder:
 
         Args:
             config: Oracle configuration parameters
+            nodes_config: Nodes configuration with node keys
             deployment_config: Deployment configuration with token names
             script_address: Address for oracle script UTxOs
             platform_utxo: UTxO containing platform auth NFT
@@ -166,7 +167,9 @@ class OracleStartBuilder:
             script_address,
             deployment_config.token_names.reward_account,
             mint_policy.policy_id,
-            RewardAccountVariant(datum=RewardAccountDatum(nodes_to_rewards=[])),
+            RewardAccountVariant(
+                datum=RewardAccountDatum(nodes_to_rewards=[0] * len(nodes_config.nodes))
+            ),
         )
 
         # Create reward transport and agg state UTxOs
@@ -254,6 +257,7 @@ class OracleStartBuilder:
         iqr_fence_multiplier: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
+        node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
 
         if config.fee_token == NoDatum():
             # If fee token is ada then we need to set buffer to a minimum ada amount held at maximum expected reward account utxo size

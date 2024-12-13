@@ -12,6 +12,7 @@ from pycardano import (
     PaymentSigningKey,
     Redeemer,
     UTxO,
+    VerificationKeyHash,
 )
 
 from charli3_offchain_core.cli.config.formatting import (
@@ -59,7 +60,6 @@ class SettingOption(Enum):
 
 class UpdateBuilder(BaseBuilder):
     REDEEMER = Redeemer(UpdateSettings())
-    FEE_BUFFER = 10_000
 
     async def build_tx(
         self,
@@ -69,6 +69,7 @@ class UpdateBuilder(BaseBuilder):
         utxos: list[UTxO],
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        required_signers: list[VerificationKeyHash],
     ) -> GovernanceTxResult:
         """Build the update transaction."""
         try:
@@ -89,9 +90,9 @@ class UpdateBuilder(BaseBuilder):
                     (platform_utxo, None, platform_script),
                 ],
                 script_outputs=[modified_settings_utxo.output, platform_utxo.output],
-                fee_buffer=self.FEE_BUFFER,
                 change_address=change_address,
                 signing_key=signing_key,
+                required_signers=required_signers,
             )
             return GovernanceTxResult(
                 transaction=tx, settings_utxo=modified_settings_utxo

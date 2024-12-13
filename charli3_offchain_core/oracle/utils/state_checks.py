@@ -23,6 +23,79 @@ from charli3_offchain_core.oracle.utils import asset_checks
 logger = logging.getLogger(__name__)
 
 
+def convert_cbor_to_transports(transport_utxos: Sequence[UTxO]) -> list[UTxO]:
+    """
+    Convert CBOR encoded NodeDatum objects to their corresponding Python objects.
+
+    Parameters:
+    - transport_utxos (List[UTxO]): A list of UTxO objects that contain RewardTransportDatum objects
+      in CBOR encoding.
+
+    Returns:
+    - A list of UTxO objects that contain  RewardTransport Datum objects in their
+      original Python format.
+    """
+    result: list[UTxO] = []
+    for utxo in transport_utxos:
+        if utxo.output.datum and not isinstance(
+            utxo.output.datum, RewardTransportVariant
+        ):
+            if utxo.output.datum.cbor:
+                utxo.output.datum = RewardTransportVariant.from_cbor(
+                    utxo.output.datum.cbor
+                )
+                result.append(utxo)
+        elif utxo.output.datum and isinstance(
+            utxo.output.datum, RewardTransportVariant
+        ):
+            result.append(utxo)
+    return result
+
+
+def convert_cbor_to_agg_states(agg_state_utxos: Sequence[UTxO]) -> list[UTxO]:
+    """
+    Convert CBOR encoded NodeDatum objects to their corresponding Python objects.
+
+    Parameters:
+    - agg_state_utxos (List[UTxO]): A list of UTxO objects that contain AggStateDatum objects
+      in CBOR encoding.
+
+    Returns:
+    - A list of UTxO objects that contain  AggState Datum objects in their
+      original Python format.
+    """
+    result: list[UTxO] = []
+    for utxo in agg_state_utxos:
+        if utxo.output.datum and not isinstance(utxo.output.datum, AggStateVariant):
+            if utxo.output.datum.cbor:
+                utxo.output.datum = AggStateVariant.from_cbor(utxo.output.datum.cbor)
+                result.append(utxo)
+        elif utxo.output.datum and isinstance(utxo.output.datum, AggStateVariant):
+            result.append(utxo)
+    return result
+
+
+def filter_empty_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
+    """Filter UTxOs for empty reward transport states.
+
+    Args:
+        utxos: List of UTxOs to filter
+
+    Returns:
+        List of UTxOs with empty reward transport states
+    """
+
+    utxos_with_datum = convert_cbor_to_transports(utxos)
+
+    return [
+        utxo
+        for utxo in utxos_with_datum
+        if utxo.output.datum
+        and isinstance(utxo.output.datum, RewardTransportVariant)
+        and isinstance(utxo.output.datum.datum, NoRewards)
+    ]
+
+
 def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
     """Filter UTxOs for pending reward consensus states.
 
@@ -44,86 +117,25 @@ def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
     ]
 
 
-def convert_cbor_to_transports(transport_utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Convert CBOR encoded NodeDatum objects to their corresponding Python objects."""
-    result: list[UTxO] = []
-    for utxo in transport_utxos:
-        try:
-            if utxo.output.datum and not isinstance(
-                utxo.output.datum, RewardTransportVariant
-            ):
-                if utxo.output.datum.cbor:
-                    utxo.output.datum = RewardTransportVariant.from_cbor(
-                        utxo.output.datum.cbor
-                    )
-                    result.append(utxo)
-            elif utxo.output.datum and isinstance(
-                utxo.output.datum, RewardTransportVariant
-            ):
-                result.append(utxo)
-        except Exception as e:
-            logger.debug(f"Failed to convert transport datum: {e}")
-            continue
-    return result
-
-
-def convert_cbor_to_agg_states(agg_state_utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Convert CBOR encoded NodeDatum objects to their corresponding Python objects."""
-    result: list[UTxO] = []
-    for utxo in agg_state_utxos:
-        try:
-            if utxo.output.datum and not isinstance(utxo.output.datum, AggStateVariant):
-                if utxo.output.datum.cbor:
-                    utxo.output.datum = AggStateVariant.from_cbor(
-                        utxo.output.datum.cbor
-                    )
-                    result.append(utxo)
-            elif utxo.output.datum and isinstance(utxo.output.datum, AggStateVariant):
-                result.append(utxo)
-        except Exception as e:
-            logger.debug(f"Failed to convert agg state datum: {e}")
-            continue
-    return result
-
-
-def filter_empty_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Filter UTxOs for empty reward transport states."""
-    filtered_utxos = []
-    utxos_with_datum = convert_cbor_to_transports(utxos)
-
-    for utxo in utxos_with_datum:
-        try:
-            if (
-                utxo.output.datum
-                and isinstance(utxo.output.datum, RewardTransportVariant)
-                and isinstance(utxo.output.datum.datum, NoRewards)
-            ):
-                filtered_utxos.append(utxo)
-        except Exception as e:
-            logger.debug(f"Failed to filter transport: {e}")
-            continue
-
-    return filtered_utxos
-
-
 def filter_empty_agg_states(utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Filter UTxOs for empty aggregation states."""
-    filtered_utxos = []
+    """Filter UTxOs for empty aggregation states.
+
+    Args:
+        utxos: List of UTxOs to filter
+
+    Returns:
+        List of UTxOs with empty aggregation states
+    """
+
     utxos_with_datum = convert_cbor_to_agg_states(utxos)
 
-    for utxo in utxos_with_datum:
-        try:
-            if (
-                utxo.output.datum
-                and isinstance(utxo.output.datum, AggStateVariant)
-                and isinstance(utxo.output.datum.datum, NoDatum)
-            ):
-                filtered_utxos.append(utxo)
-        except Exception as e:
-            logger.debug(f"Failed to filter agg state: {e}")
-            continue
-
-    return filtered_utxos
+    return [
+        utxo
+        for utxo in utxos_with_datum
+        if utxo.output.datum
+        and isinstance(utxo.output.datum, AggStateVariant)
+        and isinstance(utxo.output.datum.datum, NoDatum)
+    ]
 
 
 def filter_reward_accounts(utxos: Sequence[UTxO]) -> list[UTxO]:
@@ -146,24 +158,34 @@ def filter_reward_accounts(utxos: Sequence[UTxO]) -> list[UTxO]:
     ]
 
 
-def filter_oracle_settings_utxo(
-    utxos: Sequence[UTxO], policy_id: ScriptHash
-) -> UTxO | None:
+def filter_oracle_settings_utxo(utxos: Sequence[UTxO], policy_id: ScriptHash) -> UTxO:
     """Filter UTxOs for oracle settings.
 
     Args:
         utxos: List of UTxOs to filter
-        policy_id: ScriptHash to filter by
 
     Returns:
-        Oracle settings UTxO or None if not found
+        Oracle settings UTxO
     """
     oracle_settings_utxos = asset_checks.filter_utxos_by_token_name(
         utxos, policy_id, "CoreSettings"
     )
-    if not oracle_settings_utxos:
-        return None
     return oracle_settings_utxos[0]
+
+
+def filter_reward_account_utxo(utxos: Sequence[UTxO], policy_id: ScriptHash) -> UTxO:
+    """Filter UTxOs for reward account.
+
+    Args:
+        utxos: List of UTxOs to filter
+
+    Returns:
+        Reward account UTxO
+    """
+    reward_account_utxos = asset_checks.filter_utxos_by_token_name(
+        utxos, policy_id, "RewardAccount"
+    )
+    return reward_account_utxos[0]
 
 
 def get_oracle_settings_by_policy_id(
@@ -177,25 +199,55 @@ def get_oracle_settings_by_policy_id(
 
     Returns:
         OracleSettingsDatum: Oracle settings datum
+        UTxO: Oracle settings UTxO
 
     Raises:
         StateValidationError: If no oracle settings datum is found
     """
     try:
         settings_utxo = filter_oracle_settings_utxo(utxos, policy_id)
-
         settings_utxo_datum = None
 
-        if settings_utxo and settings_utxo.output.datum:
-            settings_utxo_datum = OracleSettingsVariant.from_cbor(
-                settings_utxo.output.datum.cbor
+        if settings_utxo.output.datum:
+            settings_utxo_datum = settings_utxo.output.datum = (
+                OracleSettingsVariant.from_cbor(settings_utxo.output.datum.cbor)
             )
-            settings_utxo.output.datum = settings_utxo_datum
 
         return settings_utxo_datum.datum, settings_utxo
 
     except Exception as e:
         raise StateValidationError(f"Failed to get oracle settings: {e}") from e
+
+
+def get_reward_account_by_policy_id(
+    utxos: Sequence[UTxO], policy_id: ScriptHash
+) -> tuple[RewardAccountDatum, UTxO]:
+    """Get reward account datum by policy ID.
+
+    Args:
+        utxos: List of UTxOs to search
+        policy_id: Policy ID
+
+    Returns:
+        RewardAccountDatum: Reward account datum
+        UTxO: Reward account UTxO
+
+    Raises:
+        StateValidationError: If no reward account datum is found
+    """
+    try:
+        reward_account_utxo = filter_reward_account_utxo(utxos, policy_id)
+        reward_account_datum = None
+
+        if reward_account_utxo.output.datum:
+            reward_account_datum = reward_account_utxo.output.datum = (
+                RewardAccountVariant.from_cbor(reward_account_utxo.output.datum.cbor)
+            )
+
+        return reward_account_datum.datum, reward_account_utxo
+
+    except Exception as e:
+        raise StateValidationError(f"Failed to get reward account: {e}") from e
 
 
 def find_transport_pair(utxos: Sequence[UTxO], policy_id: bytes) -> tuple[UTxO, UTxO]:
@@ -351,3 +403,22 @@ def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
 
     except Exception as e:
         raise StateValidationError(f"Failed to validate UTxO pair: {e}") from e
+
+
+def get_reference_script_utxo(utxos: Sequence[UTxO]) -> UTxO:
+    """Find reference script UTxO.
+
+    Args:
+        utxos: List of UTxOs to search
+
+    Returns:
+        UTxO: Reference script UTxO
+
+    Raises:
+        StateValidationError: If no reference script UTxO is found
+    """
+    for utxo in utxos:
+        if utxo.output.script:
+            return utxo
+
+    raise StateValidationError("No reference script UTxO found")
