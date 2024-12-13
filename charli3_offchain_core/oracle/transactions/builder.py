@@ -43,7 +43,6 @@ from charli3_offchain_core.oracle.exceptions import (
 )
 from charli3_offchain_core.oracle.utils import (
     asset_checks,
-    consensus,
     rewards,
     state_checks,
 )
@@ -92,9 +91,6 @@ class OracleTransactionBuilder:
         self.policy_id = policy_id
         self.fee_token_hash = fee_token_hash
         self.fee_token_name = fee_token_name
-        self.consensus_calculator = None
-        self.reward_calculator = None
-        self.reward_accumulator = rewards.RewardAccumulator()
         self.network_config = self.tx_manager.chain_query.config.network_config
 
     async def _get_script_utxos(self) -> list[UTxO]:
@@ -139,18 +135,15 @@ class OracleTransactionBuilder:
             script_utxo = state_checks.get_reference_script_utxo(utxos)
 
             # Update calculators with current settings
-            self.consensus_calculator = consensus.ConsensusCalculator(settings_datum)
-            self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
 
             # Calculate the transaction time window and current time ONCE
-            validity_start = (
-                self.tx_manager.chain_query.get_current_posix_chain_time_ms()
+            validity_start, validity_end, current_time = (
+                self._calculate_validity_window(settings_datum)
             )
-            validity_end = validity_start + settings_datum.time_absolute_uncertainty
-            current_time = (validity_end + validity_start) // 2
 
-            validity_start_slot = self.network_config.posix_to_slot(validity_start)
-            validity_end_slot = self.network_config.posix_to_slot(validity_end)
+            validity_start_slot, validity_end_slot = self._validity_window_to_slot(
+                validity_start, validity_end
+            )
 
             # Create a new message with the current timestamp
             current_message = AggregateMessage(
@@ -164,8 +157,8 @@ class OracleTransactionBuilder:
             median_value = int(median(feeds))
 
             # Calculate minimum fee
-            minimum_fee = self.reward_calculator.calculate_min_fee_amount(
-                len(current_message.node_feeds_sorted_by_feed)
+            minimum_fee = rewards.calculate_min_fee_amount(
+                settings_datum.fee_info, len(current_message.node_feeds_sorted_by_feed)
             )
 
             # Create outputs using helper methods
@@ -231,10 +224,6 @@ class OracleTransactionBuilder:
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
             script_utxo = state_checks.get_reference_script_utxo(utxos)
-
-            # Update calculators with current settings
-            self.consensus_calculator = consensus.ConsensusCalculator(settings_datum)
-            self.reward_calculator = rewards.RewardCalculator(settings_datum.fee_info)
 
             # Find pending transports
             pending_transports = state_checks.filter_pending_transports(
@@ -380,52 +369,21 @@ class OracleTransactionBuilder:
         current_datum = reward_account.output.datum.datum
         nodes = list(settings.nodes.node_map.keys())
 
-        total_fee_tokens = 0
-        node_rewards = {}
+        # Calculate total fees and rewards
+        total_fee_tokens = rewards.calculate_total_fees(
+            transports, self.fee_token_hash, self.fee_token_name
+        )
+        node_rewards = rewards.calculate_node_rewards_from_transports(transports)
 
-        for transport in transports:
-            pending = transport.output.datum.datum
-            aggregation = pending.aggregation
+        # Accumulate rewards
+        new_rewards = rewards.accumulate_node_rewards(
+            current_datum, node_rewards, nodes
+        )
 
-            # Accumulate total fees (includes both node and platform portions)
-            if (
-                transport.output.amount.multi_asset
-                and self.fee_token_hash in transport.output.amount.multi_asset
-            ):
-                fee_tokens = transport.output.amount.multi_asset[self.fee_token_hash][
-                    self.fee_token_name
-                ]
-                total_fee_tokens += fee_tokens
-
-            # Use node_reward_price from aggregation - this already accounts for the split
-            reward_per_node = aggregation.node_reward_price
-
-            # Add reward for each participating node
-            for node_id in aggregation.message.node_feeds_sorted_by_feed:
-                node_rewards[node_id] = node_rewards.get(node_id, 0) + reward_per_node
-
-        # Create rewards list matching nodes order
-        new_rewards = []
-        for node_id in nodes:
-            current_idx = len(new_rewards)
-            current_reward = (
-                current_datum.nodes_to_rewards[current_idx]
-                if current_idx < len(current_datum.nodes_to_rewards)
-                else 0
-            )
-            new_reward = current_reward + node_rewards.get(node_id, 0)
-            new_rewards.append(new_reward)
-
-        # Update fee tokens in output (total amount includes both node and platform portions)
-        if total_fee_tokens > 0:
-            if self.fee_token_hash not in output_amount.multi_asset:
-                output_amount.multi_asset[self.fee_token_hash] = Asset()
-            output_amount.multi_asset[self.fee_token_hash][self.fee_token_name] = (
-                output_amount.multi_asset[self.fee_token_hash].get(
-                    self.fee_token_name, 0
-                )
-                + total_fee_tokens
-            )
+        # Update fee tokens
+        rewards.update_fee_tokens(
+            output_amount, self.fee_token_hash, self.fee_token_name, total_fee_tokens
+        )
 
         return TransactionOutput(
             address=self.script_address,
@@ -434,3 +392,20 @@ class OracleTransactionBuilder:
                 datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
             ),
         )
+
+    def _calculate_validity_window(
+        self, settings: OracleSettingsDatum
+    ) -> tuple[int, int, int]:
+        """Calculate transaction validity window and current time."""
+        validity_start = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
+        validity_end = validity_start + settings.time_absolute_uncertainty
+        current_time = (validity_end + validity_start) // 2
+        return validity_start, validity_end, current_time
+
+    def _validity_window_to_slot(
+        self, validity_start: int, validity_end: int
+    ) -> tuple[int, int]:
+        """Convert validity window to slot numbers."""
+        validity_start_slot = self.network_config.posix_to_slot(validity_start)
+        validity_end_slot = self.network_config.posix_to_slot(validity_end)
+        return validity_start_slot, validity_end_slot
