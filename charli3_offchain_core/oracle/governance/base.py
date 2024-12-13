@@ -12,7 +12,7 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 class GovernanceTxResult:
     """Result of lifecycle transaction build"""
 
-    transaction: Transaction
+    transaction: Transaction | None = None
     settings_utxo: TransactionOutput | None = None
 
 

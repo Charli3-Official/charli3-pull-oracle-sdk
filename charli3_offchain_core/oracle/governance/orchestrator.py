@@ -73,6 +73,8 @@ class GovernanceOrchestrator:
                 change_address=change_address,
                 signing_key=signing_key,
             )
+            if result.transaction is None and result.settings_utxo is None:
+                return GovernanceResult(ProcessStatus.CANCELLED_BY_USER)
 
             return GovernanceResult(
                 status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction

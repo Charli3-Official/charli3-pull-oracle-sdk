@@ -31,6 +31,7 @@ from charli3_offchain_core.models.oracle_redeemers import (
 )
 from charli3_offchain_core.oracle.exceptions import (
     SettingsValidationError,
+    UpdateCancelled,
     UpdatingError,
 )
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
@@ -56,24 +57,6 @@ class SettingOption(Enum):
         self.label = label
 
 
-class SettingField(Enum):
-    AGGREGATION_LIVENESS = (
-        "Aggregation Liveness Period",
-        "must be greater than time uncertainty",
-    )
-    TIME_UNCERTAINTY = ("Time Absolute Uncertainty", "must be positive")
-    IQR_MULTIPLIER = ("IQR Fence Multiplier", "must be greater than 100")
-    THRESHOLD = (
-        "Required Node Signatures Count",
-        "must be positive and not greater than number of deployed parties",
-    )
-    SAFETY_BUFFER = ("UTxO Size Safety Buffer", "must not be negative")
-
-    def __init__(self, display_name: str, validation_message: str) -> None:
-        self.display_name = display_name
-        self.validation_message = validation_message
-
-
 class UpdateBuilder(BaseBuilder):
     REDEEMER = Redeemer(UpdateSettings())
     FEE_BUFFER = 10_000
@@ -95,7 +78,10 @@ class UpdateBuilder(BaseBuilder):
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
 
-            modified_settings_utxo = await manual_settings_menu(settings_utxo)
+            try:
+                modified_settings_utxo = await manual_settings_menu(settings_utxo)
+            except (UpdateCancelled, click.Abort):
+                return GovernanceTxResult()
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -161,13 +147,14 @@ async def get_setting_value(
 async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
     """Interactive menu for manual settings updates."""
     deployed_core_settings = deployed_core_utxo.output.datum
-    current_settings = {
+    initial_settings = {
         SettingOption.AGGREGATION_LIVENESS: deployed_core_settings.datum.aggregation_liveness_period,
         SettingOption.TIME_UNCERTAINTY: deployed_core_settings.datum.time_absolute_uncertainty,
         SettingOption.IQR_MULTIPLIER: deployed_core_settings.datum.iqr_fence_multiplier,
         SettingOption.THRESHOLD: deployed_core_settings.datum.required_node_signatures_count,
         SettingOption.UTXO_BUFFER: deployed_core_settings.datum.utxo_size_safety_buffer,
     }
+    current_settings = initial_settings.copy()
     invalid_settings = set()
 
     while True:
@@ -213,13 +200,15 @@ async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
             if print_confirmation_message_prompt(
                 "Are you sure you want to quit without saving?"
             ):
-                click.echo(click.style("\nUpdate cancelled", fg=CliColor.WARNING))
-                raise click.Abort()
+                raise UpdateCancelled()
             continue
 
         selected_option = next(opt for opt in SettingOption if opt.id == choice)
 
         if selected_option == SettingOption.DONE:
+            if current_settings == initial_settings:
+                print_status("Update Status", "No changes detected", success=True)
+                raise UpdateCancelled()
             # Validate all settings
             invalid_settings.clear()
             try:
@@ -264,6 +253,8 @@ async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
                     )
                     deployed_core_utxo.output.datum = new_datum
                     return deployed_core_utxo
+                else:
+                    continue
             except SettingsValidationError as e:
                 print_status("Validation Error", str(e), success=False)
                 continue

@@ -282,3 +282,9 @@ class SettingsValidationError(GovernanceError):
     """Raised when settings validation fails."""
 
     pass
+
+
+class UpdateCancelled(GovernanceError):  # noqa
+    """Exception raised when user intentionally cancels the update."""
+
+    pass
