@@ -35,7 +35,7 @@ class TransactionConfig:
     """Transaction building configuration."""
 
     validity_offset: int = 0
-    ttl_offset: int = 120
+    ttl_offset: int = 180
     extra_collateral: int = 6_000_000
     min_utxo_value: int = 2_000_000
     default_script_utxo_cost: int = 5_000_000

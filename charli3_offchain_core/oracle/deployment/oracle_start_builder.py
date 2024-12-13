@@ -58,7 +58,7 @@ class OracleStartBuilder:
     """Builds oracle start transaction for initial deployment"""
 
     # Constants for clarity and reuse
-    MIN_UTXO_VALUE = 2_500_000
+    MIN_UTXO_VALUE = 4_000_000
     FEE_BUFFER = 10_000
 
     def __init__(
