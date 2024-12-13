@@ -268,7 +268,7 @@ class OracleStartBuilder:
 
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=Nodes.from_string_list(nodes),
+                nodes=Nodes.empty(),
                 required_node_signatures_count=count,
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
