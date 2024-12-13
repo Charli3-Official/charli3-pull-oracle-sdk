@@ -91,7 +91,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
                     raise click.ClickException(f"Update failed: {status}")
                 print_status("Update", "completed successfully", success=True)
-        elif print_confirmation_message_prompt("Store multisig close transaction?"):
+        elif print_confirmation_message_prompt("Store multisig update transaction?"):
             output_path = output or Path("tx_oracle_update_settings.json")
             with output_path.open("w") as f:
                 json.dump(
@@ -102,8 +102,8 @@ async def update_settings(config: Path, output: Path | None) -> None:
                     },
                     f,
                 )
-        print_status("Transaction", "saved successfully", success=True)
-        print_hash_info("Output file", str(output_path))
+            print_status("Transaction", "saved successfully", success=True)
+            print_hash_info("Output file", str(output_path))
 
     except Exception as e:
         logger.error("Update failed", exc_info=e)
