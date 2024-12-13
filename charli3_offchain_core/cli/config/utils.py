@@ -1,7 +1,6 @@
 """CLI utility functions and decorators."""
 
 import asyncio
-import json
 import logging
 import os
 from dataclasses import dataclass
@@ -80,47 +79,3 @@ def load_yaml_config(path: Path | str) -> dict[str, Any]:
         data = yaml.safe_load(f)
 
     return resolve_env_vars(data)
-
-
-def parse_nodes_file(feeds_file: Path) -> tuple[int, list[list[str]]]:
-    """
-    Parse the feeds JSON file to extract signature_required count and PKH pairs.
-
-    Args:
-        feeds_file (Path): Path to the JSON file containing node feeds data
-
-    Returns:
-        Tuple[int, List[List[str]]]: A tuple containing:
-            - count: The signature_required value
-            - nodes: List of [feed_pkh, payment_pkh] pairs for nodes with status 'deploy'
-    """
-    with open(feeds_file) as f:
-        data = json.load(f)
-
-    # Get the signature_required count
-    count = data["signature_required"]
-
-    # Process nodes
-    nodes = []
-    for _, node_data in data["nodes"].items():
-        # Skip nodes that don't have 'deploy' status
-        if node_data.get("status") != "deploy":
-            continue
-
-        # Handle case where there's a single public_key_hash
-        if "public_key_hash" in node_data:
-            pkh = node_data["public_key_hash"]
-            nodes.append([pkh, pkh])  # Use the same PKH for both feed and payment
-            continue
-
-        # Handle case with separate feed and payment PKHs
-        feed_pkh = node_data.get("feed_public_key_hash")
-        payment_pkh = node_data.get("payment_public_key_hash")
-        if feed_pkh and payment_pkh:
-            nodes.append([feed_pkh, payment_pkh])
-
-    if count > len(nodes):
-        raise ValueError(
-            f"signature_required ({count}) cannot be greater than the number of nodes with 'deploy' status ({len(nodes)})"
-        )
-    return count, nodes

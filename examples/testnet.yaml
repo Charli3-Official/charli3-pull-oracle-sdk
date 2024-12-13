@@ -65,3 +65,14 @@ blueprint_path: "artifacts/testnet_plutus.json"
 
 # Create both reference scripts for testing
 create_reference: true
+
+# Nodes configuration
+nodes:
+  required_signatures: 2
+  nodes:
+    - feed_vkh: aa6f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070
+      payment_vkh: ab6f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070
+    - feed_vkh: ba6f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070
+      payment_vkh: ba6f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070
+    - feed_vkh: ca6f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070
+      payment_vkh: cb6f55db4069f5fb1d2662078d025d909acc55b795a67b1db0d66070

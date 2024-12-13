@@ -21,6 +21,7 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE,
@@ -74,6 +75,7 @@ class OracleStartBuilder:
         self,
         config: OracleConfiguration,
         deployment_config: OracleDeploymentConfig,
+        nodes_config: NodesConfig,
         script_address: Address,
         platform_utxo: UTxO,
         platform_script: NativeScript,
@@ -83,8 +85,6 @@ class OracleStartBuilder:
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
-        count: int,
-        nodes: list[list[str]],
     ) -> StartTransactionResult:
         """
         Build oracle start transaction that mints NFTs and creates initial UTxOs.
@@ -155,11 +155,10 @@ class OracleStartBuilder:
             self._create_settings_datum(
                 config,
                 fee_config,
+                nodes_config,
                 aggregation_liveness_period,
                 time_absolute_uncertainty,
                 iqr_fence_multiplier,
-                count,
-                nodes,
             ),
         )
 
@@ -249,11 +248,10 @@ class OracleStartBuilder:
         self,
         config: OracleConfiguration,
         fee_config: FeeConfig,
+        nodes_config: NodesConfig,
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
-        count: int,
-        nodes: list[list[str]],
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
 
@@ -266,10 +264,11 @@ class OracleStartBuilder:
             # If fee token is some native token then there is no need to manage leftover fee token amount
             utxo_size_safety_buffer = 0
 
+        node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
-                nodes=Nodes.empty(),
-                required_node_signatures_count=count,
+                nodes=Nodes(node_map=node_map),
+                required_node_signatures_count=nodes_config.required_signatures,
                 fee_info=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_absolute_uncertainty=time_absolute_uncertainty,
