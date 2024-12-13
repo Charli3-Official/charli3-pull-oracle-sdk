@@ -292,7 +292,7 @@ def validate_setting(
         raise SettingsValidationError("UTxO size safety buffer must not be negative")
 
     if option == SettingOption.IQR_MULTIPLIER and value <= 100:
-        raise SettingsValidationError("IQR fece multiplier must be greater than 100")
+        raise SettingsValidationError("IQR fence multiplier must be greater than 100")
 
     if (
         option == SettingOption.THRESHOLD
