@@ -1,48 +1,33 @@
-"""Update settings CLI"""
+"""CLI commands for oracle deployment and management."""
 
+import json
 import logging
-from collections.abc import Callable
 from pathlib import Path
 
 import click
 
-from charli3_offchain_core.cli.config.formatting import (
-    format_status_update,
-    get_configuration_method,
+from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.oracle.governance.orchestrator import GovernanceOrchestrator
+
+from ..constants.status import ProcessStatus
+from .config.formatting import (
+    print_confirmation_message_prompt,
     print_hash_info,
-    print_progress,
+    print_header,
     print_status,
-    print_title,
 )
-from charli3_offchain_core.cli.config.update_settings import PlatformTxConfig
-from charli3_offchain_core.cli.config.utils import async_command
-from charli3_offchain_core.oracle.transactions.update_settings import (
-    TransactionResult,
-    UpdateCoreSettings,
-)
+from .config.utils import async_command
+from .setup import setup_management_from_config
 
 logger = logging.getLogger(__name__)
 
 
-def tx_options(f: Callable) -> Callable:
-    """Common transaction command options.
-
-    Args:
-        f: Function to decorate
-
-    Returns:
-        Decorated function with common options
-    """
-    f = click.option(
-        "--config",
-        type=click.Path(exists=True, path_type=Path),
-        required=True,
-        help="Path to transaction configuration YAML",
-    )(f)
-    f = click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging")(f)
-    return f
-
-
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to deployment configuration YAML",
+)
 @click.option(
     "--output",
     type=click.Path(path_type=Path),
@@ -50,47 +35,73 @@ def tx_options(f: Callable) -> Callable:
 )
 @click.command()
 @async_command
-@tx_options
-async def update_settings(config: Path, verbose: bool, output: Path | None) -> None:
+async def update_settings(config: Path, output: Path | None) -> None:
     """UpdataSettings
     charli3 oracle update-settings --config platform-config.yaml
     """
-    print_progress("Loading configuration")
-    plat_tx_config = PlatformTxConfig.from_yaml(config)
-    settings_manager = UpdateCoreSettings(plat_tx_config, format_status_update)
-
     try:
-        # Load current settings
-        deployed_core_utxo = await settings_manager.get_core_settings_utxo()
+        print_header("Oracle Update Settings")
+        (
+            management_config,
+            payment_sk,
+            oracle_addresses,
+            chain_query,
+            tx_manager,
+            platform_auth_finder,
+        ) = setup_management_from_config(config)
 
-        # Title
-        print_title("Update Oracle Settings")
+        platform_utxo = await platform_auth_finder.find_auth_utxo(
+            policy_id=management_config.tokens.platform_auth_policy,
+            platform_address=oracle_addresses.platform_address,
+        )
 
-        # Get modified_settings based on user choice
-        config_method = get_configuration_method()
+        if not platform_utxo:
+            raise click.ClickException("No platform auth UTxO found")
 
-        if config_method == "Load settings from configuration file":
-            modified_core_utxo = await settings_manager.allowed_datum_changes_from_file(
-                deployed_core_utxo
-            )
-        else:
-            modified_core_utxo = await settings_manager.manual_settings_menu(
-                deployed_core_utxo
-            )
-        # Process the update
-        result = await settings_manager.process_update(modified_core_utxo, output)
+        platform_script = await platform_auth_finder.get_platform_script(
+            oracle_addresses.platform_address
+        )
+        platform_config = platform_auth_finder.get_script_config(platform_script)
 
-        # Handle result
-        if isinstance(result, TransactionResult):
-            print_status("Status", "Tx built and signed successfully", success=True)
-            print_hash_info("Transaction ID", str(result.tx_id))
-        else:  # MultisigResult
-            print_status("Transaction", "saved successfully", success=True)
-            print_hash_info("Output file", str(result.output_path))
-            print_hash_info(
-                "Next steps", f"Transaction requires {result.threshold} signatures"
-            )
+        orchestrator = GovernanceOrchestrator(
+            chain_query=chain_query,
+            tx_manager=tx_manager,
+            script_address=oracle_addresses.script_address,
+            status_callback=format_status_update,
+        )
+
+        result = await orchestrator.update_oracle(
+            oracle_policy=management_config.tokens.oracle_policy,
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            change_address=oracle_addresses.admin_address,
+            signing_key=payment_sk,
+        )
+        if result.status != ProcessStatus.TRANSACTION_BUILT:
+            raise click.ClickException(f"Update failed: {result.error}")
+
+        if platform_config.threshold == 1:
+            if print_confirmation_message_prompt("Proceed with oracle update?"):
+                status, _ = await tx_manager.sign_and_submit(
+                    result.transaction, [payment_sk], wait_confirmation=True
+                )
+                if status != ProcessStatus.TRANSACTION_CONFIRMED:
+                    raise click.ClickException(f"Update failed: {status}")
+                print_status("Update", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig close transaction?"):
+            output_path = output or Path("tx_oracle_update_settings.json")
+            with output_path.open("w") as f:
+                json.dump(
+                    {
+                        "transaction": result.transaction.to_cbor_hex(),
+                        "signed_by": [],
+                        "threshold": platform_config.threshold,
+                    },
+                    f,
+                )
+        print_status("Transaction", "saved successfully", success=True)
+        print_hash_info("Output file", str(output_path))
 
     except Exception as e:
-        logger.error("Update Settings failed", exc_info=e)
+        logger.error("Update failed", exc_info=e)
         raise click.ClickException(str(e)) from e

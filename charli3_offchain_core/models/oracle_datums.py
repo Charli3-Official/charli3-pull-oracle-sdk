@@ -1,12 +1,13 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from pycardano import PlutusData, VerificationKeyHash
 
 PolicyId = bytes
 AssetName = bytes
+PosixTime = int
 PosixTimeDiff = int
 OracleFeed = int
 NodeFeed = int
@@ -14,12 +15,6 @@ FeedVkh = VerificationKeyHash
 PaymentVkh = VerificationKeyHash
 
 MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE = 5_500_000
-
-
-@dataclass
-class PosixTime(PlutusData):
-    CONSTR_ID = 0
-    value: int
 
 
 @dataclass
@@ -50,11 +45,13 @@ class Nodes(PlutusData):
 
     @classmethod
     def from_primitive(cls, data: Any) -> "Nodes":
-        """Handle deserialization of empty maps properly"""
+        """Create Nodes from primitive data."""
         while hasattr(data, "value"):
             data = data.value
+
         if not data:
             return cls(node_map={})
+
         return cls(
             node_map={
                 VerificationKeyHash.from_primitive(
@@ -64,31 +61,7 @@ class Nodes(PlutusData):
             }
         )
 
-    @classmethod
-    def from_string_list(
-        cls,
-        parties: List[List[str]],
-    ) -> "Nodes":
-        if not isinstance(parties, list):
-            raise ValueError("parties must be a list")
-
-        node_map = {}
-        for idx, party_pair in enumerate(parties):
-            if not isinstance(party_pair, list) or len(party_pair) != 2:
-                raise ValueError(
-                    f"Each party must be a list of exactly 2 VKHs. Error at index {idx}"
-                )
-            try:
-                feed_vkh = VerificationKeyHash.from_primitive(party_pair[0])
-                payment_vkh = VerificationKeyHash.from_primitive(party_pair[1])
-                node_map[feed_vkh] = payment_vkh
-            except Exception as err:
-                raise ValueError(f"Failed to convert VKH pair at index {idx}") from err
-
-        sorted_map = dict(sorted(node_map.items(), key=lambda x: str(x[0])))
-        return cls(node_map=sorted_map)
-
-    def to_primitive(self) -> Dict[Any, Any]:
+    def to_primitive(self) -> Dict[str, Any]:
         """Convert to primitive map representation."""
         return {
             k.to_primitive(): v.to_primitive()
@@ -99,7 +72,6 @@ class Nodes(PlutusData):
     def empty(cls) -> "Nodes":
         """
         Creates an empty Nodes instance with an empty node_map.
-
         Returns:
             Nodes: A new Nodes instance with an empty map.
         """
@@ -186,41 +158,23 @@ class AggregateMessage(PlutusData):
     """Represents an aggregate message from nodes"""
 
     CONSTR_ID = 0
-    node_feeds_sorted_by_feed: Dict[VerificationKeyHash, VerificationKeyHash]
+    node_feeds_sorted_by_feed: List[Tuple[VerificationKeyHash, NodeFeed]]
     node_feeds_count: int
     timestamp: PosixTime
 
     @classmethod
     def from_primitive(
-        cls, feeds: Dict[str, str], timestamp: int
+        cls, feeds: List[Tuple[str, int]], timestamp: int
     ) -> "AggregateMessage":
-        """
-        Create from hex-encoded VKHs and feed values.
-
-        Args:
-            feeds (Dict[str, str]): A dictionary where each key-value pair is a
-                hex-encoded verification key hash for node feeds.
-            timestamp (int): The timestamp in POSIX format.
-
-        Returns:
-            AggregateMessage: An instance of AggregateMessage.
-        """
-        # Convert hex-encoded VKHs to VerificationKeyHash
-        sorted_feeds = {
-            VerificationKeyHash(bytes.fromhex(vkh)): VerificationKeyHash(
-                bytes.fromhex(feed)
-            )
-            for vkh, feed in feeds.items()
-        }
-        # Ensure feeds are sorted by their keys
-        sorted_feeds = dict(
-            sorted(sorted_feeds.items(), key=lambda x: x[0].__bytes__())
-        )
-
+        """Create from hex-encoded VKHs and feed values"""
+        sorted_feeds = [
+            (VerificationKeyHash(bytes.fromhex(vkh)), feed) for vkh, feed in feeds
+        ]
+        sorted_feeds.sort(key=lambda x: x[1])  # sorted by NodeFeed
         return cls(
             node_feeds_sorted_by_feed=sorted_feeds,
             node_feeds_count=len(feeds),
-            timestamp=PosixTime(timestamp),
+            timestamp=timestamp,
         )
 
 

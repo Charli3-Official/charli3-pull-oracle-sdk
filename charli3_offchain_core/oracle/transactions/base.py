@@ -237,26 +237,6 @@ class BaseTransaction:
 
         return MultisigResult(output_path, threshold)
 
-    async def _build_update_transaction(
-        self,
-        modified_core_utxo: UTxO,
-        platform_utxo: UTxO,
-        platform_script: NativeScript,
-        contract_reference_utxo: UTxO,
-    ) -> Transaction:
-        """Build the update transaction."""
-        deployed_core_utxo = await self.get_core_settings_utxo()
-
-        return await self.transaction_manager.build_script_tx(
-            script_inputs=[
-                (deployed_core_utxo, self.REDEEMER, contract_reference_utxo),
-                (platform_utxo, None, platform_script),
-            ],
-            script_outputs=[modified_core_utxo.output, platform_utxo.output],
-            change_address=self.key_manager[3],
-            signing_key=self.key_manager[0],
-        )
-
     async def get_core_settings_utxo(self) -> UTxO:
         if not hasattr(self, "core_settings_asset"):
             self.core_settings_asset = self.get_core_settings_asset
