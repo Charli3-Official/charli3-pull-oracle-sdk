@@ -283,20 +283,22 @@ def validate_setting(
         SettingOption.TIME_UNCERTAINTY,
         SettingOption.THRESHOLD,
     ]:
-        raise SettingsValidationError("Value must be positive")
+        raise SettingsValidationError(
+            "Time uncertainty and Node signature count must be positive"
+        )
 
     if option == SettingOption.UTXO_BUFFER and value < 0:
-        raise SettingsValidationError("Value must not be negative")
+        raise SettingsValidationError("UTxO size safety buffer must not be negative")
 
     if option == SettingOption.IQR_MULTIPLIER and value <= 100:
-        raise SettingsValidationError("Value must be greater than 100")
+        raise SettingsValidationError("IQR fece multiplier must be greater than 100")
 
     if (
         option == SettingOption.THRESHOLD
         and value > deployed_settings.datum.nodes.length
     ):
         raise SettingsValidationError(
-            f"Value cannot be greater than number of deployed parties ({deployed_settings.datum.nodes.length})"
+            f"Threshold cannot be greater than number of deployed parties ({deployed_settings.datum.nodes.length})"
         )
 
     if option == SettingOption.AGGREGATION_LIVENESS:

@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
-from charli3_offchain_core.cli.settings import update_settings
+from charli3_offchain_core.cli.governance import update_settings
 from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
     create_submit_tx_command,
