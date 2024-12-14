@@ -18,12 +18,6 @@ MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE = 5_500_000
 
 
 @dataclass
-class SomePosixTime(PlutusData):
-    CONSTR_ID = 0
-    value: int
-
-
-@dataclass
 class NoDatum(PlutusData):
     """Universal None type for PlutusData"""
 
