@@ -403,4 +403,3 @@ def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
 
     except Exception as e:
         raise StateValidationError(f"Failed to validate UTxO pair: {e}") from e
-
