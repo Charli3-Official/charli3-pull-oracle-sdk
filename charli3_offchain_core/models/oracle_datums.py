@@ -110,6 +110,14 @@ class FeeConfig(PlutusData):
 
 
 @dataclass
+class SomePosixTime(PlutusData):
+    """Represents a Posix time in a wrapper"""
+
+    CONSTR_ID = 0
+    value: int
+
+
+@dataclass
 class OracleConfiguration(PlutusData):
     """Immutable oracle settings"""
 
@@ -137,7 +145,7 @@ class OracleSettingsDatum(PlutusData):
     time_absolute_uncertainty: PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
     utxo_size_safety_buffer: int  # Lovelace
-    closing_period_started_at: Union[PosixTime, NoDatum]
+    closing_period_started_at: Union[SomePosixTime, NoDatum]
 
 
 @dataclass

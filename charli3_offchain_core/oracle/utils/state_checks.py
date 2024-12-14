@@ -404,21 +404,3 @@ def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
     except Exception as e:
         raise StateValidationError(f"Failed to validate UTxO pair: {e}") from e
 
-
-def get_reference_script_utxo(utxos: Sequence[UTxO]) -> UTxO:
-    """Find reference script UTxO.
-
-    Args:
-        utxos: List of UTxOs to search
-
-    Returns:
-        UTxO: Reference script UTxO
-
-    Raises:
-        StateValidationError: If no reference script UTxO is found
-    """
-    for utxo in utxos:
-        if utxo.output.script:
-            return utxo
-
-    raise StateValidationError("No reference script UTxO found")

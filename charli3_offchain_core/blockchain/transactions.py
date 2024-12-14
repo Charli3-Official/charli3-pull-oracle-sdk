@@ -125,17 +125,18 @@ class TransactionManager:
         signing_key: PaymentSigningKey | ExtendedSigningKey = None,
         validity_start: int | None = None,
         validity_end: int | None = None,
+        fee_buffer: int | None = None,
         metadata: dict | None = None,
     ) -> Transaction:
         """Build script interaction transaction."""
         try:
-            builder = TransactionBuilder(self.chain_query.context)
+            builder = TransactionBuilder(
+                self.chain_query.context, fee_buffer=fee_buffer
+            )
 
             # Add script inputs
             for utxo, redeemer, script in script_inputs:
-                builder.add_script_input(
-                    utxo=utxo, script=script, redeemer=Redeemer(redeemer)
-                )
+                builder.add_script_input(utxo=utxo, script=script, redeemer=redeemer)
 
             # Add script outputs with datums
             for output in script_outputs:
