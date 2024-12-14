@@ -60,6 +60,7 @@ class SettingOption(Enum):
 
 class UpdateBuilder(BaseBuilder):
     REDEEMER = Redeemer(UpdateSettings())
+    FEE_BUFFER = 10_000
 
     async def build_tx(
         self,
@@ -69,7 +70,7 @@ class UpdateBuilder(BaseBuilder):
         utxos: list[UTxO],
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        required_signers: list[VerificationKeyHash],
+        required_signers: list[VerificationKeyHash] | None = None,
     ) -> GovernanceTxResult:
         """Build the update transaction."""
         try:
@@ -90,6 +91,7 @@ class UpdateBuilder(BaseBuilder):
                     (platform_utxo, None, platform_script),
                 ],
                 script_outputs=[modified_settings_utxo.output, platform_utxo.output],
+                fee_buffer=self.FEE_BUFFER,
                 change_address=change_address,
                 signing_key=signing_key,
                 required_signers=required_signers,

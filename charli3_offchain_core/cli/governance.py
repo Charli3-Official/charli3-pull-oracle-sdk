@@ -76,7 +76,6 @@ async def update_settings(config: Path, output: Path | None) -> None:
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
             signing_key=payment_sk,
-            required_signers=platform_config.signers,
         )
         if result.status == ProcessStatus.CANCELLED_BY_USER:
             print_status("Update Status", "Operation cancelled by user", success=True)

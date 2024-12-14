@@ -59,7 +59,7 @@ class GovernanceOrchestrator:
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        required_signers: list[VerificationKeyHash],
+        required_signers: list[VerificationKeyHash] | None = None,
     ) -> GovernanceResult:
         try:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
