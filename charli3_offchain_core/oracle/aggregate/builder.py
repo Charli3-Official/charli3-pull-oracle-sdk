@@ -12,6 +12,7 @@ from pycardano import (
     ExtendedSigningKey,
     MultiAsset,
     PaymentSigningKey,
+    Redeemer,
     ScriptHash,
     Transaction,
     TransactionOutput,
@@ -43,6 +44,7 @@ from charli3_offchain_core.oracle.exceptions import (
 )
 from charli3_offchain_core.oracle.utils import (
     asset_checks,
+    common,
     rewards,
     state_checks,
 )
@@ -132,7 +134,7 @@ class OracleTransactionBuilder:
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
-            script_utxo = state_checks.get_reference_script_utxo(utxos)
+            script_utxo = common.get_reference_script_utxo(utxos)
 
             # Update calculators with current settings
 
@@ -180,8 +182,8 @@ class OracleTransactionBuilder:
             # Build and return transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
-                    (transport, OdvAggregate(), script_utxo),
-                    (agg_state, OdvAggregate(), script_utxo),
+                    (transport, Redeemer(OdvAggregate()), script_utxo),
+                    (agg_state, Redeemer(OdvAggregate()), script_utxo),
                 ],
                 script_outputs=[transport_output, agg_state_output],
                 reference_inputs=[settings_utxo],
@@ -223,7 +225,7 @@ class OracleTransactionBuilder:
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
-            script_utxo = state_checks.get_reference_script_utxo(utxos)
+            script_utxo = common.get_reference_script_utxo(utxos)
 
             # Find pending transports
             pending_transports = state_checks.filter_pending_transports(
@@ -252,9 +254,12 @@ class OracleTransactionBuilder:
 
             # Build transaction
             script_inputs = [
-                (t, CalculateRewards(), script_utxo) for t in pending_transports
+                (t, Redeemer(CalculateRewards()), script_utxo)
+                for t in pending_transports
             ]
-            script_inputs.append((reward_account_utxo, CalculateRewards(), script_utxo))
+            script_inputs.append(
+                (reward_account_utxo, Redeemer(CalculateRewards()), script_utxo)
+            )
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=script_inputs,
