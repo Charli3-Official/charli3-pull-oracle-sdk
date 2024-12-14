@@ -42,7 +42,6 @@ logger = logging.getLogger(__name__)
 @click.group()
 def oracle() -> None:
     """Oracle deployment and management commands."""
-    pass
 
 
 oracle.add_command(
@@ -155,6 +154,7 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa: C901
             iqr_fence_multiplier=deployment_config.timing.iqr_multiplier,
             deployment_config=configs["deployment"],
             fee_config=configs["fee"],
+            nodes_config=deployment_config.nodes,
             signing_key=payment_sk,
             platform_utxo=platform_utxo,
         )

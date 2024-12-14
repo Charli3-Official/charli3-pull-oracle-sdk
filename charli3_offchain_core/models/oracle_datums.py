@@ -1,7 +1,7 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Union
 
 from pycardano import PlutusData, VerificationKeyHash
 
@@ -99,12 +99,28 @@ class Asset(PlutusData):
 
 
 @dataclass
+class SomeAsset(PlutusData):
+    """Represents a native token asset"""
+
+    CONSTR_ID = 0
+    asset: Asset
+
+
+@dataclass
 class FeeConfig(PlutusData):
     """Represents fee configuration"""
 
     CONSTR_ID = 0
-    rate_nft: Union[Asset, NoDatum]
+    rate_nft: Union[SomeAsset, NoDatum]
     reward_prices: RewardPrices
+
+
+@dataclass
+class SomePosixTime(PlutusData):
+    """Represents a Posix time in a wrapper"""
+
+    CONSTR_ID = 0
+    value: int
 
 
 @dataclass
@@ -115,7 +131,7 @@ class OracleConfiguration(PlutusData):
     platform_auth_nft: PolicyId
     closing_period_length: PosixTimeDiff
     reward_dismissing_period_length: PosixTimeDiff
-    fee_token: Union[Asset, NoDatum]
+    fee_token: Union[SomeAsset, NoDatum]
 
     def __post_init__(self) -> None:
         # Add validation for platform_auth_nft length (28 bytes for Cardano)
@@ -151,24 +167,9 @@ class AggregateMessage(PlutusData):
     """Represents an aggregate message from nodes"""
 
     CONSTR_ID = 0
-    node_feeds_sorted_by_feed: List[Tuple[VerificationKeyHash, NodeFeed]]
+    node_feeds_sorted_by_feed: Dict[VerificationKeyHash, NodeFeed]
     node_feeds_count: int
     timestamp: PosixTime
-
-    @classmethod
-    def from_primitive(
-        cls, feeds: List[Tuple[str, int]], timestamp: int
-    ) -> "AggregateMessage":
-        """Create from hex-encoded VKHs and feed values"""
-        sorted_feeds = [
-            (VerificationKeyHash(bytes.fromhex(vkh)), feed) for vkh, feed in feeds
-        ]
-        sorted_feeds.sort(key=lambda x: x[1])  # sorted by NodeFeed
-        return cls(
-            node_feeds_sorted_by_feed=sorted_feeds,
-            node_feeds_count=len(feeds),
-            timestamp=timestamp,
-        )
 
 
 @dataclass
@@ -179,6 +180,14 @@ class AggStateDatum(PlutusData):
     oracle_feed: OracleFeed
     expiry_timestamp: PosixTime
     created_at: PosixTime
+
+
+@dataclass
+class SomeAggStateDatum(PlutusData):
+    """AggState contains oracle feed data"""
+
+    CONSTR_ID = 0
+    aggstate: AggStateDatum
 
 
 @dataclass
@@ -237,7 +246,7 @@ class AggStateVariant(PlutusData):
     """Agg state variant of OracleDatum"""
 
     CONSTR_ID = 3
-    datum: Union[AggStateDatum, NoDatum]
+    datum: Union[SomeAggStateDatum, NoDatum]
 
 
 @dataclass
