@@ -120,7 +120,7 @@ def validate_message_nodes(
         registered_nodes = set(settings.nodes.node_map.keys())
 
         # Get set of VKHs from message
-        message_nodes = {vkh for vkh, _ in msg.node_feeds_sorted_by_feed}
+        message_nodes = set(msg.node_feeds_sorted_by_feed.keys())
 
         # Validate all message nodes are registered
         if not message_nodes.issubset(registered_nodes):

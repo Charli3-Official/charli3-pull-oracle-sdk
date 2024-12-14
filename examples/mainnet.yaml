@@ -49,7 +49,7 @@ timing:
   closing_period: 3600000 # 1 hour
   reward_dismissing_period: 7200000 # 2 hours
   aggregation_liveness: 300000 # 5 minutes
-  time_uncertainty: 60000 # 1 minute
+  time_uncertainty: 180000 # 3 minutes
   iqr_multiplier: 150 # 1.5x multiplier for outlier detection
 
 # Number of reward transport UTxOs (minimum 4 for mainnet)

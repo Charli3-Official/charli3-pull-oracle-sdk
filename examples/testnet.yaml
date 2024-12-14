@@ -53,8 +53,8 @@ timing:
   # Shorter periods for testing
   closing_period: 1800000              # 30 minutes
   reward_dismissing_period: 3600000    # 1 hour
-  aggregation_liveness: 180000         # 3 minutes
-  time_uncertainty: 600000             # 10 minutes
+  aggregation_liveness: 600000         # 10 minutes
+  time_uncertainty: 180000             # 3 minutes
   iqr_multiplier: 150                  # 1.5x multiplier for outlier detection
 
 # Can use fewer transport UTxOs on testnet
@@ -65,3 +65,27 @@ blueprint_path: "artifacts/testnet_plutus.json"
 
 # Create both reference scripts for testing
 create_reference: true
+
+nodes:
+  nodes:
+  - feed_vkh: 007df380aef26e44739db3f4fe67d8137446e630dab3df16d9fbddc5
+    payment_vkh: b296714efefe2d991bb7eb002b48b024d1a152691c6fe9e0f76511c5
+  - feed_vkh: 018ab1dd5f33ca2e0ae6ccb694ea379d841bf5f4d2d5756452a2117d
+    payment_vkh: e12ee69ac72fff83a39d690830595cf11ca5a2f0d2d69b3f859f8f43
+  - feed_vkh: e47c436dbd0d1f7642ce2f4a8e36c4facae2b8d9d4c3267380cb1f5f
+    payment_vkh: 13bc38b4b81d4b942fc61be4533a165d837db56bedaf1a991e90fcdf
+  - feed_vkh: db4d690afb9f75d0a4ce983b41349220f9d0b4ada424f3d625963f85
+    payment_vkh: aed02a7e20098dc1415f669a1816473650b295136ff0fc0f9a09be0c
+  - feed_vkh: e8ca8fe77947c4947af2fb90a349a191b37fe3fcc622b33acac52004
+    payment_vkh: e84ef5d37ad9cb2ee66fa2669f173e8d99bfd78179bd19efacc73c43
+  - feed_vkh: 7a02ee13cf285d316c584de37ca91786f36be7dad5050583f882387e
+    payment_vkh: 9d90106063f17b270408613d37d02e774cc0a1a722a5f38d7384379c
+  - feed_vkh: dea736e9914864960220d8f86ee82630ed28ba8a5d25d360130618a3
+    payment_vkh: 774c653c91b3851ea8359c40142a3a6bd2e5179660ae221df69cd0e3
+  - feed_vkh: cd2aae9043211567a007713f3405b06915fcf7bef97d297ebbc6412f
+    payment_vkh: a3a7bb7973cae8b3860588617e51484459ec617e4188b929fd8db81c
+  - feed_vkh: a700026c2fc5fc6a0250b9a3c38116268cb7d7e7bf26a1fd3487ef8f
+    payment_vkh: 2896f8e6afd47954d3ca2816e81658f5574e272a455d9fa6ef3b1e64
+  - feed_vkh: 5e05b93679f60e91568c29ec3d5ed2f5f7d19076f02f088a34e7e0c4
+    payment_vkh: 3663f232d3ab712ede73500bb631d860c7050052f52ec90e3910c442
+  required_signatures: 9

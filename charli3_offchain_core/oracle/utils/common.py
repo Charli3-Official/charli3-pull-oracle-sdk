@@ -1,3 +1,5 @@
+""" Common utility functions for oracle operations. """
+
 from pycardano import ScriptHash, UTxO
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
@@ -26,8 +28,17 @@ async def get_script_utxos(
 
 
 def get_reference_script_utxo(utxos: list[UTxO]) -> UTxO:
-    """Find and validate reference script UTxO."""
+    """Find reference script UTxO.
 
+    Args:
+        utxos: List of UTxOs to search
+
+    Returns:
+        UTxO: Reference script UTxO
+
+    Raises:
+        StateValidationError: If no reference script UTxO is found
+    """
     for utxo in utxos:
         if utxo.output.script:
             return utxo

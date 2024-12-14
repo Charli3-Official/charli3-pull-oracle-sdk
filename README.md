@@ -335,13 +335,9 @@ odv-multisig-charli3-offchain-core/
 │   │       ├── __init__.py
 │   │       ├── asset_checks.py # Asset validation
 │   │       ├── common.py      # Common utilities
-│   │       ├── consensus.py   # Consensus calculations
-│   │       ├── fee_checks.py  # Fee validation
 │   │       ├── rewards.py     # Reward calculations
 │   │       ├── signature_checks.py # Signature validation
 │   │       ├── state_checks.py # State validation
-│   │       ├── time_checks.py # Time validation
-│   │       └── value_checks.py # Value validation
 │   │
 │   ├── platform/             # Platform operations
 │   │   ├── __init__.py
