@@ -65,7 +65,7 @@ class ChainQueryConfig:
     min_utxo_value: int = 2_000_000
 
     # Time handling
-    use_wall_clock: bool = True
+    use_wall_clock: bool = False
     network_config: NetworkConfig | None = None
 
 

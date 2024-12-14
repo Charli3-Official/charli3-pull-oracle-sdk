@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .multisig import MultisigConfig
 from .network import NetworkConfig
+from .nodes import NodesConfig
 from .settings import FeeConfig, TimingConfig
 from .token import TokenConfig
 from .utils import load_yaml_config
@@ -18,6 +19,7 @@ class DeploymentConfig:
     tokens: TokenConfig
     fees: FeeConfig
     timing: TimingConfig
+    nodes: NodesConfig
     transport_count: int = 4
     multi_sig: MultisigConfig | None = None
     blueprint_path: Path = Path("artifacts/plutus.json")
@@ -34,6 +36,7 @@ class DeploymentConfig:
             multi_sig=MultisigConfig.from_dict(data.get("multisig", {})),
             fees=FeeConfig.from_dict(data.get("fees", {})),
             timing=TimingConfig.from_dict(data.get("timing", {})),
+            nodes=NodesConfig.from_dict(data.get("nodes", {})),
             transport_count=data.get("transport_count", 4),
             blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),
             create_reference=data.get("create_reference", True),
