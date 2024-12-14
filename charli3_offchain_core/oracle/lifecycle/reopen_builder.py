@@ -21,7 +21,7 @@ from charli3_offchain_core.oracle.exceptions import ClosingError
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
     get_oracle_settings_by_policy_id,
-    is_oracle_closing
+    is_oracle_closing,
 )
 
 from .base import BaseBuilder, LifecycleTxResult
@@ -56,11 +56,13 @@ class ReopenBuilder(BaseBuilder):
             modified_datum = deepcopy(settings_datum)
             modified_settings_utxo = deepcopy(settings_utxo)
             modified_datum.closing_period_started_at = NoDatum()
-            
+
             modified_settings_utxo.output.datum = OracleSettingsVariant(modified_datum)
 
-            validity_start = self.chain_query.last_block_slot 
-            validity_end = validity_start + (settings_datum.time_absolute_uncertainty // 1000)
+            validity_start = self.chain_query.last_block_slot
+            validity_end = validity_start + (
+                settings_datum.time_absolute_uncertainty // 1000
+            )
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -80,8 +82,7 @@ class ReopenBuilder(BaseBuilder):
             )
 
             return LifecycleTxResult(
-                transaction=tx,
-                settings_utxo=modified_settings_utxo
+                transaction=tx, settings_utxo=modified_settings_utxo
             )
 
         except Exception as e:
