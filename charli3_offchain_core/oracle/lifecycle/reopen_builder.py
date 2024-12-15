@@ -59,6 +59,8 @@ class ReopenBuilder(BaseBuilder):
 
             modified_settings_utxo.output.datum = OracleSettingsVariant(modified_datum)
 
+            modified_settings_utxo.output.datum_hash = None
+
             validity_start = self.chain_query.last_block_slot
             validity_end = validity_start + (
                 settings_datum.time_absolute_uncertainty // 1000
