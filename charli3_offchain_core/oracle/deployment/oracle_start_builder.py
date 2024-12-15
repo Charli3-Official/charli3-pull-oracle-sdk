@@ -268,7 +268,6 @@ class OracleStartBuilder:
             # If fee token is some native token then there is no need to manage leftover fee token amount
             utxo_size_safety_buffer = 0
 
-        node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
         return OracleSettingsVariant(
             datum=OracleSettingsDatum(
                 nodes=Nodes(node_map=node_map),

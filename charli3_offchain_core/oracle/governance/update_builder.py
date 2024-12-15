@@ -255,6 +255,7 @@ async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
                         )
                     )
                     deployed_core_utxo.output.datum = new_datum
+                    deployed_core_utxo.output.datum_hash = None
                     return deployed_core_utxo
                 else:
                     continue
