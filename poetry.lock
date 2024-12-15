@@ -198,13 +198,13 @@ test = ["coverage (>=7)", "hypothesis", "pytest"]
 
 [[package]]
 name = "certifi"
-version = "2024.8.30"
+version = "2024.12.14"
 description = "Python package for providing Mozilla's CA Bundle."
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "certifi-2024.8.30-py3-none-any.whl", hash = "sha256:922820b53db7a7257ffbda3f597266d435245903d80737e34f8a45ff3e3230d8"},
-    {file = "certifi-2024.8.30.tar.gz", hash = "sha256:bec941d2aa8195e248a60b31ff9f0558284cf01a52591ceda73ea9afffd69fd9"},
+    {file = "certifi-2024.12.14-py3-none-any.whl", hash = "sha256:1275f7a45be9464efc1173084eaa30f866fe2e47d389406136d332ed4967ec56"},
+    {file = "certifi-2024.12.14.tar.gz", hash = "sha256:b650d30f370c2b724812bee08008be0c4163b163ddaec3f2546c1caf65f191db"},
 ]
 
 [[package]]
@@ -1166,7 +1166,7 @@ files = [
 
 [[package]]
 name = "pycardano"
-version = "0.12.0"
+version = "0.12.2"
 description = "A Cardano library in Python"
 optional = false
 python-versions = "^3.8.1"
@@ -1193,9 +1193,9 @@ websockets = "^13.0"
 
 [package.source]
 type = "git"
-url = "https://github.com/talhahussain7/pycardano.git"
-reference = "fix/odv-multisig-offchain"
-resolved_reference = "ef528df31dad596be6f08dba8469ff71cbdf781a"
+url = "https://github.com/Charli3-Official/pycardano.git"
+reference = "odv-multisig"
+resolved_reference = "5e277ef4ea7aeeb3e5f9a85392733f909c6f3d4b"
 
 [[package]]
 name = "pycparser"
@@ -1816,4 +1816,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
-content-hash = "5776c72d4363b4ca5cb08ccd4552c4b26a99e9ec4b39406ffc7d7c8b1d19ad6c"
+content-hash = "523f8ee9dc4bb74800c8750c05c9aedf88639cd64d52b06b2637fc0e85f0f223"
