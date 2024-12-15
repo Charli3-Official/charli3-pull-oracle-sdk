@@ -151,11 +151,6 @@ class TransactionManager:
                 builder.mint = mint
                 builder.add_minting_script(script=mint_script, redeemer=mint_redeemer)
 
-            if validity_start is not None:
-                builder.validity_start = validity_start
-            if validity_end is not None:
-                builder.ttl = validity_end
-
             return await self.build_tx(
                 builder=builder,
                 change_address=change_address,

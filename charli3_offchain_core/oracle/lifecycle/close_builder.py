@@ -67,6 +67,7 @@ class CloseBuilder(BaseBuilder):
             modified_settings_utxo.output.datum = OracleSettingsVariant(
                 modified_settings_datum
             )
+            modified_settings_utxo.output.datum_hash = None
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
