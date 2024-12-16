@@ -26,7 +26,6 @@ from charli3_offchain_core.oracle.config import (
 from charli3_offchain_core.oracle.deployment.orchestrator import (
     OracleDeploymentOrchestrator,
 )
-from charli3_offchain_core.oracle.lifecycle.orchestrator import LifecycleOrchestrator
 from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
 from ..blockchain.chain_query import ChainQuery

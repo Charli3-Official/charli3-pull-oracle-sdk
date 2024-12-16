@@ -309,5 +309,5 @@ def validate_setting(
         time_uncertainty = current_settings[SettingOption.TIME_UNCERTAINTY]
         if value <= time_uncertainty:
             raise SettingsValidationError(
-                f"Value must be greater than time uncertainty ({time_uncertainty})"
+                f"Aggregation liveness ({value}) must be greater than time uncertainty ({time_uncertainty})"
             )
