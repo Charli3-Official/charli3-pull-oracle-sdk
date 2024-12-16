@@ -17,3 +17,4 @@ class ProcessStatus(str, Enum):
     WAITING_CONFIRMATION = "waiting_confirmation"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED_BY_USER = "cancelled_by_user"
