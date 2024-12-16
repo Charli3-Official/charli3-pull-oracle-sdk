@@ -68,6 +68,19 @@ class Nodes(PlutusData):
             for k, v in sorted(self.node_map.items(), key=lambda x: str(x[0]))
         }
 
+    @classmethod
+    def empty(cls) -> "Nodes":
+        """
+        Creates an empty Nodes instance with an empty node_map.
+        Returns:
+            Nodes: A new Nodes instance with an empty map.
+        """
+        return cls(node_map={})
+
+    @property
+    def length(self) -> int:
+        return len(self.node_map)
+
 
 @dataclass
 class RewardPrices(PlutusData):

@@ -264,3 +264,27 @@ class SyncError(RecoveryError):
     """Raised when oracle state synchronization fails."""
 
     pass
+
+
+class GovernanceError(OracleError):
+    """Base exception for all governance-related errors."""
+
+    pass
+
+
+class UpdatingError(GovernanceError):
+    """Raised when oracle update operations fail."""
+
+    pass
+
+
+class SettingsValidationError(GovernanceError):
+    """Raised when settings validation fails."""
+
+    pass
+
+
+class UpdateCancelled(GovernanceError):  # noqa
+    """Exception raised when user intentionally cancels the update."""
+
+    pass

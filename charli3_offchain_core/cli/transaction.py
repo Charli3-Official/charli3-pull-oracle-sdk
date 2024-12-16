@@ -13,13 +13,13 @@ from charli3_offchain_core.cli.config.formatting import (
     print_hash_info,
     print_status,
 )
+from charli3_offchain_core.cli.config.network import NetworkConfig
 from charli3_offchain_core.cli.config.utils import async_command
 
 from ..blockchain.transactions import TransactionManager
 from ..constants.status import ProcessStatus
 from .base import create_chain_query
 from .config.keys import KeyManager
-from .config.network import NetworkConfig
 
 logger = logging.getLogger(__name__)
 

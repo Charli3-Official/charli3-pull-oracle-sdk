@@ -16,6 +16,16 @@ def print_header(text: str) -> None:
     click.echo()
 
 
+def print_information(text: str) -> None:
+    """Print styled information text."""
+    click.secho(f"=== {text} ===", fg=CliColor.INFO, bold=True)
+
+
+def print_title(text: str) -> None:
+    """Print styled title text."""
+    click.secho(f"=== {text} ===", fg=CliColor.TITLE, bold=True)
+
+
 def print_address_info(label: str, address: str) -> None:
     """Print formatted address information."""
     click.echo(
@@ -117,8 +127,7 @@ def platform_success_callback(tx: Transaction, data: dict) -> None:
         success=True,
     )
     print_hash_info("Transaction ID", tx.id)
-    print_hash_info("Platform Address", data["platform_address"])
-    print_hash_info("Policy ID", data["policy_id"])
+    print_hash_info("Platform Address", data["script_addr"])
 
 
 # Example usage in cli/oracle.py:
@@ -155,6 +164,4 @@ def print_platform_auth_config_prompt(auth_config: any) -> bool:
     for i, party in enumerate(auth_config.multisig.parties, start=1):
         print_address_info(f"PKH {i}", party)
 
-    return print_confirmation_message_prompt(
-        "Ensure that the above configurations are correct?"
-    )
+    return print_confirmation_message_prompt("Proceed with token minting?")

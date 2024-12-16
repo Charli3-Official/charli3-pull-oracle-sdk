@@ -26,7 +26,6 @@ from charli3_offchain_core.oracle.config import (
 from charli3_offchain_core.oracle.deployment.orchestrator import (
     OracleDeploymentOrchestrator,
 )
-from charli3_offchain_core.oracle.lifecycle.orchestrator import LifecycleOrchestrator
 from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
 from ..blockchain.chain_query import ChainQuery
@@ -212,7 +211,6 @@ def setup_management_from_config(config: Path) -> tuple[
     OracleAddresses,
     ChainQuery,
     TransactionManager,
-    LifecycleOrchestrator,
     PlatformAuthFinder,
 ]:
     management_config = ManagementConfig.from_yaml(config)
@@ -235,19 +233,11 @@ def setup_management_from_config(config: Path) -> tuple[
     tx_manager = TransactionManager(chain_query)
     platform_auth_finder = PlatformAuthFinder(chain_query)
 
-    orchestrator = LifecycleOrchestrator(
-        chain_query=chain_query,
-        tx_manager=tx_manager,
-        script_address=oracle_addresses.script_address,
-        status_callback=format_status_update,
-    )
-
     return (
         management_config,
         keys.payment_sk,
         oracle_addresses,
         chain_query,
         tx_manager,
-        orchestrator,
         platform_auth_finder,
     )
