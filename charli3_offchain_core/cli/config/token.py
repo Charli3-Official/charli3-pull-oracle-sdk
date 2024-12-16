@@ -8,7 +8,7 @@ class TokenConfig:
     platform_auth_policy: str
     fee_token_policy: str
     fee_token_name: str
-    oracle_policy: str
+    oracle_policy: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TokenConfig":

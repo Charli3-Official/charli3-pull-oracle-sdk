@@ -112,7 +112,7 @@ def print_confirmation_prompt(addresses: dict[str, str]) -> bool:
 
 def oracle_success_callback(tx: Transaction, data: dict) -> None:
     print_status(
-        "Oracle deployment",
+        "Oracle",
         "Transaction submitted successfully",
         success=True,
     )

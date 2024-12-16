@@ -35,7 +35,7 @@ from .config.formatting import (
     print_status,
 )
 from .config.utils import async_command
-from .setup import setup_oracle_from_config
+from .setup import setup_management_from_config, setup_oracle_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,160 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
 
     except Exception as e:
         logger.error("Deployment failed", exc_info=e)
+        raise click.ClickException(str(e)) from e
+
+
+@oracle.command()
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to deployment configuration YAML",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output file for transaction data",
+)
+@async_command
+async def close(config: Path, output: Path | None) -> None:
+    """Close an oracle instance using configuration file."""
+    try:
+        print_header("Oracle Close")
+        (
+            management_config,
+            payment_sk,
+            oracle_addresses,
+            _,
+            tx_manager,
+            orchestrator,
+            platform_auth_finder,
+        ) = setup_management_from_config(config)
+
+        platform_utxo = await platform_auth_finder.find_auth_utxo(
+            policy_id=management_config.tokens.platform_auth_policy,
+            platform_address=oracle_addresses.platform_address,
+        )
+        if not platform_utxo:
+            raise click.ClickException("No platform auth UTxO found")
+
+        platform_script = await platform_auth_finder.get_platform_script(
+            oracle_addresses.platform_address
+        )
+        platform_config = platform_auth_finder.get_script_config(platform_script)
+
+        result = await orchestrator.close_oracle(
+            oracle_policy=management_config.tokens.oracle_policy,
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            change_address=oracle_addresses.admin_address,
+            signing_key=payment_sk,
+        )
+
+        if result.status != ProcessStatus.TRANSACTION_BUILT:
+            raise click.ClickException(f"Close failed: {result.error}")
+
+        if platform_config.threshold == 1:
+            if print_confirmation_message_prompt("Proceed with oracle close?"):
+                status, _ = await tx_manager.sign_and_submit(
+                    result.transaction, [payment_sk], wait_confirmation=True
+                )
+                if status != ProcessStatus.TRANSACTION_CONFIRMED:
+                    raise click.ClickException(f"Close failed: {status}")
+                print_status("Close", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig close transaction?"):
+            output_path = output or Path("tx_oracle_close.json")
+            with output_path.open("w") as f:
+                json.dump(
+                    {
+                        "transaction": result.transaction.to_cbor_hex(),
+                        "signed_by": [],
+                        "threshold": platform_config.threshold,
+                    },
+                    f,
+                )
+            print_status("Transaction", "saved successfully", success=True)
+            print_hash_info("Output file", str(output_path))
+
+    except Exception as e:
+        logger.error("Close failed", exc_info=e)
+        raise click.ClickException(str(e)) from e
+
+
+@oracle.command()
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to deployment configuration YAML",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output file for transaction data",
+)
+@async_command
+async def reopen(config: Path, output: Path | None) -> None:
+    """Reopen a closed oracle instance using configuration file."""
+    try:
+        print_header("Oracle Reopen")
+        (
+            management_config,
+            payment_sk,
+            oracle_addresses,
+            _,
+            tx_manager,
+            orchestrator,
+            platform_auth_finder,
+        ) = setup_management_from_config(config)
+
+        platform_utxo = await platform_auth_finder.find_auth_utxo(
+            policy_id=management_config.tokens.platform_auth_policy,
+            platform_address=oracle_addresses.platform_address,
+        )
+        if not platform_utxo:
+            raise click.ClickException("No platform auth UTxO found")
+
+        platform_script = await platform_auth_finder.get_platform_script(
+            oracle_addresses.platform_address
+        )
+        platform_config = platform_auth_finder.get_script_config(platform_script)
+
+        result = await orchestrator.reopen_oracle(
+            oracle_policy=management_config.tokens.oracle_policy,
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            change_address=oracle_addresses.admin_address,
+            signing_key=payment_sk,
+        )
+
+        if result.status != ProcessStatus.TRANSACTION_BUILT:
+            raise click.ClickException(f"Reopen failed: {result.error}")
+
+        if platform_config.threshold == 1:
+            if print_confirmation_message_prompt("Proceed with oracle reopen?"):
+                status, _ = await tx_manager.sign_and_submit(
+                    result.transaction, [payment_sk], wait_confirmation=True
+                )
+                if status != ProcessStatus.TRANSACTION_CONFIRMED:
+                    raise click.ClickException(f"Reopen failed: {status}")
+                print_status("Reopen", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig reopen transaction?"):
+            output_path = output or Path("tx_oracle_reopen.json")
+            with output_path.open("w") as f:
+                json.dump(
+                    {
+                        "transaction": result.transaction.to_cbor_hex(),
+                        "signed_by": [],
+                        "threshold": platform_config.threshold,
+                    },
+                    f,
+                )
+            print_status("Transaction", "saved successfully", success=True)
+            print_hash_info("Output file", str(output_path))
+
+    except Exception as e:
+        logger.error("Reopen failed", exc_info=e)
         raise click.ClickException(str(e)) from e
 
 

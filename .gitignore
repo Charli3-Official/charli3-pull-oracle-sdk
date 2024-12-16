@@ -4,6 +4,7 @@ tx_platform_mint.json
 tx_oracle_deploy.json
 tx_oracle_close.json
 tx_oracle_update_settings.json
+tx_oracle_reopen.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
