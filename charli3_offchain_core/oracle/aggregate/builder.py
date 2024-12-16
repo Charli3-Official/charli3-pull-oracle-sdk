@@ -69,6 +69,33 @@ class RewardsResult:
     new_transports: list[TransactionOutput]
     new_reward_account: TransactionOutput
 
+    @property
+    def reward_distribution(self) -> dict[int, int]:
+        """Get reward distribution from new reward account."""
+        account = self.new_reward_account.datum.datum
+        distribution = {}
+        for i in range(0, len(account.nodes_to_rewards), 2):
+            node_id = account.nodes_to_rewards[i]
+            amount = account.nodes_to_rewards[i + 1]
+            distribution[node_id] = amount
+        return distribution
+
+    @property
+    def platform_fee(self) -> int:
+        """Calculate total platform fee from new transports."""
+        total_fee = 0
+        for transport in self.new_transports:
+            if hasattr(transport.datum.datum, "aggregation") and hasattr(
+                transport.datum.datum.aggregation, "rewards_amount_paid"
+            ):
+                total_fee += transport.datum.datum.aggregation.rewards_amount_paid
+        return total_fee
+
+    @property
+    def total_distributed(self) -> int:
+        """Calculate total rewards distributed."""
+        return sum(self.reward_distribution.values()) + self.platform_fee
+
 
 class OracleTransactionBuilder:
     """Builder for Oracle transactions with comprehensive validation."""

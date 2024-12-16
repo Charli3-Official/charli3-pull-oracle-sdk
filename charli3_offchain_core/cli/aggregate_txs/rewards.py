@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 @click.group()
 def rewards() -> None:
     """Reward calculation and distribution commands."""
-    pass
 
 
 @rewards.command()
@@ -75,31 +74,28 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             change_address=change_address,
         )
 
-        if not result.consensus_values:
-            click.echo("No pending rewards to process")
-            return
-
         # Display transaction details
         if not print_confirmation_prompt(
             {
                 "Transports to Process": len(result.new_transports),
-                "Total Nodes": len(result.reward_distribution.node_rewards),
-                "Platform Fee": result.reward_distribution.platform_fee,
+                "Total Nodes": len(result.reward_distribution),
+                "Platform Fee": result.platform_fee,
+                "Total Distribution": result.total_distributed,
             }
         ):
             raise click.Abort()
 
         # Submit transaction
         print_progress("Submitting rewards transaction...")
-        status, tx = await ctx.tx_manager.sign_and_submit(
+        tx_status, tx = await ctx.tx_manager.sign_and_submit(
             result.transaction, [signing_key], wait_confirmation=wait
         )
 
-        click.secho(f"\n✓ Transaction {status}!", fg="green")
+        click.secho(f"\n✓ Transaction {tx_status}!", fg="green")
         click.echo(f"Transaction ID: {tx.id}")
 
-        # Display reward details
-        if status == "confirmed":
+        # Display detailed results
+        if tx_status == "confirmed":
             _print_reward_summary(result)
 
     except TransactionError as e:
@@ -184,15 +180,27 @@ def _print_reward_summary(result: RewardsResult) -> None:
     """Print summary of processed rewards."""
     click.echo("\nReward Processing Summary:")
     click.echo("-" * 40)
+    click.echo(f"Transaction ID: {result.transaction.id}")
     click.echo(f"Processed Transports: {len(result.new_transports)}")
-    click.echo(f"Total Consensus Values: {len(result.consensus_values)}")
 
+    # Print new transport details
+    click.echo("\nNew Transport UTxOs:")
+    for transport in result.new_transports:
+        datum = transport.datum.variant.datum
+        if hasattr(datum, "aggregation"):
+            click.echo(f"- Fee paid: {datum.aggregation.rewards_amount_paid}")
+            click.echo(f"- Oracle feed: {datum.aggregation.oracle_feed}")
+            click.echo(
+                f"- Node count: {len(datum.aggregation.message.node_feeds_sorted_by_feed)}"
+            )
+
+    # Print reward distribution
     click.echo("\nReward Distribution:")
-    for node_id, amount in result.reward_distribution.node_rewards.items():
+    for node_id, amount in result.reward_distribution.items():
         click.echo(f"Node {node_id}: {amount}")
 
-    click.echo(f"\nPlatform Fee: {result.reward_distribution.platform_fee}")
-    click.echo(f"Total Distributed: {result.reward_distribution.total_distributed}")
+    click.echo(f"\nPlatform Fee: {result.platform_fee}")
+    click.echo(f"Total Distributed: {result.total_distributed}")
 
 
 def _print_reward_status(

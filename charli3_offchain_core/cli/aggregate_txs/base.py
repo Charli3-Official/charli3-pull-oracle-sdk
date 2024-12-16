@@ -28,23 +28,66 @@ class TxConfig:
     fee_token_name: str  # Fee token name
     wallet: WalletConfig  # Wallet configuration with mnemonic
 
+    def validate(self) -> None:
+        """Validate complete configuration."""
+        # Validate network configuration
+        if not self.network:
+            raise ValueError("Network configuration required")
+        self.network.validate()
+
+        # Validate addresses and IDs
+        if not self.script_address:
+            raise ValueError("Script address required")
+        if not self.policy_id:
+            raise ValueError("Policy ID required")
+        if not self.fee_token_policy_id:
+            raise ValueError("Fee token policy ID required")
+        if not self.fee_token_name:
+            raise ValueError("Fee token name required")
+
+        # Validate wallet configuration
+        if not self.wallet:
+            raise ValueError("Wallet configuration required")
+        if not self.wallet.mnemonic:
+            raise ValueError("Wallet mnemonic required")
+
     @classmethod
     def from_yaml(cls, path: Path) -> "TxConfig":
         """Load transaction config from YAML file."""
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
 
-        with path.open("r") as f:
-            data = yaml.safe_load(f)
+        try:
+            with path.open("r") as f:
+                data = yaml.safe_load(f)
 
-        return cls(
-            network=NetworkConfig.from_dict(data.get("network", {})),
-            script_address=data["script_address"],
-            policy_id=data["policy_id"],
-            fee_token_policy_id=data["fee_token"]["fee_token_policy_id"],
-            fee_token_name=data["fee_token"]["fee_token_name"],
-            wallet=WalletConfig.from_dict(data["wallet"]),
-        )
+            # Handle both old and new fee token field names
+            if "fee_token" in data:
+                fee_token = data["fee_token"]
+                fee_token_policy_id = fee_token.get(
+                    "fee_token_policy"
+                ) or fee_token.get("fee_token_policy_id")
+                fee_token_name = fee_token["fee_token_name"]
+            else:
+                raise ValueError("Missing fee_token configuration")
+
+            if not fee_token_policy_id:
+                raise ValueError("Missing fee token policy ID")
+
+            return cls(
+                network=NetworkConfig.from_dict(data.get("network", {})),
+                script_address=data["script_address"],
+                policy_id=data["policy_id"],
+                fee_token_policy_id=fee_token_policy_id,
+                fee_token_name=fee_token_name,
+                wallet=WalletConfig.from_dict(data["wallet"]),
+            )
+        except KeyError as e:
+            logger.error("Failed to load configuration: %s", e)
+            raise ValueError(f"Invalid configuration file: {e}") from e
+        except Exception as e:
+            logger.error("Failed to load configuration: %s", e)
+            raise ValueError(f"Error loading configuration: {e}") from e
 
     def get_script_address(self) -> Address:
         """Get script address as Address object."""

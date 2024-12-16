@@ -2,15 +2,14 @@
 
 import click
 
-from .odv import odv
+from .odv_aggregate import odv_aggregate
 from .rewards import rewards
 
 
 @click.group()
 def tx() -> None:
     """Oracle transaction commands."""
-    pass
 
 
-tx.add_command(odv)
+tx.add_command(odv_aggregate)
 tx.add_command(rewards)
