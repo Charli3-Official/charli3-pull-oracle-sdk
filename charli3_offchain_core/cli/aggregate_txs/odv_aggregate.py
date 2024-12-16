@@ -6,16 +6,24 @@ from pathlib import Path
 from typing import Any
 
 import click
-from pycardano import UTxO, VerificationKeyHash
+from pycardano import PaymentExtendedSigningKey, UTxO, VerificationKeyHash
 
-from charli3_offchain_core.models.oracle_datums import AggregateMessage
+from charli3_offchain_core.models.oracle_datums import (
+    AggregateMessage,
+    AggStateVariant,
+    NoDatum,
+)
 from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,
     OracleTransactionBuilder,
 )
 from charli3_offchain_core.oracle.exceptions import TransactionError
+from charli3_offchain_core.oracle.utils import (
+    asset_checks,
+    state_checks,
+)
 
-from ..config.formatting import print_confirmation_prompt, print_header, print_progress
+from ..config.formatting import print_header, print_progress
 from ..config.utils import async_command
 from .base import TransactionContext, TxConfig, tx_options
 
@@ -36,12 +44,20 @@ def odv_aggregate() -> None:
     help="JSON file containing node feeds and signatures",
 )
 @click.option(
+    "--node-keys-dir",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Directory containing node signing keys",
+)
+@click.option(
     "--wait/--no-wait",
     default=True,
     help="Wait for transaction confirmation",
 )
 @async_command
-async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
+async def submit(
+    config: Path, feeds_file: Path, node_keys_dir: Path, wait: bool
+) -> None:
     """Submit ODV transaction with aggregated feeds.
 
     Example:
@@ -51,7 +67,7 @@ async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
         # Load configuration and initialize context
         print_header("ODV Transaction Submission")
 
-        # Load and validate configuration
+        # Load configuration
         print_progress("Loading configuration...")
         tx_config = TxConfig.from_yaml(config)
         ctx = TransactionContext(tx_config)
@@ -63,8 +79,20 @@ async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
             validate_feed_data(feed_data)
             message = process_feed_data(feed_data)
 
-        # Load keys
-        print_progress("Loading keys...")
+        # Load node signing keys
+        print_progress("Loading node keys...")
+        node_keys = []
+        for node_dir in sorted(node_keys_dir.glob("node_*")):
+            try:
+                skey = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
+                node_keys.append(skey)
+            except Exception as e:  # pylint: disable=broad-except
+                logger.warning("Failed to load key from %s: %s", node_dir, e)
+
+        if not node_keys:
+            raise click.ClickException("No node keys found")
+
+        # Load primary signing key
         signing_key, change_address = ctx.load_keys()
 
         # Initialize transaction builder
@@ -77,27 +105,18 @@ async def submit(config: Path, feeds_file: Path, wait: bool) -> None:
         )
 
         # Build ODV transaction
-        print_progress("Building ODV transaction...")
+        print_progress("Building ODV Aggregate transaction...")
         result = await builder.build_odv_tx(
             message=message,
             signing_key=signing_key,
             change_address=change_address,
         )
 
-        # Display transaction details
-        if not print_confirmation_prompt(
-            {
-                "Node Count": len(message.node_feeds_sorted_by_feed),
-                "Required Fees": result.transaction.transaction_body.fee,
-                "Transaction Size": len(result.transaction.to_cbor()),
-            }
-        ):
-            raise click.Abort()
-
-        # Submit transaction
-        print_progress("Submitting transaction...")
+        # Sign transaction with all node keys
+        print_progress("Signing transaction with node keys...")
+        all_signing_keys = [signing_key, *node_keys]
         tx_status, tx = await ctx.tx_manager.sign_and_submit(
-            result.transaction, [signing_key], wait_confirmation=wait
+            result.transaction, all_signing_keys, wait_confirmation=wait
         )
 
         click.secho(f"\n✓ Transaction {tx_status}!", fg="green")
@@ -125,33 +144,88 @@ async def status(config: Path) -> None:
         charli3 tx odv_aggregate status --config tx-config.yaml
     """
     try:
-        print_header("ODV Status Check")
+        print_header("ODV Aggregate Status Check")
         print_progress("Loading configuration...")
         tx_config = TxConfig.from_yaml(config)
         ctx = TransactionContext(tx_config)
 
-        # Get UTxO counts
+        # Get UTxOs and current time
         print_progress("Checking UTxO status...")
         script_utxos = await ctx.chain_query.get_utxos(ctx.script_address)
+        current_time = ctx.chain_query.get_current_posix_chain_time_ms()
 
-        empty_pairs = sum(1 for utxo in script_utxos if _is_empty_transport_pair(utxo))
-        pending_pairs = sum(1 for utxo in script_utxos if _is_pending_transport(utxo))
+        # Filter transport states using utility functions
+        transport_utxos = asset_checks.filter_utxos_by_token_name(
+            script_utxos, ctx.policy_id, "RewardTransport"
+        )
+        empty_transports = state_checks.filter_empty_transports(transport_utxos)
+        pending_transports = state_checks.filter_pending_transports(transport_utxos)
+
+        # Filter agg states
+        agg_state_utxos = asset_checks.filter_utxos_by_token_name(
+            script_utxos, ctx.policy_id, "AggregationState"
+        )
+        empty_agg_states = state_checks.filter_empty_agg_states(agg_state_utxos)
+
+        # Get all valid agg states and separate empty from expired
+        valid_agg_states = state_checks.filter_valid_agg_states(
+            agg_state_utxos, current_time
+        )
+
+        # Filter expired states (valid states that aren't empty)
+        expired_agg_states = [
+            utxo
+            for utxo in valid_agg_states
+            if utxo.output.datum
+            and isinstance(utxo.output.datum, AggStateVariant)
+            and not isinstance(utxo.output.datum.datum, NoDatum)
+            and utxo.output.datum.datum.aggstate.expiry_timestamp < current_time
+        ]
 
         # Display status
-        click.echo("\nODV Status:")
+        click.echo("\nODV Aggregate Status:")
         click.echo("-" * 40)
-        click.echo(f"Available Empty Pairs: {empty_pairs}")
-        click.echo(f"Pending Validation: {pending_pairs}")
+        click.echo(f"Empty Transport UTxOs: {len(empty_transports)}")
+        click.echo(f"Pending Transport UTxOs: {len(pending_transports)}")
+        click.echo("\nAggState UTxOs:")
+        click.echo(f"Empty: {len(empty_agg_states)}")
+        click.echo(f"Expired: {len(expired_agg_states)}")
+        click.echo(f"Total Valid (Empty + Expired): {len(valid_agg_states)}")
 
-        if pending_pairs > 0:
-            click.echo("\nPending Transactions:")
-            for utxo in script_utxos:
-                if _is_pending_transport(utxo):
-                    _print_pending_transport(utxo)
+        # Display available pairs
+        available_pairs = min(len(empty_transports), len(valid_agg_states))
+        click.echo(f"\nAvailable ODV Pairs: {available_pairs}")
+
+        if pending_transports:
+            click.echo("\nPending ODV Transactions:")
+            click.echo("-" * 40)
+            for utxo in pending_transports:
+                _print_pending_transport(utxo)
+
+        if expired_agg_states:
+            click.echo("\nExpired AggState UTxOs:")
+            click.echo("-" * 40)
+            for utxo in expired_agg_states:
+                _print_expired_aggstate(utxo)
 
     except Exception as e:
         logger.error("Status check failed", exc_info=e)
         raise click.ClickException(str(e)) from e
+
+
+def _print_expired_aggstate(utxo: UTxO) -> None:
+    """Print details of expired AggState UTxO."""
+    if not isinstance(utxo.output.datum, AggStateVariant):
+        return
+
+    datum = utxo.output.datum.datum
+    if isinstance(datum, NoDatum):
+        return
+
+    click.echo(f"\nUTxO: {utxo.input.transaction_id}#{utxo.input.index}")
+    click.echo(f"Created At: {datum.aggstate.created_at}")
+    click.echo(f"Expired At: {datum.aggstate.expiry_timestamp}")
+    click.echo(f"Oracle Feed: {datum.aggstate.oracle_feed}")
 
 
 def _print_odv_summary(result: OdvResult) -> None:
@@ -165,24 +239,12 @@ def _print_odv_summary(result: OdvResult) -> None:
 
 def _print_pending_transport(utxo: UTxO) -> None:
     """Print details of pending transport UTxO."""
-    datum = utxo.output.datum.variant.datum
+    datum = utxo.output.datum.datum
     click.echo(f"\nUTxO: {utxo.input.transaction_id}#{utxo.input.index}")
-    click.echo(f"Message Timestamp: {datum.message.timestamp}")
-    click.echo(f"Node Count: {len(datum.message.node_feeds_sorted_by_feed)}")
-
-
-def _is_empty_transport_pair(utxo: UTxO) -> bool:
-    """Check if UTxO is part of empty transport pair."""
-    if not utxo.output.datum:
-        return False
-    return utxo.output.datum.variant.datum.type == "NoRewards"
-
-
-def _is_pending_transport(utxo: UTxO) -> bool:
-    """Check if UTxO is pending transport."""
-    if not utxo.output.datum:
-        return False
-    return utxo.output.datum.variant.datum.type == "RewardConsensusPending"
+    click.echo(f"Message Timestamp: {datum.aggregation.message.timestamp}")
+    click.echo(
+        f"Node Count: {len(datum.aggregation.message.node_feeds_sorted_by_feed)}"
+    )
 
 
 def validate_feed_data(feed_data: dict) -> None:
