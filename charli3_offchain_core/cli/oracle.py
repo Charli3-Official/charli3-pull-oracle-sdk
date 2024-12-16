@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.governance import update_settings
 from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
@@ -16,6 +17,7 @@ from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.oracle.config import (
     OracleScriptConfig,
 )
+from charli3_offchain_core.oracle.lifecycle.orchestrator import LifecycleOrchestrator
 
 from ..constants.status import ProcessStatus
 from .base import (
@@ -226,9 +228,8 @@ async def close(config: Path, output: Path | None) -> None:
             management_config,
             payment_sk,
             oracle_addresses,
-            _,
+            chain_query,
             tx_manager,
-            orchestrator,
             platform_auth_finder,
         ) = setup_management_from_config(config)
 
@@ -244,6 +245,12 @@ async def close(config: Path, output: Path | None) -> None:
         )
         platform_config = platform_auth_finder.get_script_config(platform_script)
 
+        orchestrator = LifecycleOrchestrator(
+            chain_query=chain_query,
+            tx_manager=tx_manager,
+            script_address=oracle_addresses.script_address,
+            status_callback=format_status_update,
+        )
         result = await orchestrator.close_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
@@ -303,9 +310,8 @@ async def reopen(config: Path, output: Path | None) -> None:
             management_config,
             payment_sk,
             oracle_addresses,
-            _,
+            chain_query,
             tx_manager,
-            orchestrator,
             platform_auth_finder,
         ) = setup_management_from_config(config)
 
@@ -320,6 +326,13 @@ async def reopen(config: Path, output: Path | None) -> None:
             oracle_addresses.platform_address
         )
         platform_config = platform_auth_finder.get_script_config(platform_script)
+
+        orchestrator = LifecycleOrchestrator(
+            chain_query=chain_query,
+            tx_manager=tx_manager,
+            script_address=oracle_addresses.script_address,
+            status_callback=format_status_update,
+        )
 
         result = await orchestrator.reopen_oracle(
             oracle_policy=management_config.tokens.oracle_policy,

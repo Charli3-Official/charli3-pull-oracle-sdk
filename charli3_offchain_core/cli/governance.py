@@ -36,9 +36,7 @@ logger = logging.getLogger(__name__)
 @click.command()
 @async_command
 async def update_settings(config: Path, output: Path | None) -> None:
-    """UpdataSettings
-    charli3 oracle update-settings --config platform-config.yaml
-    """
+    """Updates the core settings configuration of an Oracle instance."""
     try:
         print_header("Oracle Update Settings")
         (
