@@ -155,9 +155,7 @@ class OracleTransactionBuilder:
         try:
             # Get UTxOs and settings first
             utxos = await self._get_script_utxos()
-            transport, agg_state = state_checks.find_transport_pair(
-                utxos, self.policy_id
-            )
+
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
@@ -172,6 +170,10 @@ class OracleTransactionBuilder:
 
             validity_start_slot, validity_end_slot = self._validity_window_to_slot(
                 validity_start, validity_end
+            )
+
+            transport, agg_state = state_checks.find_transport_pair(
+                utxos, self.policy_id, current_time
             )
 
             # Create a new message with the current timestamp
