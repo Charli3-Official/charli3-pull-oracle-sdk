@@ -268,18 +268,19 @@ class OracleStartBuilder:
             # If fee token is some native token then there is no need to manage leftover fee token amount
             utxo_size_safety_buffer = 0
 
-        return OracleSettingsVariant(
-            datum=OracleSettingsDatum(
-                nodes=Nodes(node_map=node_map),
-                required_node_signatures_count=nodes_config.required_signatures,
-                fee_info=fee_config,
-                aggregation_liveness_period=aggregation_liveness_period,
-                time_absolute_uncertainty=time_absolute_uncertainty,
-                iqr_fence_multiplier=iqr_fence_multiplier,
-                utxo_size_safety_buffer=utxo_size_safety_buffer,
-                closing_period_started_at=NoDatum(),
-            )
+        oracle_settings = OracleSettingsDatum(
+            nodes=Nodes(node_map=node_map),
+            required_node_signatures_count=nodes_config.required_signatures,
+            fee_info=fee_config,
+            aggregation_liveness_period=aggregation_liveness_period,
+            time_absolute_uncertainty=time_absolute_uncertainty,
+            iqr_fence_multiplier=iqr_fence_multiplier,
+            utxo_size_safety_buffer=utxo_size_safety_buffer,
+            closing_period_started_at=NoDatum(),
         )
+        oracle_settings.validate_based_on_config(config)
+
+        return OracleSettingsVariant(datum=oracle_settings)
 
     def _create_utxo_with_nft(
         self,

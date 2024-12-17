@@ -7,6 +7,7 @@ from typing import Any
 import click
 from pycardano import (
     Address,
+    Datum,
     ExtendedSigningKey,
     NativeScript,
     PaymentSigningKey,
@@ -24,6 +25,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
 )
 from charli3_offchain_core.models.oracle_datums import (
+    OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
 )
@@ -64,6 +66,7 @@ class UpdateBuilder(BaseBuilder):
 
     async def build_tx(
         self,
+        oracle_config: OracleConfiguration,
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: Any,
@@ -81,7 +84,9 @@ class UpdateBuilder(BaseBuilder):
                 raise ValueError("Reference script UTxO not found")
 
             try:
-                modified_settings_utxo = await manual_settings_menu(settings_utxo)
+                modified_settings_utxo = await manual_settings_menu(
+                    settings_utxo, oracle_config
+                )
             except (UpdateCancelled, click.Abort):
                 return GovernanceTxResult()
 
@@ -147,7 +152,9 @@ async def get_setting_value(
             continue
 
 
-async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
+async def manual_settings_menu(  # noqa: C901
+    deployed_core_utxo: UTxO, oracle_config: OracleConfiguration
+) -> UTxO:
     """Interactive menu for manual settings updates."""
     deployed_core_settings = deployed_core_utxo.output.datum
     initial_settings = {
@@ -161,37 +168,9 @@ async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
     invalid_settings = set()
 
     while True:
-        # Print current settings
-        print_header("Current Settings")
-        for option in SettingOption:
-            if option != SettingOption.DONE:
-                is_valid = option not in invalid_settings
-                print_status(
-                    option.label, str(current_settings[option]), success=is_valid
-                )
-
-        # Show validation errors if any exist
-        if invalid_settings:
-            print_header("Validation Errors")
-            for option in invalid_settings:
-                try:
-                    validate_setting(
-                        option,
-                        current_settings[option],
-                        current_settings,
-                        deployed_core_settings,
-                    )
-                except SettingsValidationError as e:
-                    print_status(option.label, str(e), success=False)
-
-        print_information(
-            "Note: Only the options presented here can be changed with this transaction"
+        display_initial_settings_context(
+            deployed_core_settings, current_settings, invalid_settings
         )
-
-        # Display menu
-        print_header("Available Options")
-        for option in SettingOption:
-            click.echo(f"{option.id}. {option.label}")
 
         # Get user choice
         choices = [opt.id for opt in SettingOption] + ["q"]
@@ -231,52 +210,107 @@ async def manual_settings_menu(deployed_core_utxo: UTxO) -> UTxO:  # noqa
                 if print_confirmation_message_prompt(
                     "Do you want to proceed with these changes?"
                 ):
-                    print_progress("Building new settings datum")
-                    new_datum = OracleSettingsVariant(
-                        OracleSettingsDatum(
-                            nodes=deployed_core_settings.datum.nodes,
-                            required_node_signatures_count=current_settings[
-                                SettingOption.THRESHOLD
-                            ],
-                            fee_info=deployed_core_settings.datum.fee_info,
-                            aggregation_liveness_period=current_settings[
-                                SettingOption.AGGREGATION_LIVENESS
-                            ],
-                            time_absolute_uncertainty=current_settings[
-                                SettingOption.TIME_UNCERTAINTY
-                            ],
-                            iqr_fence_multiplier=current_settings[
-                                SettingOption.IQR_MULTIPLIER
-                            ],
-                            utxo_size_safety_buffer=current_settings[
-                                SettingOption.UTXO_BUFFER
-                            ],
-                            closing_period_started_at=deployed_core_settings.datum.closing_period_started_at,
-                        )
+                    return build_new_settings_datum(
+                        deployed_core_utxo,
+                        oracle_config,
+                        deployed_core_settings,
+                        current_settings,
                     )
-                    deployed_core_utxo.output.datum = new_datum
-                    deployed_core_utxo.output.datum_hash = None
-                    return deployed_core_utxo
                 else:
                     continue
             except SettingsValidationError as e:
                 print_status("Validation Error", str(e), success=False)
                 continue
+            except ValueError as e:
+                print_status("Value Validation Error", str(e), success=False)
+                continue
 
-        try:
-            new_value = await get_setting_value(
-                selected_option,
-                current_settings[selected_option],
-                deployed_core_settings,
-                current_settings,
-            )
-            current_settings[selected_option] = new_value
-            invalid_settings.discard(
-                selected_option
-            )  # Clear validation error if value is valid
-        except SettingsValidationError as e:
-            invalid_settings.add(selected_option)
-            print_status("Validation Error", str(e), success=False)
+        await add_settings_value(
+            selected_option, deployed_core_settings, current_settings, invalid_settings
+        )
+
+
+def build_new_settings_datum(
+    deployed_core_utxo: UTxO,
+    oracle_config: OracleConfiguration,
+    deployed_core_settings: Datum,
+    current_settings: dict,
+) -> UTxO:
+    print_progress("Building new settings datum")
+    oracle_settings = OracleSettingsDatum(
+        nodes=deployed_core_settings.datum.nodes,
+        required_node_signatures_count=current_settings[SettingOption.THRESHOLD],
+        fee_info=deployed_core_settings.datum.fee_info,
+        aggregation_liveness_period=current_settings[
+            SettingOption.AGGREGATION_LIVENESS
+        ],
+        time_absolute_uncertainty=current_settings[SettingOption.TIME_UNCERTAINTY],
+        iqr_fence_multiplier=current_settings[SettingOption.IQR_MULTIPLIER],
+        utxo_size_safety_buffer=current_settings[SettingOption.UTXO_BUFFER],
+        closing_period_started_at=deployed_core_settings.datum.closing_period_started_at,
+    )
+    oracle_settings.validate_based_on_config(oracle_config)
+
+    new_datum = OracleSettingsVariant(oracle_settings)
+    deployed_core_utxo.output.datum = new_datum
+    deployed_core_utxo.output.datum_hash = None
+    return deployed_core_utxo
+
+
+async def add_settings_value(
+    selected_option: SettingOption,
+    deployed_core_settings: Datum,
+    current_settings: dict,
+    invalid_settings: set,
+) -> None:
+    try:
+        new_value = await get_setting_value(
+            selected_option,
+            current_settings[selected_option],
+            deployed_core_settings,
+            current_settings,
+        )
+        current_settings[selected_option] = new_value
+        invalid_settings.discard(
+            selected_option
+        )  # Clear validation error if value is valid
+    except SettingsValidationError as e:
+        invalid_settings.add(selected_option)
+        print_status("Validation Error", str(e), success=False)
+
+
+def display_initial_settings_context(
+    deployed_core_settings: Datum, current_settings: dict, invalid_settings: set
+) -> None:
+    # Print current settings
+    print_header("Current Settings")
+    for option in SettingOption:
+        if option != SettingOption.DONE:
+            is_valid = option not in invalid_settings
+            print_status(option.label, str(current_settings[option]), success=is_valid)
+
+    # Show validation errors if any exist
+    if invalid_settings:
+        print_header("Validation Errors")
+        for option in invalid_settings:
+            try:
+                validate_setting(
+                    option,
+                    current_settings[option],
+                    current_settings,
+                    deployed_core_settings,
+                )
+            except SettingsValidationError as e:
+                print_status(option.label, str(e), success=False)
+
+    print_information(
+        "Note: Only the options presented here can be changed with this transaction"
+    )
+
+    # Display menu
+    print_header("Available Options")
+    for option in SettingOption:
+        click.echo(f"{option.id}. {option.label}")
 
 
 def validate_setting(
