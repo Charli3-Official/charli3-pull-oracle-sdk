@@ -90,6 +90,10 @@ class RewardPrices(PlutusData):
     node_fee: int
     platform_fee: int
 
+    def __post_init__(self) -> None:
+        if self.node_fee < 0 or self.platform_fee < 0:
+            raise ValueError("Must not have negative reward prices")
+
 
 @dataclass
 class Asset(PlutusData):
@@ -159,6 +163,39 @@ class OracleSettingsDatum(PlutusData):
     iqr_fence_multiplier: int  # Percent
     utxo_size_safety_buffer: int  # Lovelace
     closing_period_started_at: Union[SomePosixTime, NoDatum]
+
+    def __post_init__(self) -> None:
+        if (
+            len(self.nodes.node_map) < self.required_node_signatures_count
+            or self.required_node_signatures_count <= 0
+        ):
+            raise ValueError("Must not break multisig")
+
+        if self.aggregation_liveness_period <= self.time_absolute_uncertainty:
+            raise ValueError("Must measure time precisely")
+
+        if self.time_absolute_uncertainty <= 0:
+            raise ValueError("Must have positive time interval lengths")
+
+        if self.iqr_fence_multiplier <= 100:
+            raise ValueError("Must be fair about outliers")
+
+    def validate_based_on_config(self, oracle_conf: OracleConfiguration) -> None:
+        """Validate contents and throw ValueError if this instance will not satisfy on-chain checks"""
+        if oracle_conf.fee_token == NoDatum():
+            if self.utxo_size_safety_buffer <= 0:
+                raise ValueError("Must have positive utxo_size_safety_buffer")
+        elif self.utxo_size_safety_buffer != 0:
+            raise ValueError("Must have zero utxo_size_safety_buffer")
+
+        if (
+            oracle_conf.closing_period_length <= self.time_absolute_uncertainty
+            or oracle_conf.reward_dismissing_period_length
+            <= self.time_absolute_uncertainty
+        ):
+            raise ValueError("Must measure time precisely")
+
+        return super().validate()
 
 
 @dataclass
