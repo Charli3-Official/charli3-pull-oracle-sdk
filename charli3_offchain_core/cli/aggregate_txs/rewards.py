@@ -14,7 +14,7 @@ from charli3_offchain_core.oracle.aggregate.builder import (
 from charli3_offchain_core.oracle.exceptions import TransactionError
 from charli3_offchain_core.oracle.utils import state_checks
 
-from ..config.formatting import print_confirmation_prompt, print_header, print_progress
+from ..config.formatting import print_header, print_progress
 from ..config.utils import async_command
 from .base import TransactionContext, TxConfig, tx_options
 
@@ -74,25 +74,42 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             change_address=change_address,
         )
 
-        # Display transaction details
-        if not print_confirmation_prompt(
-            {
-                "Transports to Process": len(result.new_transports),
-                "Total Nodes": len(result.reward_distribution),
-                "Platform Fee": result.platform_fee,
-                "Total Distribution": result.total_distributed,
-            }
-        ):
+        # Show transaction details and prompt for confirmation
+        click.echo("\nReward Processing Details:")
+        click.echo("-" * 40)
+        click.echo(f"Transports to Process: {len(result.new_transports)}")
+
+        total_rewards = 0
+        for transport in result.new_transports:
+            datum = transport.datum.datum
+            if hasattr(datum, "aggregation"):
+                agg = datum.aggregation
+                node_count = len(agg.message.node_feeds_sorted_by_feed)
+                platform_fee = agg.rewards_amount_paid - (
+                    node_count * agg.node_reward_price
+                )
+                total_rewards += agg.rewards_amount_paid
+
+                click.echo("\nTransport Details:")
+                click.echo(f"  Oracle Feed: {agg.oracle_feed}")
+                click.echo(f"  Participating Nodes: {node_count}")
+                click.echo(f"  Reward per Node: {agg.node_reward_price}")
+                click.echo(f"  Platform Fee: {platform_fee}")
+                click.echo(f"  Total Amount: {agg.rewards_amount_paid}")
+
+        click.echo(f"\nTotal Rewards to Process: {total_rewards}")
+
+        if not click.confirm("\nProceed with reward processing?"):
             raise click.Abort()
 
         # Submit transaction
         print_progress("Submitting rewards transaction...")
-        tx_status, tx = await ctx.tx_manager.sign_and_submit(
+        tx_status, _ = await ctx.tx_manager.sign_and_submit(
             result.transaction, [signing_key], wait_confirmation=wait
         )
 
         click.secho(f"\n✓ Transaction {tx_status}!", fg="green")
-        click.echo(f"Transaction ID: {tx.id}")
+        click.echo(f"Transaction ID: {result.transaction.id}")
 
         # Display detailed results
         if tx_status == "confirmed":
@@ -183,24 +200,37 @@ def _print_reward_summary(result: RewardsResult) -> None:
     click.echo(f"Transaction ID: {result.transaction.id}")
     click.echo(f"Processed Transports: {len(result.new_transports)}")
 
-    # Print new transport details
-    click.echo("\nNew Transport UTxOs:")
-    for transport in result.new_transports:
-        datum = transport.datum.variant.datum
-        if hasattr(datum, "aggregation"):
-            click.echo(f"- Fee paid: {datum.aggregation.rewards_amount_paid}")
-            click.echo(f"- Oracle feed: {datum.aggregation.oracle_feed}")
-            click.echo(
-                f"- Node count: {len(datum.aggregation.message.node_feeds_sorted_by_feed)}"
-            )
+    # Print processed transports details
+    if result.new_transports:
+        click.echo("\nProcessed Transport Details:")
+        for transport in result.new_transports:
+            datum = transport.datum.datum
+            if hasattr(datum, "aggregation"):
+                agg = datum.aggregation
+                node_count = len(agg.message.node_feeds_sorted_by_feed)
+                click.echo(
+                    f"\nTransport: {transport.input.transaction_id}#{transport.input.index}"
+                )
+                click.echo(f"  Oracle Feed: {agg.oracle_feed}")
+                click.echo(f"  Participating Nodes: {node_count}")
+                click.echo(f"  Node Reward Rate: {agg.node_reward_price}")
+                click.echo(f"  Total Amount: {agg.rewards_amount_paid}")
 
-    # Print reward distribution
-    click.echo("\nReward Distribution:")
-    for node_id, amount in result.reward_distribution.items():
-        click.echo(f"Node {node_id}: {amount}")
+    # Print consolidated reward distribution using account data
+    if result.reward_distribution:
+        click.echo("\nReward Distribution by Node:")
+        for node_id, amount in sorted(result.reward_distribution.items()):
+            click.echo(f"  Node {node_id}: {amount}")
 
-    click.echo(f"\nPlatform Fee: {result.platform_fee}")
-    click.echo(f"Total Distributed: {result.total_distributed}")
+    # Use RewardsResult properties for totals
+    total_node_rewards = sum(result.reward_distribution.values())
+    platform_fee = result.platform_fee
+    total_distributed = result.total_distributed
+
+    click.echo("\nTransaction Summary:")
+    click.echo(f"  Total Node Rewards: {total_node_rewards}")
+    click.echo(f"  Platform Fee: {platform_fee}")
+    click.echo(f"  Total Amount: {total_distributed}")
 
 
 def _print_reward_status(

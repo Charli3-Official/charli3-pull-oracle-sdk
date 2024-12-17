@@ -76,7 +76,7 @@ class TxConfig:
 
             return cls(
                 network=NetworkConfig.from_dict(data.get("network", {})),
-                script_address=data["script_address"],
+                script_address=data["oracle_address"],
                 policy_id=data["policy_id"],
                 fee_token_policy_id=fee_token_policy_id,
                 fee_token_name=fee_token_name,

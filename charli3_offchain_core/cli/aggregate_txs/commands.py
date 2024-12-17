@@ -7,9 +7,9 @@ from .rewards import rewards
 
 
 @click.group()
-def tx() -> None:
+def aggregate_tx() -> None:
     """Oracle transaction commands."""
 
 
-tx.add_command(odv_aggregate)
-tx.add_command(rewards)
+aggregate_tx.add_command(odv_aggregate)
+aggregate_tx.add_command(rewards)

@@ -115,12 +115,15 @@ async def submit(
         # Sign transaction with all node keys
         print_progress("Signing transaction with node keys...")
         all_signing_keys = [signing_key, *node_keys]
-        tx_status, tx = await ctx.tx_manager.sign_and_submit(
+        tx_status, _ = await ctx.tx_manager.sign_and_submit(
             result.transaction, all_signing_keys, wait_confirmation=wait
         )
 
+        # Get transaction ID from the original transaction
+        tx_id = result.transaction.id
+
         click.secho(f"\n✓ Transaction {tx_status}!", fg="green")
-        click.echo(f"Transaction ID: {tx.id}")
+        click.echo(f"Transaction ID: {tx_id}")
 
         # Display additional details
         if tx_status == "confirmed":
@@ -232,9 +235,29 @@ def _print_odv_summary(result: OdvResult) -> None:
     """Print summary of ODV transaction result."""
     click.echo("\nTransaction Summary:")
     click.echo("-" * 40)
-    click.echo(f"Transport UTxO: {result.transport_output}")
-    click.echo(f"AggState UTxO: {result.agg_state_output}")
-    click.echo(f"Total Fees Paid: {result.transaction.transaction_body.fee}")
+
+    # Print Transport UTxO details
+    transport_datum = result.transport_output.datum.datum
+    total_fee = transport_datum.aggregation.rewards_amount_paid
+    node_count = len(transport_datum.aggregation.message.node_feeds_sorted_by_feed)
+    node_reward = transport_datum.aggregation.node_reward_price
+    platform_fee = total_fee - (node_count * node_reward)
+
+    click.echo("Transport Details:")
+    click.echo(f"  Oracle Feed: {transport_datum.aggregation.oracle_feed}")
+    click.echo(f"  Node Count: {node_count}")
+    click.echo(f"  Reward per Node: {node_reward}")
+    click.echo(f"  Platform Fee: {platform_fee}")
+    click.echo(f"  Total Rewards Amount: {total_fee}")
+
+    # Print AggState UTxO details
+    agg_datum = result.agg_state_output.datum.datum
+    click.echo("\nAggState Details:")
+    click.echo(f"  Oracle Feed: {agg_datum.aggstate.oracle_feed}")
+    click.echo(f"  Created At: {agg_datum.aggstate.created_at}")
+    click.echo(f"  Expires At: {agg_datum.aggstate.expiry_timestamp}")
+
+    click.echo(f"\nTransaction Fee: {result.transaction.transaction_body.fee}")
 
 
 def _print_pending_transport(utxo: UTxO) -> None:
