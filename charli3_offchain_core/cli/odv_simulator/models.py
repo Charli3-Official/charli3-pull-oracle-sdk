@@ -1,15 +1,10 @@
 """Simulated node implementation using real node keys."""
 
-import json
-import time
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
 
-import cbor2
 import yaml
-from nacl.encoding import RawEncoder
-from nacl.signing import SigningKey, VerifyKey
 from pycardano import (
     PaymentExtendedSigningKey,
     PaymentVerificationKey,
@@ -19,7 +14,6 @@ from pycardano import (
 from charli3_offchain_core.cli.aggregate_txs.base import TxConfig
 from charli3_offchain_core.cli.config import NetworkConfig, WalletConfig
 from charli3_offchain_core.oracle.aggregate.builder import RewardsResult
-from charli3_offchain_core.oracle.utils.signature_checks import encode_oracle_feed
 
 logger = getLogger(__name__)
 
@@ -32,8 +26,6 @@ class SimulatedNode:
         signing_key: PaymentExtendedSigningKey,
         verification_key: PaymentVerificationKey,
         feed_vkh: VerificationKeyHash,
-        payment_vkh: VerificationKeyHash,
-        nacl_verify_key: VerifyKey,
     ) -> None:
         """Initialize node with provided keys.
 
@@ -41,40 +33,12 @@ class SimulatedNode:
             signing_key: Payment signing key
             verification_key: Payment verification key
             feed_vkh: Feed verification key hash
-            payment_vkh: Payment verification key hash
-            nacl_verify_key: NaCl verify key for signature verification
         """
         self.signing_key = signing_key
         self.verification_key = verification_key
         self.feed_vkh = feed_vkh
-        self.payment_vkh = payment_vkh
-        self._nacl_verify_key = nacl_verify_key
 
-        try:
-            key_json = json.loads(self.signing_key.to_json())
-            cbor_data = bytes.fromhex(key_json["cborHex"])
-            decoded = cbor2.loads(cbor_data)
-
-            # Extract private key from CBOR data
-            if isinstance(decoded, bytes):
-                private_key_bytes = decoded[-32:]
-            elif isinstance(decoded, list) and len(decoded) > 0:
-                private_key_bytes = (
-                    decoded[-1][-32:]
-                    if isinstance(decoded[-1], bytes)
-                    else decoded[-32:]
-                )
-            else:
-                raise ValueError("Unexpected CBOR data format")
-
-            self._nacl_signing_key = SigningKey(private_key_bytes, encoder=RawEncoder)
-            logger.info(
-                "Initialized node VKH: %s", self.feed_vkh.to_primitive().hex()[:8]
-            )
-
-        except Exception as e:
-            logger.error("Failed to initialize node: %s", str(e))
-            raise ValueError(f"Failed to initialize node: {e!s}") from e
+        logger.info("Initialized node VKH: %s", self.feed_vkh.to_primitive().hex()[:8])
 
     @classmethod
     def from_key_directory(cls, node_dir: Path) -> "SimulatedNode":
@@ -94,16 +58,9 @@ class SimulatedNode:
             signing_key = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
             verification_key = PaymentVerificationKey.load(node_dir / "feed.vkey")
 
-            # Process verification key
-            key_bytes = verification_key.payload[-32:]  # Take last 32 bytes
-            nacl_verify_key = VerifyKey(key_bytes)
-
             # Load VKH values
             feed_vkh = VerificationKeyHash(
                 bytes.fromhex((node_dir / "feed.vkh").read_text().strip())
-            )
-            payment_vkh = VerificationKeyHash(
-                bytes.fromhex((node_dir / "payment.vkh").read_text().strip())
             )
 
             # Create instance using __init__
@@ -111,8 +68,6 @@ class SimulatedNode:
                 signing_key=signing_key,
                 verification_key=verification_key,
                 feed_vkh=feed_vkh,
-                payment_vkh=payment_vkh,
-                nacl_verify_key=nacl_verify_key,
             )
 
         except FileNotFoundError as e:
@@ -127,71 +82,6 @@ class SimulatedNode:
         return self.feed_vkh.to_primitive().hex()
 
     @property
-    def hex_payment_vkh(self) -> str:
-        """Get payment verification key hash as hex."""
-        return self.payment_vkh.to_primitive().hex()
-
-    def sign_feed(self, value: int, timestamp: int | None = None) -> tuple[int, bytes]:
-        """Sign feed value and return signature.
-
-        Args:
-            value: Feed value to sign
-            timestamp: Optional timestamp (uses current time if None)
-
-        Returns:
-            Tuple of (timestamp, signature bytes)
-        """
-        if timestamp is None:
-            timestamp = int(time.time() * 1000)
-
-        # Create message bytes
-        message = encode_oracle_feed(value, timestamp)
-
-        try:
-            signature = self._nacl_signing_key.sign(message).signature
-
-            # Verify signature immediately
-            try:
-                self._nacl_verify_key.verify(message, signature)
-                logger.debug(
-                    "Signature verification successful for node %s",
-                    self.hex_feed_vkh[:8],
-                )
-            except Exception as e:  # pylint: disable=broad-except
-                logger.warning(
-                    "Self-verification failed for node %s: %s", self.hex_feed_vkh[:8], e
-                )
-
-            return timestamp, signature
-        except Exception as e:  # pylint: disable=broad-except
-            logger.error(
-                "Failed to sign feed for node %s: %s", self.hex_feed_vkh[:8], e
-            )
-            raise
-
-    def verify_feed_signature(
-        self, value: int, timestamp: int, signature: bytes
-    ) -> bool:
-        """Verify a feed signature.
-
-        Args:
-            value: Feed value
-            timestamp: Timestamp in milliseconds
-            signature: Signature to verify
-
-        Returns:
-            bool: True if signature is valid
-        """
-        try:
-            message = encode_oracle_feed(value, timestamp)
-            # Use nacl's VerifyKey for verification
-            self._nacl_verify_key.verify(message, signature)
-            return True
-        except Exception as e:  # pylint: disable=broad-except
-            logger.warning("Signature verification failed: %s", e)
-            return False
-
-    @property
     def verify_key_bytes(self) -> bytes:
         """Get raw verification key bytes for signature validation."""
         return self.verification_key.hash().payload
@@ -200,7 +90,6 @@ class SimulatedNode:
         """Convert node to dictionary representation."""
         return {
             "feed_vkh": self.hex_feed_vkh,
-            "payment_vkh": self.hex_payment_vkh,
             "verification_key": self.verify_key_bytes.hex(),
         }
 
@@ -298,7 +187,7 @@ class SimulationConfig(TxConfig):
 
         return cls(
             network=NetworkConfig.from_dict(data.get("network", {})),
-            script_address=data["script_address"],
+            script_address=data["oracle_address"],
             policy_id=data["policy_id"],
             fee_token_policy_id=data["fee_token"]["fee_token_policy"],
             fee_token_name=data["fee_token"]["fee_token_name"],

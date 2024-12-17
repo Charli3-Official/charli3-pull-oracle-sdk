@@ -74,7 +74,7 @@ def save_node_keys(nodes: list[dict], output_dir: Path) -> None:
 
     # Add a metadata file with required signatures
     with (output_dir / "required_signatures").open("w") as f:
-        f.write(str(max(1, len(nodes) - 1)))
+        f.write(str(len(nodes)))
 
     for node in nodes:
         index = node["index"]
@@ -181,7 +181,7 @@ def print_yaml_config(nodes_config: NodesConfig) -> None:
 @click.option(
     "--required-sigs",
     type=int,
-    help="Required signature count (defaults to n-1)",
+    help="Required signature count (defaults to n for all nodes)",
 )
 @click.option(
     "--output-dir",

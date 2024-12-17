@@ -4,15 +4,12 @@ import logging
 from pathlib import Path
 
 import click
-from pycardano import UTxO
 
-from charli3_offchain_core.models.oracle_datums import RewardAccountDatum
 from charli3_offchain_core.oracle.aggregate.builder import (
     OracleTransactionBuilder,
     RewardsResult,
 )
 from charli3_offchain_core.oracle.exceptions import TransactionError
-from charli3_offchain_core.oracle.utils import state_checks
 
 from ..config.formatting import print_header, print_progress
 from ..config.utils import async_command
@@ -74,30 +71,8 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             change_address=change_address,
         )
 
-        # Show transaction details and prompt for confirmation
-        click.echo("\nReward Processing Details:")
-        click.echo("-" * 40)
-        click.echo(f"Transports to Process: {len(result.new_transports)}")
-
-        total_rewards = 0
-        for transport in result.new_transports:
-            datum = transport.datum.datum
-            if hasattr(datum, "aggregation"):
-                agg = datum.aggregation
-                node_count = len(agg.message.node_feeds_sorted_by_feed)
-                platform_fee = agg.rewards_amount_paid - (
-                    node_count * agg.node_reward_price
-                )
-                total_rewards += agg.rewards_amount_paid
-
-                click.echo("\nTransport Details:")
-                click.echo(f"  Oracle Feed: {agg.oracle_feed}")
-                click.echo(f"  Participating Nodes: {node_count}")
-                click.echo(f"  Reward per Node: {agg.node_reward_price}")
-                click.echo(f"  Platform Fee: {platform_fee}")
-                click.echo(f"  Total Amount: {agg.rewards_amount_paid}")
-
-        click.echo(f"\nTotal Rewards to Process: {total_rewards}")
+        # Print preview
+        print_rewards_preview(result)
 
         if not click.confirm("\nProceed with reward processing?"):
             raise click.Abort()
@@ -123,162 +98,54 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
         raise click.ClickException(str(e)) from e
 
 
-@rewards.command()
-@tx_options
-@async_command
-async def status(config: Path) -> None:
-    """Show current reward status and distributions.
+def print_rewards_preview(result: RewardsResult) -> None:
+    """Print detailed preview of rewards processing."""
+    click.echo("\nReward Processing Details:")
+    click.echo("-" * 40)
 
-    Example:
-        charli3 tx rewards status --config tx-config.yaml
-    """
-    try:
-        # Load configuration and initialize context
-        print_header("Reward Status Check")
-        print_progress("Loading configuration...")
-        tx_config = TxConfig.from_yaml(config)
-        ctx = TransactionContext(tx_config)
+    # Print summary
+    click.echo(f"Transports to Process: {len(result.pending_transports)}")
+    total_rewards = sum(result.reward_distribution.values())
+    click.echo(f"Total Node Rewards: {total_rewards}")
+    click.echo(f"Platform Fee: {result.platform_fee}")
+    click.echo(f"Total Distribution: {result.total_distributed}")
 
-        # Get UTxO status
-        print_progress("Checking reward status...")
-        script_utxos = await ctx.chain_query.get_utxos(ctx.script_address)
+    # Print transport details
+    for detail in result.transport_details:
+        click.echo(f"\nTransport {detail['tx_hash']}#{detail['index']}:")
+        click.echo(f"  Oracle Feed: {detail['oracle_feed']}")
+        click.echo(f"  Participating Nodes: {detail['node_count']}")
+        click.echo(f"  Reward per Node: {detail['reward_per_node']}")
+        click.echo(f"  Platform Fee: {detail['platform_fee']}")
+        click.echo(f"  Total Amount: {detail['total_amount']}")
+        click.echo(f"  Timestamp: {detail['timestamp']}")
 
-        # Filter reward-related UTxOs
-        pending_transports = state_checks.filter_pending_transports(script_utxos)
-        reward_accounts = state_checks.filter_reward_accounts(script_utxos)
+        if logger.isEnabledFor(logging.DEBUG):
+            click.echo("\n  Node Feeds:")
+            for node_vkh, feed in detail["node_feeds"].items():
+                click.echo(f"    {node_vkh}: {feed}")
 
-        # Display status
-        _print_reward_status(pending_transports, reward_accounts)
-
-    except Exception as e:
-        logger.error("Status check failed", exc_info=e)
-        raise click.ClickException(str(e)) from e
-
-
-@rewards.command()
-@tx_options
-@click.option(
-    "--node-id",
-    type=int,
-    required=True,
-    help="Node ID to check rewards for",
-)
-@async_command
-async def check_node(config: Path, node_id: int) -> None:
-    """Check rewards for specific node.
-
-    Example:
-        charli3 tx rewards check-node --config tx-config.yaml --node-id 1
-    """
-    try:
-        print_header(f"Node {node_id} Reward Check")
-        print_progress("Loading configuration...")
-        tx_config = TxConfig.from_yaml(config)
-        ctx = TransactionContext(tx_config)
-
-        # Get reward account
-        print_progress("Checking reward account...")
-        script_utxos = await ctx.chain_query.get_utxos(ctx.script_address)
-        reward_accounts = state_checks.filter_reward_accounts(script_utxos)
-
-        if not reward_accounts:
-            click.echo("No reward account found")
-            return
-
-        # Display node rewards
-        _print_node_rewards(reward_accounts[0], node_id)
-
-    except Exception as e:
-        logger.error("Node check failed", exc_info=e)
-        raise click.ClickException(str(e)) from e
+    # Print reward distribution
+    if result.reward_distribution:
+        click.echo("\nProposed Reward Distribution:")
+        click.echo("-" * 40)
+        for node_vkh, amount in result.reward_distribution.items():
+            click.echo(f"  {node_vkh}: {amount}")
 
 
 def _print_reward_summary(result: RewardsResult) -> None:
-    """Print summary of processed rewards."""
+    """Print final reward processing summary."""
     click.echo("\nReward Processing Summary:")
     click.echo("-" * 40)
     click.echo(f"Transaction ID: {result.transaction.id}")
-    click.echo(f"Processed Transports: {len(result.new_transports)}")
+    click.echo(f"Processed Transports: {len(result.pending_transports)}")
 
-    # Print processed transports details
-    if result.new_transports:
-        click.echo("\nProcessed Transport Details:")
-        for transport in result.new_transports:
-            datum = transport.datum.datum
-            if hasattr(datum, "aggregation"):
-                agg = datum.aggregation
-                node_count = len(agg.message.node_feeds_sorted_by_feed)
-                click.echo(
-                    f"\nTransport: {transport.input.transaction_id}#{transport.input.index}"
-                )
-                click.echo(f"  Oracle Feed: {agg.oracle_feed}")
-                click.echo(f"  Participating Nodes: {node_count}")
-                click.echo(f"  Node Reward Rate: {agg.node_reward_price}")
-                click.echo(f"  Total Amount: {agg.rewards_amount_paid}")
+    total_rewards = sum(result.reward_distribution.values())
+    click.echo(f"Total Node Rewards: {total_rewards}")
+    click.echo(f"Platform Fee: {result.platform_fee}")
+    click.echo(f"Total Distribution: {result.total_distributed}")
 
-    # Print consolidated reward distribution using account data
     if result.reward_distribution:
-        click.echo("\nReward Distribution by Node:")
-        for node_id, amount in sorted(result.reward_distribution.items()):
-            click.echo(f"  Node {node_id}: {amount}")
-
-    # Use RewardsResult properties for totals
-    total_node_rewards = sum(result.reward_distribution.values())
-    platform_fee = result.platform_fee
-    total_distributed = result.total_distributed
-
-    click.echo("\nTransaction Summary:")
-    click.echo(f"  Total Node Rewards: {total_node_rewards}")
-    click.echo(f"  Platform Fee: {platform_fee}")
-    click.echo(f"  Total Amount: {total_distributed}")
-
-
-def _print_reward_status(
-    pending_transports: list[UTxO], reward_accounts: list[UTxO]
-) -> None:
-    """Print current reward status."""
-    click.echo("\nReward Status:")
-    click.echo("-" * 40)
-    click.echo(f"Pending Transport UTxOs: {len(pending_transports)}")
-
-    if pending_transports:
-        click.echo("\nPending Transports:")
-        for utxo in pending_transports:
-            click.echo(f"- {utxo.input.transaction_id}#{utxo.input.index}")
-
-    if reward_accounts:
-        click.echo("\nReward Account Status:")
-        account = reward_accounts[0].output.datum.variant.datum
-        _print_reward_account_status(account)
-
-
-def _print_reward_account_status(account: RewardAccountDatum) -> None:
-    """Print reward account details."""
-    total_rewards = 0
-    nodes_with_rewards = 0
-
-    for i in range(0, len(account.nodes_to_rewards), 2):
-        _ = account.nodes_to_rewards[i]
-        amount = account.nodes_to_rewards[i + 1]
-        total_rewards += amount
-        nodes_with_rewards += 1
-
-    click.echo(f"Total Accumulated Rewards: {total_rewards}")
-    click.echo(f"Nodes with Rewards: {nodes_with_rewards}")
-
-
-def _print_node_rewards(reward_account: UTxO, node_id: int) -> None:
-    """Print rewards for specific node."""
-    account = reward_account.output.datum.variant.datum
-
-    click.echo("\nNode Reward Status:")
-    click.echo("-" * 40)
-
-    # Find node's rewards
-    for i in range(0, len(account.nodes_to_rewards), 2):
-        if account.nodes_to_rewards[i] == node_id:
-            amount = account.nodes_to_rewards[i + 1]
-            click.echo(f"Current Reward Balance: {amount}")
-            return
-
-    click.echo("No rewards found for this node")
+        click.echo("\nFinal Reward Distribution:")
+        for node_vkh, amount in result.reward_distribution.items():
+            click.echo(f"  {node_vkh}: {amount}")

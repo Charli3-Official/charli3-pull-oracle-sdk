@@ -66,35 +66,68 @@ class RewardsResult:
     """Result of rewards calculation transaction."""
 
     transaction: Transaction
-    new_transports: list[TransactionOutput]
+    pending_transports: list[UTxO]
     new_reward_account: TransactionOutput
 
     @property
     def reward_distribution(self) -> dict[int, int]:
-        """Get reward distribution from new reward account."""
-        account = self.new_reward_account.datum.datum
+        """Get reward distribution from pending transports."""
         distribution = {}
-        for i in range(0, len(account.nodes_to_rewards), 2):
-            node_id = account.nodes_to_rewards[i]
-            amount = account.nodes_to_rewards[i + 1]
-            distribution[node_id] = amount
+        for transport in self.pending_transports:
+            datum = transport.output.datum.datum
+            if hasattr(datum, "aggregation"):
+                agg = datum.aggregation
+                node_reward = agg.node_reward_price
+                for node_id in agg.message.node_feeds_sorted_by_feed.keys():
+                    distribution[node_id] = distribution.get(node_id, 0) + node_reward
         return distribution
 
     @property
     def platform_fee(self) -> int:
-        """Calculate total platform fee from new transports."""
+        """Calculate total platform fee from pending transports."""
         total_fee = 0
-        for transport in self.new_transports:
-            if hasattr(transport.datum.datum, "aggregation") and hasattr(
-                transport.datum.datum.aggregation, "rewards_amount_paid"
-            ):
-                total_fee += transport.datum.datum.aggregation.rewards_amount_paid
+        for transport in self.pending_transports:
+            datum = transport.output.datum.datum
+            if hasattr(datum, "aggregation"):
+                agg = datum.aggregation
+                node_count = len(agg.message.node_feeds_sorted_by_feed)
+                total_fee += agg.rewards_amount_paid - (
+                    node_count * agg.node_reward_price
+                )
         return total_fee
 
     @property
     def total_distributed(self) -> int:
         """Calculate total rewards distributed."""
         return sum(self.reward_distribution.values()) + self.platform_fee
+
+    @property
+    def transport_details(self) -> list[dict]:
+        """Get detailed information about each transport."""
+        details = []
+        for transport in self.pending_transports:
+            datum = transport.output.datum.datum
+            if hasattr(datum, "aggregation"):
+                agg = datum.aggregation
+                node_count = len(agg.message.node_feeds_sorted_by_feed)
+                platform_fee = agg.rewards_amount_paid - (
+                    node_count * agg.node_reward_price
+                )
+
+                details.append(
+                    {
+                        "tx_hash": transport.input.transaction_id,
+                        "index": transport.input.index,
+                        "oracle_feed": agg.oracle_feed,
+                        "node_count": node_count,
+                        "reward_per_node": agg.node_reward_price,
+                        "platform_fee": platform_fee,
+                        "total_amount": agg.rewards_amount_paid,
+                        "node_feeds": dict(agg.message.node_feeds_sorted_by_feed),
+                        "timestamp": agg.message.timestamp,
+                    }
+                )
+        return details
 
 
 class OracleTransactionBuilder:
@@ -300,7 +333,7 @@ class OracleTransactionBuilder:
 
             return RewardsResult(
                 transaction=tx,
-                new_transports=new_transports,
+                pending_transports=pending_transports,
                 new_reward_account=reward_account_output,
             )
 
