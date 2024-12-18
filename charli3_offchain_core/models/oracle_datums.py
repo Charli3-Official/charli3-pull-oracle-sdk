@@ -169,30 +169,36 @@ class OracleSettingsDatum(PlutusData):
             len(self.nodes.node_map) < self.required_node_signatures_count
             or self.required_node_signatures_count <= 0
         ):
-            raise ValueError("Must not break multisig")
+            raise ValueError("Oracle Settings Validator: Must not break multisig")
 
         if self.aggregation_liveness_period <= self.time_absolute_uncertainty:
-            raise ValueError("Must measure time precisely")
+            raise ValueError("Oracle Settings Validator: Must measure time precisely")
 
         if self.time_absolute_uncertainty <= 0:
-            raise ValueError("Must have positive time interval lengths")
+            raise ValueError(
+                "Oracle Settings Validator: Must have positive time interval lengths"
+            )
 
         if self.iqr_fence_multiplier <= 100:
-            raise ValueError("Must be fair about outliers")
+            raise ValueError("Oracle Settings Validator: Must be fair about outliers")
 
     def validate_based_on_config(self, oracle_conf: OracleConfiguration) -> None:
         """Validate contents and throw ValueError if this instance will not satisfy on-chain checks"""
         if oracle_conf.fee_token == NoDatum() and self.utxo_size_safety_buffer <= 0:
-            raise ValueError("Must have positive utxo_size_safety_buffer")
+            raise ValueError(
+                "Oracle Settings Validator: Must have positive utxo_size_safety_buffer"
+            )
         if oracle_conf.fee_token != NoDatum() and self.utxo_size_safety_buffer != 0:
-            raise ValueError("Must have zero utxo_size_safety_buffer")
+            raise ValueError(
+                "Oracle Settings Validator: Must have zero utxo_size_safety_buffer"
+            )
 
         if (
             oracle_conf.closing_period_length <= self.time_absolute_uncertainty
             or oracle_conf.reward_dismissing_period_length
             <= self.time_absolute_uncertainty
         ):
-            raise ValueError("Must measure time precisely")
+            raise ValueError("Oracle Settings Validator: Must measure time precisely")
 
         return super().validate()
 
