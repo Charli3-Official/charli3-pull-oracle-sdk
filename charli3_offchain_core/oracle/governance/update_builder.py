@@ -173,7 +173,10 @@ async def manual_settings_menu(  # noqa: C901
 
     while True:
         display_initial_settings_context(
-            deployed_core_settings, current_settings, invalid_settings
+            deployed_core_settings,
+            current_settings,
+            invalid_settings,
+            oracle_config,
         )
 
         # Get user choice
@@ -291,7 +294,10 @@ async def add_settings_value(
 
 
 def display_initial_settings_context(
-    deployed_core_settings: Datum, current_settings: dict, invalid_settings: set
+    deployed_core_settings: Datum,
+    current_settings: dict,
+    invalid_settings: set,
+    oracle_config: OracleConfiguration,
 ) -> None:
     # Print current settings
     print_header("Current Settings")
@@ -310,6 +316,7 @@ def display_initial_settings_context(
                     current_settings[option],
                     current_settings,
                     deployed_core_settings,
+                    oracle_config,
                 )
             except SettingsValidationError as e:
                 print_status(option.label, str(e), success=False)

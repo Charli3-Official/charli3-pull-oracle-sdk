@@ -182,10 +182,9 @@ class OracleSettingsDatum(PlutusData):
 
     def validate_based_on_config(self, oracle_conf: OracleConfiguration) -> None:
         """Validate contents and throw ValueError if this instance will not satisfy on-chain checks"""
-        if oracle_conf.fee_token == NoDatum():
-            if self.utxo_size_safety_buffer <= 0:
-                raise ValueError("Must have positive utxo_size_safety_buffer")
-        elif self.utxo_size_safety_buffer != 0:
+        if oracle_conf.fee_token == NoDatum() and self.utxo_size_safety_buffer <= 0:
+            raise ValueError("Must have positive utxo_size_safety_buffer")
+        if oracle_conf.fee_token != NoDatum() and self.utxo_size_safety_buffer != 0:
             raise ValueError("Must have zero utxo_size_safety_buffer")
 
         if (
