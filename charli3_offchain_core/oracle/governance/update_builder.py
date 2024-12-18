@@ -1,4 +1,4 @@
-"""Close oracle transaction builder."""
+"""Update oracle transaction builder."""
 
 import logging
 from enum import Enum
@@ -25,6 +25,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
 )
 from charli3_offchain_core.models.oracle_datums import (
+    NoDatum,
     OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
@@ -113,6 +114,7 @@ async def get_setting_value(
     current_value: int,
     deployed_settings: Any,
     current_settings: dict,
+    oracle_config: OracleConfiguration,
 ) -> int:
     """Prompt user for new setting value with validation."""
     while True:
@@ -145,7 +147,9 @@ async def get_setting_value(
                 click.style(prompt_text, fg=CliColor.WARNING, bold=True), type=int
             )
 
-            validate_setting(option, new_value, current_settings, deployed_settings)
+            validate_setting(
+                option, new_value, current_settings, deployed_settings, oracle_config
+            )
             return new_value
         except SettingsValidationError as e:
             print_status("Validation Error", str(e), success=False)
@@ -201,6 +205,7 @@ async def manual_settings_menu(  # noqa: C901
                             current_settings[option],
                             current_settings,
                             deployed_core_settings,
+                            oracle_config,
                         )
 
                 if invalid_settings:
@@ -226,7 +231,11 @@ async def manual_settings_menu(  # noqa: C901
                 continue
 
         await add_settings_value(
-            selected_option, deployed_core_settings, current_settings, invalid_settings
+            selected_option,
+            deployed_core_settings,
+            current_settings,
+            invalid_settings,
+            oracle_config,
         )
 
 
@@ -262,6 +271,7 @@ async def add_settings_value(
     deployed_core_settings: Datum,
     current_settings: dict,
     invalid_settings: set,
+    oracle_config: OracleConfiguration,
 ) -> None:
     try:
         new_value = await get_setting_value(
@@ -269,6 +279,7 @@ async def add_settings_value(
             current_settings[selected_option],
             deployed_core_settings,
             current_settings,
+            oracle_config,
         )
         current_settings[selected_option] = new_value
         invalid_settings.discard(
@@ -314,7 +325,11 @@ def display_initial_settings_context(
 
 
 def validate_setting(
-    option: SettingOption, value: int, current_settings: dict, deployed_settings: Any
+    option: SettingOption,
+    value: int,
+    current_settings: dict,
+    deployed_settings: Any,
+    oracle_config: OracleConfiguration,
 ) -> None:
     """Validate a setting value."""
     if value <= 0 and option in [
@@ -325,9 +340,17 @@ def validate_setting(
             "Time uncertainty and Node signature count must be positive"
         )
 
-    if option == SettingOption.UTXO_BUFFER and value < 0:
-        raise SettingsValidationError("UTxO size safety buffer must not be negative")
+    if option == SettingOption.UTXO_BUFFER:
+        is_ada_token = oracle_config.fee_token == NoDatum()
 
+        if is_ada_token and value <= 0:
+            raise SettingsValidationError(
+                "UTxO size must be positive when used with ADA"
+            )
+        elif not is_ada_token and value != 0:
+            raise SettingsValidationError(
+                "The UTxO size safety buffer must be set to zero when using non-ADA reward tokens"
+            )
     if option == SettingOption.IQR_MULTIPLIER and value <= 100:
         raise SettingsValidationError("IQR fence multiplier must be greater than 100")
 
