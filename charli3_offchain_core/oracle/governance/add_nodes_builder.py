@@ -23,7 +23,9 @@ from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.models.oracle_datums import (
     Nodes,
     OracleSettingsDatum,
+    OracleSettingsVariant,
     RewardAccountDatum,
+    RewardAccountVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     AddNodes,
@@ -45,7 +47,6 @@ logger = logging.getLogger(__name__)
 
 
 class AddNodesBuilder(BaseBuilder):
-    REDEEMER = Redeemer(AddNodes())
     FEE_BUFFER = 10_000
 
     async def build_tx(
@@ -98,8 +99,8 @@ class AddNodesBuilder(BaseBuilder):
 
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
-                    (in_reward_account_utxo, self.REDEEMER, script_utxo),
-                    (in_core_utxo, self.REDEEMER, script_utxo),
+                    (in_reward_account_utxo, Redeemer(AddNodes()), script_utxo),
+                    (in_core_utxo, Redeemer(AddNodes()), script_utxo),
                     (platform_utxo, None, platform_script),
                 ],
                 script_outputs=[
@@ -147,7 +148,7 @@ def modified_core_utxo(
         closing_period_started_at=in_core_datum.closing_period_started_at,
     )
 
-    in_core_utxo.output.datum = new_datum
+    in_core_utxo.output.datum = OracleSettingsVariant(new_datum)
     in_core_utxo.output.datum_hash = None
     return in_core_utxo
 
@@ -187,7 +188,7 @@ def modified_reward_utxo(
             out_distribution.append(0)
 
     new_datum = RewardAccountDatum(nodes_to_rewards=out_distribution)
-    in_reward_utxo.output.datum = new_datum
+    in_reward_utxo.output.datum = RewardAccountVariant(new_datum)
     in_reward_utxo.output.datum_hash = None
     return in_reward_utxo
 
