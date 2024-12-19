@@ -19,6 +19,10 @@ from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.constants.status import ProcessStatus
+from charli3_offchain_core.oracle.exceptions import (
+    AddingNodesError,
+    AddNodesValidationError,
+)
 from charli3_offchain_core.oracle.governance.add_nodes_builder import AddNodesBuilder
 from charli3_offchain_core.oracle.governance.update_builder import UpdateBuilder
 from charli3_offchain_core.oracle.utils.common import get_script_utxos
@@ -70,16 +74,23 @@ class GovernanceOrchestrator:
 
             builder = AddNodesBuilder(self.chain_query, self.tx_manager)
 
-            result = await builder.build_tx(
-                platform_utxo=platform_utxo,
-                platform_script=platform_script,
-                policy_hash=policy_hash,
-                utxos=utxos,
-                change_address=change_address,
-                signing_key=signing_key,
-                new_nodes_config=new_nodes_config,
-                required_signers=required_signers,
-            )
+            try:
+                result = await builder.build_tx(
+                    platform_utxo=platform_utxo,
+                    platform_script=platform_script,
+                    policy_hash=policy_hash,
+                    utxos=utxos,
+                    change_address=change_address,
+                    signing_key=signing_key,
+                    new_nodes_config=new_nodes_config,
+                    required_signers=required_signers,
+                )
+            except (AddingNodesError, AddNodesValidationError):
+                return GovernanceResult(status=ProcessStatus.FAILED)
+
+            if result.reason:
+                return GovernanceResult(ProcessStatus.VERIFICATION_FAILURE)
+
             if result.transaction is None and result.settings_utxo is None:
                 return GovernanceResult(ProcessStatus.CANCELLED_BY_USER)
 

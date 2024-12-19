@@ -81,6 +81,13 @@ async def add_nodes(config: Path, output: Path | None) -> None:
                 "Add nodes Status", "Operation cancelled by user", success=True
             )
             return
+        if result.status == ProcessStatus.VERIFICATION_FAILURE:
+            print_status(
+                "Add nodes Status",
+                "On-chain validation does not meet the requirements.",
+                success=False,
+            )
+            return
         if result.status != ProcessStatus.TRANSACTION_BUILT:
             raise click.ClickException(f"Add nodes failed: {result.error}")
 
