@@ -173,8 +173,12 @@ class ChainQuery:
             if isinstance(self.context, BlockFrostChainContext):
                 script = self.context._get_script(str(script_hash))
             else:
-                script = await self.ogmios.get_script(script_hash)
-
+                kupo_script_url = f"{self.context._kupo_url}/scripts/{script_hash}"
+                script = await asyncio.to_thread(
+                    lambda: requests.get(kupo_script_url, timeout=(5, 15)).json()
+                )
+                if script["language"] == "plutus:v3":
+                    script = PlutusV3Script(bytes.fromhex(script["script"]))
             if not script:
                 raise ScriptQueryError(f"Script not found for hash: {script_hash}")
 
