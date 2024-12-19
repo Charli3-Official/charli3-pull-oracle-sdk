@@ -13,11 +13,14 @@ from pycardano import (
     UTxO,
     VerificationKeyHash,
 )
+from tabulate import tabulate
 
 from charli3_offchain_core.cli.config.formatting import (
+    CliColor,
     print_confirmation_message_prompt,
     print_header,
     print_information,
+    print_title,
 )
 from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.models.oracle_datums import (
@@ -76,13 +79,6 @@ class AddNodesBuilder(BaseBuilder):
 
             try:
 
-                show_nodes_update_info(in_core_datum, new_nodes_config)
-
-                if not print_confirmation_message_prompt(
-                    "Do you want to continue with the detected changes?"
-                ):
-                    raise UpdateCancelled()
-
                 out_core_utxo = modified_core_utxo(
                     in_core_utxo,
                     in_core_datum,
@@ -94,30 +90,46 @@ class AddNodesBuilder(BaseBuilder):
                     new_nodes_config,
                     in_core_datum,
                 )
+                try:
+                    confirm_node_updates(
+                        in_core_datum, out_core_utxo.output.datum.datum
+                    )
+                except UpdateCancelled as e:
+
+                    logger.info(f"Node update cancelled: {e}")
+                    return GovernanceTxResult()
+
+                tx = await self.tx_manager.build_script_tx(
+                    script_inputs=[
+                        (in_reward_account_utxo, Redeemer(AddNodes()), script_utxo),
+                        (in_core_utxo, Redeemer(AddNodes()), script_utxo),
+                        (platform_utxo, None, platform_script),
+                    ],
+                    script_outputs=[
+                        out_core_utxo.output,
+                        out_reward_account_utxo.output,
+                        platform_utxo.output,
+                    ],
+                    fee_buffer=self.FEE_BUFFER,
+                    change_address=change_address,
+                    signing_key=signing_key,
+                    required_signers=required_signers,
+                )
+                return GovernanceTxResult(
+                    transaction=tx, settings_utxo=out_core_utxo.output
+                )
             except (UpdateCancelled, click.Abort):
+                logger.info("Operation cancelled")
                 return GovernanceTxResult()
 
-            tx = await self.tx_manager.build_script_tx(
-                script_inputs=[
-                    (in_reward_account_utxo, Redeemer(AddNodes()), script_utxo),
-                    (in_core_utxo, Redeemer(AddNodes()), script_utxo),
-                    (platform_utxo, None, platform_script),
-                ],
-                script_outputs=[
-                    out_core_utxo.output,
-                    out_reward_account_utxo.output,
-                    platform_utxo.output,
-                ],
-                fee_buffer=self.FEE_BUFFER,
-                change_address=change_address,
-                signing_key=signing_key,
-                required_signers=required_signers,
-            )
-            return GovernanceTxResult(
-                transaction=tx, settings_utxo=out_core_utxo.output
-            )
         except SettingsValidationError as e:
-            raise UpdatingError(f"Failed to build close transaction: {e!s}") from e
+            error_msg = f"Failed to build add nodes transaction: {e}"
+            logger.error(error_msg)
+            raise UpdatingError(error_msg) from e
+        except Exception as e:
+            error_msg = f"Unexpected error building add nodes transaction: {e}"
+            logger.error(error_msg)
+            raise UpdatingError(error_msg) from e
 
 
 def modified_core_utxo(
@@ -193,42 +205,174 @@ def modified_reward_utxo(
     return in_reward_utxo
 
 
+def print_nodes_table(
+    node_map: dict[VerificationKeyHash, VerificationKeyHash],
+    success: bool = True,
+    is_current: bool = True,
+) -> None:
+    """Print nodes in a formatted table with improved headers."""
+    color = CliColor.SUCCESS if success else CliColor.ERROR
+
+    title = "CURRENT NODES" if is_current else "NEW NODES TO BE ADDED"
+    # header_length = 120
+    # header = f" {title} ".center(header_length, "=")
+    print_title(title)
+
+    headers = ["Node #", "Feed Verification Key Hash", "Payment Verification Key Hash"]
+    table_data = [
+        [f"{i}", feed_vkh, payment_vkh]
+        for i, (feed_vkh, payment_vkh) in enumerate(node_map.items(), 1)
+    ]
+
+    # click.secho(header, fg=color)
+    table = tabulate(
+        table_data,
+        headers=headers,
+        tablefmt="rst",
+        stralign="center",
+        numalign="center",
+    )
+    click.secho(table, fg=color)
+
+
+def print_required_signatories(count: int, is_current: bool = True) -> None:
+    """Print required signatories information with improved formatting."""
+    status = "Current" if is_current else "New"
+    message = f"{status} Required Signatures: {count}"
+    click.secho(f"\n{message}", fg=CliColor.NEUTRAL, bold=True)
+
+
+def print_validation_rules(
+    new_node_count: int,
+    new_signatures_count: int,
+    has_new_nodes: bool,
+    has_deleted_nodes: bool,
+) -> bool:
+    """Print validation rules and their current status."""
+    rules = [
+        {
+            "rule": "Must not break multisig requirements",
+            "status": new_signatures_count > 0
+            and new_signatures_count <= new_node_count,
+            "details": (
+                f"Required signatures ({new_signatures_count}) must be greater than 0 "
+                f"and not exceed total nodes ({new_node_count})"
+            ),
+        },
+        {
+            "rule": "Must not delete existing nodes",
+            "status": not has_deleted_nodes,
+            "details": "No existing nodes can be removed in this operation",
+        },
+        {
+            "rule": "Must add at least one new node",
+            "status": has_new_nodes,
+            "details": "At least one new node must be added",
+        },
+    ]
+
+    all_rules_pass = True
+
+    print_header("Validation Rules")
+    for rule in rules:
+        status_color = CliColor.SUCCESS if rule["status"] else CliColor.ERROR
+        status_symbol = "✓" if rule["status"] else "✗"
+        click.secho(f"{status_symbol} {rule['rule']}", fg=status_color)
+        print_information(f"   {rule['details']}")
+
+        all_rules_pass = all_rules_pass and rule["status"]
+
+    return all_rules_pass
+
+
 def show_nodes_update_info(
     in_core_datum: OracleSettingsDatum,
-    new_nodes_config: NodesConfig,
-) -> None:
-    """Muestra información sobre los cambios que se realizarán en los nodos."""
-    print_header("Node Update Information")
+    out_core_datum: OracleSettingsDatum,
+) -> bool:
+    """Displays information about the changes that will be made to the nodes."""
+    # Print current nodes
+    print_nodes_table(in_core_datum.nodes.node_map, is_current=True)
+    print_required_signatories(
+        in_core_datum.required_node_signatures_count, is_current=True
+    )
 
-    print_header("Current Nodes")
-    for i, (feed_vkh, payment_vkh) in enumerate(
-        in_core_datum.nodes.node_map.items(), 1
-    ):
-        print_information(f"{i}. Feed VKH: {feed_vkh}")
-        print_information(f"   Payment VKH: {payment_vkh}")
-
+    # Calculate new nodes
     new_nodes = {
-        node.feed_vkh: node.payment_vkh
-        for node in new_nodes_config.nodes
-        if node.feed_vkh not in in_core_datum.nodes.node_map
+        feed_vkh: payment_vkh
+        for feed_vkh, payment_vkh in out_core_datum.nodes.node_map.items()
+        if feed_vkh not in in_core_datum.nodes.node_map
     }
 
-    if new_nodes:
-        print_header("New Nodes to Add")
-        for i, (feed_vkh, payment_vkh) in enumerate(new_nodes.items(), 1):
-            print_information(f"{i}. Feed VKH: {feed_vkh}")
-            print_information(f"   Payment VKH: {payment_vkh}")
-    else:
-        print_information("No new nodes to add")
+    # Calculate deleted nodes for validation
+    deleted_nodes = [
+        feed_vkh
+        for feed_vkh in in_core_datum.nodes.node_map.keys()
+        if feed_vkh not in out_core_datum.nodes.node_map
+    ]
 
-    if (
-        new_nodes_config.required_signatures
-        != in_core_datum.required_node_signatures_count
+    if new_nodes:
+        click.secho("\n", nl=True)
+        print_nodes_table(new_nodes, is_current=False)
+
+        current_signatures = in_core_datum.required_node_signatures_count
+        new_signatures_count = out_core_datum.required_node_signatures_count
+
+        if new_signatures_count == current_signatures:
+            click.secho(
+                "\nSignature requirement will remain unchanged",
+                fg=CliColor.NEUTRAL,
+                bold=True,
+            )
+        else:
+            print_required_signatories(new_signatures_count, is_current=False)
+            click.secho(
+                f"\nSignature requirement will change from {current_signatures} to {new_signatures_count}",
+                fg=(
+                    CliColor.WARNING
+                    if new_signatures_count < current_signatures
+                    else CliColor.SUCCESS
+                ),
+                bold=True,
+            )
+
+        return print_validation_rules(
+            new_node_count=out_core_datum.nodes.length,
+            new_signatures_count=new_signatures_count,
+            has_new_nodes=bool(new_nodes),
+            has_deleted_nodes=bool(deleted_nodes),
+        )
+    else:
+        click.secho("\nNo new nodes to add", fg=CliColor.NEUTRAL, bold=True)
+        raise UpdateCancelled()
+
+
+def confirm_node_updates(
+    in_core_datum: OracleSettingsDatum, out_core_datum: OracleSettingsDatum
+) -> bool:
+    """
+    Validate and confirm node updates with the user.
+
+    Args:
+        in_core_datum: Current oracle settings
+        out_core_datum: Proposed oracle settings
+
+    Returns:
+        bool: True if changes are valid and confirmed, False otherwise
+
+    Raises:
+        UpdateCancelled: If the user cancels the update or validation fails
+    """
+    # Validate and display changes
+    changes_valid = show_nodes_update_info(in_core_datum, out_core_datum)
+    if not changes_valid:
+        logger.warning("Validation failed for node updates")
+        raise UpdateCancelled("Node update validation failed")
+
+    # Get user confirmation
+    if not print_confirmation_message_prompt(
+        "Do you want to continue with the detected changes?"
     ):
-        print_header("Required Signatures Change")
-        print_information(
-            f"Current required signatures: {in_core_datum.required_node_signatures_count}"
-        )
-        print_information(
-            f"New required signatures: {new_nodes_config.required_signatures}"
-        )
+        logger.info("User cancelled node update")
+        raise UpdateCancelled("Update cancelled by user")
+
+    return True
