@@ -250,12 +250,43 @@ def get_reward_account_by_policy_id(
         raise StateValidationError(f"Failed to get reward account: {e}") from e
 
 
-def find_transport_pair(utxos: Sequence[UTxO], policy_id: bytes) -> tuple[UTxO, UTxO]:
-    """Find matching empty transport and agg state pair.
+def filter_valid_agg_states(utxos: Sequence[UTxO], current_time: int) -> list[UTxO]:
+    """Filter UTxOs for empty or expired aggregation states.
+
+    Args:
+        utxos: List of UTxOs to filter
+        current_time: Current time for checking expiry
+
+    Returns:
+        List of UTxOs with empty or expired aggregation states
+    """
+    utxos_with_datum = convert_cbor_to_agg_states(utxos)
+
+    return [
+        utxo
+        for utxo in utxos_with_datum
+        if utxo.output.datum
+        and isinstance(utxo.output.datum, AggStateVariant)
+        and (
+            isinstance(utxo.output.datum.datum, NoDatum)  # Empty state
+            or (
+                not isinstance(utxo.output.datum.datum, NoDatum)
+                and utxo.output.datum.datum.aggstate.expiry_timestamp
+                < current_time  # Expired state
+            )
+        )
+    ]
+
+
+def find_transport_pair(
+    utxos: Sequence[UTxO], policy_id: bytes, current_time: int
+) -> tuple[UTxO, UTxO]:
+    """Find empty transport and agg state pair (empty or expired).
 
     Args:
         utxos: List of UTxOs to search
         policy_id: Policy ID for filtering tokens
+        current_time: Current time for checking expiry
 
     Returns:
         Tuple of (transport UTxO, agg state UTxO)
@@ -271,22 +302,18 @@ def find_transport_pair(utxos: Sequence[UTxO], policy_id: bytes) -> tuple[UTxO, 
         if not transports:
             raise StateValidationError("No empty transport UTxO found")
 
-        # Find empty agg states
-        agg_states = filter_empty_agg_states(
+        # Find empty or expired agg states
+        agg_states = filter_valid_agg_states(
             asset_checks.filter_utxos_by_token_name(
                 utxos, policy_id, "AggregationState"
-            )
+            ),
+            current_time,
         )
         if not agg_states:
-            raise StateValidationError("No empty agg state UTxO found")
+            raise StateValidationError("No valid agg state UTxO found")
 
-        # Find matching pair
-        for transport in transports:
-            for agg_state in agg_states:
-                if validate_matching_pair(transport, agg_state):
-                    return transport, agg_state
-
-        raise StateValidationError("No matching transport/agg state pair found")
+        # Return first pair found
+        return transports[0], agg_states[0]
 
     except Exception as e:
         raise StateValidationError(f"Failed to find UTxO pair: {e}") from e

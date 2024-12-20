@@ -227,6 +227,7 @@ async def close(config: Path, output: Path | None) -> None:
         print_header("Oracle Close")
         (
             management_config,
+            _oracle_config,
             payment_sk,
             oracle_addresses,
             chain_query,
@@ -309,6 +310,7 @@ async def reopen(config: Path, output: Path | None) -> None:
         print_header("Oracle Reopen")
         (
             management_config,
+            _oracle_config,
             payment_sk,
             oracle_addresses,
             chain_query,

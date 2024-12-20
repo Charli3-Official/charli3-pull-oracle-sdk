@@ -19,6 +19,7 @@ from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.constants.status import ProcessStatus
+from charli3_offchain_core.models.oracle_datums import OracleConfiguration
 from charli3_offchain_core.oracle.exceptions import (
     AddingNodesError,
     AddNodesValidationError,
@@ -105,6 +106,7 @@ class GovernanceOrchestrator:
     async def update_oracle(
         self,
         oracle_policy: str,
+        oracle_config: OracleConfiguration,
         platform_utxo: UTxO,
         platform_script: NativeScript,
         change_address: Address,
@@ -118,6 +120,7 @@ class GovernanceOrchestrator:
             builder = UpdateBuilder(self.chain_query, self.tx_manager)
 
             result = await builder.build_tx(
+                oracle_config=oracle_config,
                 platform_utxo=platform_utxo,
                 platform_script=platform_script,
                 policy_hash=policy_hash,

@@ -1,0 +1,26 @@
+network:
+  # Network type (mainnet/testnet)
+  network: "testnet"
+
+  # Ogmios/Kupo configuration for local testnet
+  ogmios_kupo:
+    ogmios_url: "http://localhost:1337"
+    kupo_url: "http://localhost:1442"
+
+# Wallet configuration - use either mnemonic or key files
+wallet:
+  mnemonic: "$TESTNET_WALLET_MNEMONIC"
+
+oracle_address: "addr1..."
+policy_id: "..."
+
+fee_token:
+  fee_token_policy: "hex_policy_id_here"
+  fee_token_name: "hex_token_name_here"
+
+# Simulation-specific settings
+simulation:
+  node_keys_dir: "node_keys"
+  base_feed: 100
+  variance: 0.02
+  wait_time: 60
