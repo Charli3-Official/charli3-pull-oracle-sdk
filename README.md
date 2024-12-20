@@ -124,6 +124,18 @@ timing:
 
 transport_count: 4  # Number of reward transport UTxOs
 blueprint_path: "artifacts/plutus.json"  # Path to Aiken blueprint
+
+nodes:
+  nodes:
+  - feed_vkh: 007df380aef26e44739db3f4fe67d8137446e630dab3df16d9fbddc5
+    payment_vkh: b296714efefe2d991bb7eb002b48b024d1a152691c6fe9e0f76511c5
+  - feed_vkh: 018ab1dd5f33ca2e0ae6ccb694ea379d841bf5f4d2d5756452a2117d
+    payment_vkh: e12ee69ac72fff83a39d690830595cf11ca5a2f0d2d69b3f859f8f43
+  - feed_vkh: e47c436dbd0d1f7642ce2f4a8e36c4facae2b8d9d4c3267380cb1f5f
+    payment_vkh: 13bc38b4b81d4b942fc61be4533a165d837db56bedaf1a991e90fcdf
+  - feed_vkh: db4d690afb9f75d0a4ce983b41349220f9d0b4ada424f3d625963f85
+    payment_vkh: aed02a7e20098dc1415f669a1816473650b295136ff0fc0f9a09be0c
+  required_signatures: 4
 ```
 
 2. Deploy the oracle based on your platform auth NFT configuration:
@@ -153,6 +165,79 @@ charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle
 # - Shows deployment status and script address
 charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_deploy.json
 ```
+## Aggregate Transactions
+### Aggregate and Rewards Calculate
+
+1. Create transaction config (tx_config.yml):
+```yaml
+network:
+  network: "TESTNET"
+  ogmios_kupo:
+    ogmios_url: "ws://localhost:1337"
+    kupo_url: "http://localhost:1442"
+
+oracle_address: "addr_test1..."
+policy_id: "1234..."
+
+fee_token:
+  fee_token_policy: "hex_policy_id_here"
+  fee_token_name: "hex_token_name_here"
+
+wallet:
+  mnemonic: "your 24 word mnemonic"
+```
+
+2. Prepare feed data (feeds.json):
+```json
+{
+  "node_feeds_sorted_by_feed": {
+    "007df380aef26e44739db3f4fe67d8137446e630dab3df16d9fbddc5": 1000,
+    "018ab1dd5f33ca2e0ae6ccb694ea379d841bf5f4d2d5756452a2117d": 1001,
+    "e47c436dbd0d1f7642ce2f4a8e36c4facae2b8d9d4c3267380cb1f5f": 1001
+  },
+  "node_feeds_count": 3,
+  "timestamp": 1734363765000
+}
+```
+
+3. Submit ODV transaction:
+```bash
+charli3 aggregate-tx odv-aggregate submit \
+  --config tx_config.yml \
+  --feeds-file feeds.json \
+  --node-keys-dir node_keys
+```
+
+4. Process rewards:
+```bash
+charli3 aggregate-tx rewards process \
+  --config tx_config.yml
+```
+
+### Simulation of Aggregate and Rewards Calculate
+
+For testing purposes:
+
+1. Create simulation config (sim_config.yml):
+```yaml
+# Include standard transaction config
+...
+
+simulation:
+  node_keys_dir: "node_keys"
+  base_feed: 100
+  variance: 0.02
+  wait_time: 60
+```
+
+2. Run simulation:
+```bash
+charli3 simulator run \
+  --config tx_config.yml
+```
+
+For detailed informations, see [Aggregate Transactions](docs/oracle_aggregate_tx_cli.md)
+
 ##  Governance Operations
 ### Update Oracle Settings
 

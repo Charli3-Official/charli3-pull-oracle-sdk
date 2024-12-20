@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from charli3_offchain_core.cli.config.settings import TimingConfig
+
 from .multisig import MultisigConfig
 from .network import NetworkConfig
 from .token import TokenConfig
@@ -15,6 +17,7 @@ class ManagementConfig:
 
     network: NetworkConfig
     tokens: TokenConfig
+    timing: TimingConfig
     oracle_address: str
     multi_sig: MultisigConfig
     blueprint_path: Path = Path("artifacts/plutus.json")
@@ -26,6 +29,7 @@ class ManagementConfig:
         return cls(
             network=NetworkConfig.from_dict(data.get("network", {})),
             tokens=TokenConfig.from_dict(data.get("tokens", {})),
+            timing=TimingConfig.from_dict(data.get("timing", {})),
             oracle_address=data.get("oracle_address", ""),
             multi_sig=MultisigConfig.from_dict(data.get("multisig", {})),
             blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),

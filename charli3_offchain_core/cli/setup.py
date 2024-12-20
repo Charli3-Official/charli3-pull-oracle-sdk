@@ -115,19 +115,10 @@ def setup_oracle_from_config(
     # Load base contracts
     base_contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
 
-    # Create fee token
-    if (
-        deployment_config.tokens.fee_token_policy == ""
-        and deployment_config.tokens.fee_token_name == ""
-    ):
-        fee_token = NoDatum()
-    else:
-        fee_token = SomeAsset(
-            asset=Asset(
-                policy_id=bytes.fromhex(deployment_config.tokens.fee_token_policy),
-                name=bytes.fromhex(deployment_config.tokens.fee_token_name),
-            )
-        )
+    fee_token = setup_fee_token(
+        deployment_config.tokens.fee_token_policy,
+        deployment_config.tokens.fee_token_name,
+    )
 
     # Create oracle configuration
     oracle_config = OracleConfiguration(
@@ -207,6 +198,7 @@ def setup_oracle_from_config(
 
 def setup_management_from_config(config: Path) -> tuple[
     ManagementConfig,
+    OracleConfiguration,
     PaymentSigningKey,
     OracleAddresses,
     ChainQuery,
@@ -215,6 +207,17 @@ def setup_management_from_config(config: Path) -> tuple[
 ]:
     management_config = ManagementConfig.from_yaml(config)
     base_contracts = OracleContracts.from_blueprint(management_config.blueprint_path)
+
+    # Create oracle configuration
+    oracle_config = OracleConfiguration(
+        platform_auth_nft=bytes.fromhex(management_config.tokens.platform_auth_policy),
+        closing_period_length=management_config.timing.closing_period,
+        reward_dismissing_period_length=management_config.timing.reward_dismissing_period,
+        fee_token=setup_fee_token(
+            management_config.tokens.fee_token_policy,
+            management_config.tokens.fee_token_name,
+        ),
+    )
 
     keys = load_keys_with_validation(management_config, base_contracts)
     addresses = derive_deployment_addresses(management_config, base_contracts)
@@ -235,9 +238,24 @@ def setup_management_from_config(config: Path) -> tuple[
 
     return (
         management_config,
+        oracle_config,
         keys.payment_sk,
         oracle_addresses,
         chain_query,
         tx_manager,
         platform_auth_finder,
     )
+
+
+def setup_fee_token(fee_token_policy: str, fee_token_name: str) -> NoDatum | SomeAsset:
+    """Setup fee token from config params"""
+    if fee_token_policy == "" and fee_token_name == "":
+        fee_token = NoDatum()
+    else:
+        fee_token = SomeAsset(
+            asset=Asset(
+                policy_id=bytes.fromhex(fee_token_policy),
+                name=bytes.fromhex(fee_token_name),
+            )
+        )
+    return fee_token
