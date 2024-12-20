@@ -62,54 +62,48 @@ class PlatformCollect(OracleRedeemer):
 
 
 class UpdateSettings(OracleRedeemer):
-    """Oracle platform changes consensus settings"""
+    """Oracle platform changes consensus, timing or fee settings"""
 
     CONSTR_ID = 4
-
-
-class SetFeeConfig(OracleRedeemer):
-    """Oracle platform changes reward fee configuration"""
-
-    CONSTR_ID = 5
 
 
 class AddNodes(OracleRedeemer):
     """Oracle platform adds new nodes"""
 
-    CONSTR_ID = 6
+    CONSTR_ID = 5
 
 
 class DelNodes(OracleRedeemer):
     """Oracle platform deletes nodes"""
 
-    CONSTR_ID = 7
+    CONSTR_ID = 6
 
 
 class ScaleDown(OracleRedeemer):
     """Platform burns RewardTransport and AggState NFTs"""
 
-    CONSTR_ID = 8
+    CONSTR_ID = 7
 
 
 class DismissRewards(OracleRedeemer):
     """Platform turns RewardTransport UTxOs with pending rewards into NoRewards"""
 
-    CONSTR_ID = 9
+    CONSTR_ID = 8
 
 
 class CloseOracle(OracleRedeemer):
     """Platform starts closing period"""
 
-    CONSTR_ID = 10
+    CONSTR_ID = 9
 
 
 class ReopenOracle(OracleRedeemer):
     """Cancel oracle close for temporary suspension"""
 
-    CONSTR_ID = 11
+    CONSTR_ID = 10
 
 
 class RemoveOracle(OracleRedeemer):
     """Close oracle and destroy all UTxOs and NFTs"""
 
-    CONSTR_ID = 12
+    CONSTR_ID = 11
