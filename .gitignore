@@ -5,6 +5,7 @@ tx_oracle_deploy.json
 tx_oracle_close.json
 tx_oracle_update_settings.json
 tx_oracle_reopen.json
+feeds.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -151,6 +152,7 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+node_keys/
 
 # Pyre type checker
 .pyre/
@@ -161,6 +163,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 deploy-*.yaml
+tx_config*.yml
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

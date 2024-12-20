@@ -1,6 +1,7 @@
 """Oracle start transaction builder for initial oracle deployment."""
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,6 +18,7 @@ from pycardano import (
     TransactionOutput,
     UTxO,
     Value,
+    min_lovelace_post_alonzo,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -58,7 +60,7 @@ class OracleStartBuilder:
     """Builds oracle start transaction for initial deployment"""
 
     # Constants for clarity and reuse
-    MIN_UTXO_VALUE = 4_000_000
+    MIN_UTXO_VALUE = 2_000_000
     FEE_BUFFER = 10_000
 
     def __init__(
@@ -70,6 +72,7 @@ class OracleStartBuilder:
         self.chain_query = chain_query
         self.contracts = contracts
         self.tx_manager = tx_manager
+        self._standard_min_ada = self.MIN_UTXO_VALUE
 
     async def build_start_transaction(
         self,
@@ -148,7 +151,7 @@ class OracleStartBuilder:
         )
         logger.info("Created minting policy with ID: %s", mint_policy.policy_id)
 
-        # Create core UTxOs
+        # Create core UTxOs - Calculate CoreSettings first to set standard min ADA
         settings_utxo = self._create_utxo_with_nft(
             script_address,
             deployment_config.token_names.core_settings,
@@ -161,6 +164,7 @@ class OracleStartBuilder:
                 time_absolute_uncertainty,
                 iqr_fence_multiplier,
             ),
+            "core_settings",
         )
 
         reward_account_utxo = self._create_utxo_with_nft(
@@ -170,6 +174,7 @@ class OracleStartBuilder:
             RewardAccountVariant(
                 datum=RewardAccountDatum(nodes_to_rewards=[0] * len(nodes_config.nodes))
             ),
+            "other",
         )
 
         # Create reward transport and agg state UTxOs
@@ -180,12 +185,14 @@ class OracleStartBuilder:
                     deployment_config.token_names.reward_transport,
                     mint_policy.policy_id,
                     RewardTransportVariant(datum=NoRewards()),
+                    "other",
                 ),
                 self._create_utxo_with_nft(
                     script_address,
                     deployment_config.token_names.aggstate,
                     mint_policy.policy_id,
                     AggStateVariant(datum=NoDatum()),
+                    "agg_state",
                 ),
             )
             for _ in range(deployment_config.reward_transport_count)
@@ -288,18 +295,48 @@ class OracleStartBuilder:
         token_name: str,
         policy_id: ScriptHash,
         datum: Any,
+        utxo_type: str,
     ) -> TransactionOutput:
-        """Create UTxO with NFT and datum."""
-        value = Value(self.MIN_UTXO_VALUE)
+        """
+        Create UTxO with NFT and datum, with specific ADA amounts based on UTxO type.
+
+        Args:
+            address: Script address for the UTxO
+            token_name: Name of the NFT token
+            policy_id: Policy ID for the NFT
+            datum: Datum to attach to the UTxO
+            utxo_type: Type of UTxO ('core_settings', 'agg_state', or 'other')
+
+        Returns:
+            TransactionOutput: Properly configured output with appropriate ADA amount
+        """
+        # Create initial value with just the NFT
+        value = Value()
         value.multi_asset = MultiAsset.from_primitive(
             {policy_id: {token_name.encode(): 1}}
         )
 
-        return TransactionOutput(
+        # Create initial output without ADA
+        output = TransactionOutput(
             address=address,
             amount=value,
             datum=datum,
         )
+
+        if utxo_type == "agg_state":
+            # Fixed 2 ADA for AggregationState
+            output.amount.coin = self.MIN_UTXO_VALUE
+        elif utxo_type == "core_settings":
+            # Calculate exact minimum and store rounded up value for other UTxOs
+            min_ada = min_lovelace_post_alonzo(output, self.chain_query.context)
+            # Round up to nearest ADA (lovelace to ADA, ceiling, back to lovelace)
+            self._standard_min_ada = math.ceil(min_ada / 1_000_000) * 1_000_000
+            output.amount.coin = self._standard_min_ada
+        else:
+            # Use the rounded up value from CoreSettings for all other UTxOs
+            output.amount.coin = self._standard_min_ada
+
+        return output
 
     def _create_nft_mint(
         self,
