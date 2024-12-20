@@ -41,6 +41,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
         print_header("Oracle Update Settings")
         (
             management_config,
+            oracle_config,
             payment_sk,
             oracle_addresses,
             chain_query,
@@ -70,6 +71,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
 
         result = await orchestrator.update_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
+            oracle_config=oracle_config,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
