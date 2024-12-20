@@ -102,21 +102,11 @@ class SimulationSettings:
     base_feed: int
     variance: float = 0.01
     wait_time: int = 60
-    required_signatures: int | None = None
 
     def __post_init__(self) -> None:
         """Validate and set defaults."""
         if not self.node_keys_dir.is_dir():
             raise ValueError(f"Node keys directory not found: {self.node_keys_dir}")
-
-        # Load required signatures from file if not specified
-        if self.required_signatures is None:
-            try:
-                self.required_signatures = int(
-                    (self.node_keys_dir / "required_signatures").read_text()
-                )
-            except (FileNotFoundError, ValueError) as e:
-                raise ValueError("Could not load required_signatures") from e
 
     @property
     def node_count(self) -> int:
@@ -182,7 +172,6 @@ class SimulationConfig(TxConfig):
             base_feed=sim_data["base_feed"],
             variance=sim_data.get("variance", 0.01),
             wait_time=sim_data.get("wait_time", 60),
-            required_signatures=sim_data.get("required_signatures"),
         )
 
         return cls(
@@ -199,13 +188,6 @@ class SimulationConfig(TxConfig):
         """Validate complete configuration."""
         # Validate base config
         self.network.validate()
-
-        # Validate simulation settings
-        if self.simulation.node_count < self.simulation.required_signatures:
-            raise ValueError(
-                f"Number of nodes ({self.simulation.node_count}) must be >= "
-                f"required signatures ({self.simulation.required_signatures})"
-            )
 
         if not 0 < self.simulation.variance < 1:
             raise ValueError("Variance must be between 0 and 1")

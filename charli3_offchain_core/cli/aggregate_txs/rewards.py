@@ -91,8 +91,13 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             _print_reward_summary(result)
 
     except TransactionError as e:
-        logger.error("Transaction failed", exc_info=e)
-        raise click.ClickException(f"Transaction failed: {e!s}") from e
+        if "No pending transport UTxOs found" in str(e.__cause__):
+            logger.info(
+                "No rewards to process at this time - this is normal if no ODV aggregate transactions are pending"
+            )
+            return
+        logger.error("Transaction failed: %s", e)
+
     except Exception as e:
         logger.error("Reward processing failed", exc_info=e)
         raise click.ClickException(str(e)) from e

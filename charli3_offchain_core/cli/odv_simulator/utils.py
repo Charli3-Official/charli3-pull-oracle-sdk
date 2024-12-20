@@ -7,8 +7,8 @@ import click
 from pycardano import VerificationKeyHash
 
 from charli3_offchain_core.cli.odv_simulator.models import (
-    SimulationConfig,
     SimulationResult,
+    SimulationSettings,
 )
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
 
@@ -40,7 +40,7 @@ def create_aggregate_message(feed_data: dict) -> AggregateMessage:
     )
 
 
-def print_simulation_config(config: "SimulationConfig") -> None:
+def print_simulation_config(config: "SimulationSettings") -> None:
     """Print simulation configuration.
 
     Args:
@@ -49,7 +49,6 @@ def print_simulation_config(config: "SimulationConfig") -> None:
     click.echo("\nSimulation Configuration")
     click.echo("=======================")
     click.echo(f"Nodes: {config.node_count}")
-    click.echo(f"Required Signatures: {config.required_signatures}")
     click.echo(f"Base Feed: {config.base_feed}")
     click.echo(f"Variance: {config.variance*100}%")
     click.echo(f"Wait Time: {config.wait_time} seconds")

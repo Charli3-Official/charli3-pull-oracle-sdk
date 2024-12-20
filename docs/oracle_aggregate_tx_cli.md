@@ -140,7 +140,6 @@ simulation:
   base_feed: 100
   variance: 0.02
   wait_time: 60
-  required_signatures: 3
 ```
 
 

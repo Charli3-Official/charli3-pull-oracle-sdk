@@ -39,13 +39,13 @@ async def run(
     # Create simulator
     oracle_simulator = OracleSimulator(sim_config)
 
-    # Show configuration
-    print_simulation_config(sim_config.simulation)
-
     try:
         # Run simulation
         click.echo("\nStarting Simulation...")
         result = await oracle_simulator.run_simulation()
+
+        # Show configuration
+        print_simulation_config(sim_config.simulation)
 
         # Show results
         print_simulation_results(result)

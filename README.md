@@ -202,7 +202,7 @@ wallet:
 
 3. Submit ODV transaction:
 ```bash
-charli3 aggregate_tx odv_aggregate submit \
+charli3 aggregate-tx odv-aggregate submit \
   --config tx_config.yml \
   --feeds-file feeds.json \
   --node-keys-dir node_keys
@@ -210,7 +210,7 @@ charli3 aggregate_tx odv_aggregate submit \
 
 4. Process rewards:
 ```bash
-charli3 aggregate_tx rewards process \
+charli3 aggregate-tx rewards process \
   --config tx_config.yml
 ```
 
@@ -228,7 +228,6 @@ simulation:
   base_feed: 100
   variance: 0.02
   wait_time: 60
-  required_signatures: 3
 ```
 
 2. Run simulation:

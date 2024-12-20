@@ -129,9 +129,12 @@ async def submit(
         if tx_status == "confirmed":
             _print_odv_summary(result)
 
+    except ValueError as e:
+        logger.error("ODV submission failed: %s", e)
+
     except TransactionError as e:
-        logger.error("Transaction failed", exc_info=e)
-        raise click.ClickException(f"Transaction failed: {e!s}") from e
+        logger.error("Transaction failed: %s", e)
+
     except Exception as e:
         logger.error("ODV submission failed", exc_info=e)
         raise click.ClickException(str(e)) from e
@@ -270,6 +273,53 @@ def _print_pending_transport(utxo: UTxO) -> None:
     )
 
 
+def _validate_required_fields(feed_data: dict) -> None:
+    """Validate that all required fields are present in feed data."""
+    required_fields = ["node_feeds_sorted_by_feed", "node_feeds_count", "timestamp"]
+    if not all(field in feed_data for field in required_fields):
+        raise ValueError("Missing required fields in feed data")
+
+
+def _validate_field_types(feed_data: dict) -> None:
+    """Validate the types of feed data fields."""
+    if not isinstance(feed_data["node_feeds_sorted_by_feed"], dict):
+        raise ValueError("node_feeds_sorted_by_feed must be a dictionary")
+
+    if not isinstance(feed_data["node_feeds_count"], int):
+        raise ValueError("node_feeds_count must be an integer")
+
+    if not isinstance(feed_data["timestamp"], int):
+        raise ValueError("timestamp must be an integer")
+
+
+def _validate_feed_count(node_feeds: dict, expected_count: int) -> None:
+    """Validate that the number of feeds matches the expected count."""
+    if len(node_feeds) != expected_count:
+        raise ValueError("node_feeds_count doesn't match number of feeds")
+
+
+def _validate_feed_sorting(node_feeds: dict) -> None:
+    """Validate that feeds are sorted by their values."""
+    feed_values = list(node_feeds.values())
+    if feed_values != sorted(feed_values):
+        raise ValueError("node_feeds_sorted_by_feed must be sorted by feed values")
+
+
+def _validate_vkh_and_feeds(node_feeds: dict) -> None:
+    """Validate VKH format and feed values."""
+    for vkh, feed_value in node_feeds.items():
+        if not isinstance(vkh, str):
+            raise ValueError(f"Invalid VKH format: {vkh}")
+        try:
+            # VKH should be a valid hex string
+            bytes.fromhex(vkh)
+        except ValueError as exc:
+            raise ValueError(f"Invalid VKH hex format: {vkh}") from exc
+
+        if not isinstance(feed_value, int):
+            raise ValueError(f"Invalid feed value for VKH {vkh}")
+
+
 def validate_feed_data(feed_data: dict) -> None:
     """Validate feed data format and content.
 
@@ -284,38 +334,13 @@ def validate_feed_data(feed_data: dict) -> None:
         "timestamp": integer
     }
     """
-    required_fields = ["node_feeds_sorted_by_feed", "node_feeds_count", "timestamp"]
-    if not all(field in feed_data for field in required_fields):
-        raise ValueError("Missing required fields in feed data")
+    _validate_required_fields(feed_data)
+    _validate_field_types(feed_data)
 
-    if not isinstance(feed_data["node_feeds_sorted_by_feed"], dict):
-        raise ValueError("node_feeds_sorted_by_feed must be a dictionary")
-
-    if not isinstance(feed_data["node_feeds_count"], int):
-        raise ValueError("node_feeds_count must be an integer")
-
-    if not isinstance(feed_data["timestamp"], int):
-        raise ValueError("timestamp must be an integer")
-
-    # Validate each node feed
     node_feeds = feed_data["node_feeds_sorted_by_feed"]
-
-    # Check if count matches
-    if len(node_feeds) != feed_data["node_feeds_count"]:
-        raise ValueError("node_feeds_count doesn't match number of feeds")
-
-    # Validate VKHs and feed values
-    for vkh, feed_value in node_feeds.items():
-        if not isinstance(vkh, str):
-            raise ValueError(f"Invalid VKH format: {vkh}")
-        try:
-            # VKH should be a valid hex string
-            bytes.fromhex(vkh)
-        except ValueError as exc:
-            raise ValueError(f"Invalid VKH hex format: {vkh}") from exc
-
-        if not isinstance(feed_value, int):
-            raise ValueError(f"Invalid feed value for VKH {vkh}")
+    _validate_feed_count(node_feeds, feed_data["node_feeds_count"])
+    _validate_feed_sorting(node_feeds)
+    _validate_vkh_and_feeds(node_feeds)
 
 
 def process_feed_data(feed_data: dict[str, Any]) -> AggregateMessage:

@@ -40,7 +40,6 @@ from charli3_offchain_core.models.oracle_redeemers import (
 from charli3_offchain_core.oracle.exceptions import (
     StateValidationError,
     TransactionError,
-    ValidationError,
 )
 from charli3_offchain_core.oracle.utils import (
     asset_checks,
@@ -155,16 +154,6 @@ class OracleTransactionBuilder:
         self.fee_token_name = fee_token_name
         self.network_config = self.tx_manager.chain_query.config.network_config
 
-    async def _get_script_utxos(self) -> list[UTxO]:
-        """Get and validate UTxOs at script address."""
-        try:
-            utxos = await self.tx_manager.chain_query.get_utxos(self.script_address)
-            if not utxos:
-                raise ValidationError("No UTxOs found at script address")
-            return utxos
-        except Exception as e:
-            raise TransactionError(f"Failed to get script UTxOs: {e}") from e
-
     async def build_odv_tx(
         self,
         message: AggregateMessage,
@@ -187,7 +176,7 @@ class OracleTransactionBuilder:
         """
         try:
             # Get UTxOs and settings first
-            utxos = await self._get_script_utxos()
+            utxos = await common.get_script_utxos(self.script_address, self.tx_manager)
 
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
@@ -283,7 +272,7 @@ class OracleTransactionBuilder:
         """
         try:
             # Get and validate UTxOs
-            utxos = await self._get_script_utxos()
+            utxos = await common.get_script_utxos(self.script_address, self.tx_manager)
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
