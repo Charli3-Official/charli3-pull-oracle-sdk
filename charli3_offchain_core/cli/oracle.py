@@ -380,12 +380,17 @@ async def reopen(config: Path, output: Path | None) -> None:
     help="Path to deployment configuration YAML",
 )
 @click.option(
+    "--pair-count",
+    type=int,
+    help="Number of AggregationState + RewardTransport token pairs to burn (defaults to all available pairs)",
+)
+@click.option(
     "--output",
     type=click.Path(path_type=Path),
     help="Output file for transaction data",
 )
 @async_command
-async def remove(config: Path, output: Path | None) -> None:
+async def remove(config: Path, output: Path | None, pair_count: int | None) -> None:
     """Remove an oracle instance permanently using configuration file."""
     try:
         print_header("Oracle Remove")
@@ -420,6 +425,7 @@ async def remove(config: Path, output: Path | None) -> None:
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
+            pair_count=pair_count,
             change_address=oracle_addresses.admin_address,
             signing_key=payment_sk,
         )

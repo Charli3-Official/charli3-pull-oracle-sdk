@@ -250,6 +250,34 @@ def get_reward_account_by_policy_id(
         raise StateValidationError(f"Failed to get reward account: {e}") from e
 
 
+def filter_valid_agg_states(utxos: Sequence[UTxO], current_time: int) -> list[UTxO]:
+    """Filter UTxOs for empty or expired aggregation states.
+
+    Args:
+        utxos: List of UTxOs to filter
+        current_time: Current time for checking expiry
+
+    Returns:
+        List of UTxOs with empty or expired aggregation states
+    """
+    utxos_with_datum = convert_cbor_to_agg_states(utxos)
+
+    return [
+        utxo
+        for utxo in utxos_with_datum
+        if utxo.output.datum
+        and isinstance(utxo.output.datum, AggStateVariant)
+        and (
+            isinstance(utxo.output.datum.datum, NoDatum)  # Empty state
+            or (
+                not isinstance(utxo.output.datum.datum, NoDatum)
+                and utxo.output.datum.datum.aggstate.expiry_timestamp
+                < current_time  # Expired state
+            )
+        )
+    ]
+
+
 def find_transport_pair(utxos: Sequence[UTxO], policy_id: bytes) -> tuple[UTxO, UTxO]:
     """Find matching empty transport and agg state pair.
 

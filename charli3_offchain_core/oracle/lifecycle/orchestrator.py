@@ -143,6 +143,7 @@ class LifecycleOrchestrator:
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        pair_count: int | None = None,
     ) -> LifecycleResult:
         """Remove an oracle permanently and burn all NFTs.
 
@@ -152,6 +153,7 @@ class LifecycleOrchestrator:
             platform_script: Platform authorization script
             change_address: Change address
             signing_key: Signing key
+            pair_count: Optional number of AggregationState + RewardTransport token pairs to burn
 
         Returns:
             LifecycleResult containing transaction status and details
@@ -169,6 +171,7 @@ class LifecycleOrchestrator:
                 platform_script=platform_script,
                 policy_hash=policy_hash,
                 utxos=utxos,
+                pair_count=pair_count,
                 change_address=change_address,
                 signing_key=signing_key,
             )
