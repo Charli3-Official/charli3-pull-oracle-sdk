@@ -41,6 +41,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:
         print_header("Add Nodes")
         (
             management_config,
+            _,
             payment_sk,
             oracle_addresses,
             chain_query,
