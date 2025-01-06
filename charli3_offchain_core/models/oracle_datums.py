@@ -117,12 +117,15 @@ class SomeAsset(PlutusData):
     asset: Asset
 
 
+FeeRateNFT = Union[SomeAsset, NoDatum]
+
+
 @dataclass
 class FeeConfig(PlutusData):
     """Represents fee configuration"""
 
     CONSTR_ID = 0
-    rate_nft: Union[SomeAsset, NoDatum]
+    rate_nft: FeeRateNFT
     reward_prices: RewardPrices
 
 

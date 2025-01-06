@@ -7,11 +7,13 @@ from typing import Any
 import click
 from pycardano import (
     Address,
+    AssetName,
     Datum,
     ExtendedSigningKey,
     NativeScript,
     PaymentSigningKey,
     Redeemer,
+    ScriptHash,
     UTxO,
     VerificationKeyHash,
 )
@@ -25,12 +27,15 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
 )
 from charli3_offchain_core.models.oracle_datums import (
+    Asset,
     FeeConfig,
+    FeeRateNFT,
     NoDatum,
     OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
     RewardPrices,
+    SomeAsset,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     UpdateSettings,
@@ -170,6 +175,7 @@ async def manual_settings_menu(  # noqa: C901
 ) -> UTxO:
     """Interactive menu for manual settings updates."""
     deployed_core_settings = deployed_core_utxo.output.datum
+    initial_fee_rate_nft = deployed_core_settings.datum.fee_info.rate_nft
     initial_settings = {
         SettingOption.AGGREGATION_LIVENESS: deployed_core_settings.datum.aggregation_liveness_period,
         SettingOption.TIME_UNCERTAINTY: deployed_core_settings.datum.time_absolute_uncertainty,
@@ -181,6 +187,8 @@ async def manual_settings_menu(  # noqa: C901
     }
     current_settings = initial_settings.copy()
     invalid_settings = set()
+
+    current_fee_rate_nft = choose_fee_rate_nft(initial_fee_rate_nft)
 
     while True:
         display_initial_settings_context(
@@ -206,7 +214,7 @@ async def manual_settings_menu(  # noqa: C901
         selected_option = next(opt for opt in SettingOption if opt.id == choice)
 
         if selected_option == SettingOption.DONE:
-            if current_settings == initial_settings:
+            if current_settings == initial_settings and current_fee_rate_nft is None:
                 print_status("Update Status", "No changes detected", success=True)
                 raise UpdateCancelled()
             # Validate all settings
@@ -234,6 +242,7 @@ async def manual_settings_menu(  # noqa: C901
                         oracle_config,
                         deployed_core_settings,
                         current_settings,
+                        current_fee_rate_nft,
                     )
                 else:
                     continue
@@ -258,13 +267,17 @@ def build_new_settings_datum(
     oracle_config: OracleConfiguration,
     deployed_core_settings: Datum,
     current_settings: dict,
+    current_fee_rate_nft: FeeRateNFT | None,
 ) -> UTxO:
     print_progress("Building new settings datum")
+    if current_fee_rate_nft is None:
+        current_fee_rate_nft = deployed_core_settings.datum.fee_info.rate_nft
+
     oracle_settings = OracleSettingsDatum(
         nodes=deployed_core_settings.datum.nodes,
         required_node_signatures_count=current_settings[SettingOption.THRESHOLD],
         fee_info=FeeConfig(
-            rate_nft=deployed_core_settings.datum.fee_info.rate_nft,
+            rate_nft=current_fee_rate_nft,
             reward_prices=RewardPrices(
                 node_fee=current_settings[SettingOption.NODE_REWARD_FEE],
                 platform_fee=current_settings[SettingOption.PLATFORM_REWARD_FEE],
@@ -398,3 +411,77 @@ def validate_setting(  # noqa: C901
 
     if option == SettingOption.PLATFORM_REWARD_FEE and value < 0:
         raise SettingsValidationError("Must not have negative platform reward price")
+
+
+def choose_fee_rate_nft(initial_fee_rate_nft: FeeRateNFT) -> FeeRateNFT | None:
+    """
+    Choose new fee rate NFT interactively.
+    Returns None if rate NFT not changed.
+    """
+    print_current_fee_rate_nft(initial_fee_rate_nft)
+
+    if print_confirmation_message_prompt("Do you want to change the fee rate NFT?"):
+        if initial_fee_rate_nft != NoDatum():
+            if print_confirmation_message_prompt(
+                "Do you want to set the fee rate NFT to none?"
+            ):
+                current_fee_rate_nft = NoDatum()
+                print_current_fee_rate_nft(current_fee_rate_nft)
+                return current_fee_rate_nft
+
+        while True:
+            new_policy_id = click.prompt(
+                click.style(
+                    "Enter new value for policy id in hex format",
+                    fg=CliColor.WARNING,
+                    bold=True,
+                ),
+                type=str,
+            )
+            try:
+                new_policy_id = ScriptHash.from_primitive(new_policy_id)
+            except (ValueError, AssertionError, TypeError) as err:
+                print_status(
+                    "Policy Id should be a valid script hash (28 bytes) in hex format",
+                    str(err),
+                    success=False,
+                )
+                continue
+            break
+
+        while True:
+            new_token_name = click.prompt(
+                click.style(
+                    "Enter new value for token name", fg=CliColor.WARNING, bold=True
+                ),
+                type=str,
+            )
+            try:
+                new_token_name = AssetName.from_primitive(
+                    bytes(new_token_name, "utf-8")
+                )
+            except (ValueError, AssertionError, TypeError) as err:
+                print_status(
+                    "Token name should be a valid utf-8 string (max 32 bytes)",
+                    str(err),
+                    success=False,
+                )
+                continue
+            break
+
+        current_fee_rate_nft = SomeAsset(
+            Asset(policy_id=new_policy_id.payload, name=new_token_name.payload)
+        )
+        print_current_fee_rate_nft(current_fee_rate_nft)
+        return current_fee_rate_nft
+
+
+def print_current_fee_rate_nft(current_fee_rate_nft: FeeRateNFT) -> None:
+    print_header("Current Fee Rate NFT")
+    if current_fee_rate_nft == NoDatum():
+        print_status("Fee Rate NFT", "none")
+    else:
+        print_status(
+            "Fee Rate NFT policy id", current_fee_rate_nft.asset.policy_id.hex()
+        )
+        print_status("Fee Rate NFT name", str(current_fee_rate_nft.asset.name))
