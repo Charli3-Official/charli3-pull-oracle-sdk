@@ -11,7 +11,7 @@ Core off-chain infrastructure for Charli3's Oracle Data Verification (ODV) syste
   - Oracle node operations
   - Oracle lifecycle management
     - Oracle pause with multisig support
-    - Oracle reopening with multisig support
+    - Oracle resuming with multisig support
 - **Smart Contract Integration**
   - Aiken blueprint parsing and handling
   - Plutus script management
@@ -311,36 +311,36 @@ charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle
 charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_pause.json
 ```
 
-### Oracle Reopening
+### Oracle Resuming
 
-You can reopen a paused oracle instance using the following commands:
+You can resume a paused oracle instance using the following commands:
 
 #### Option 1: Single Signature Flow (threshold = 1)
 ```bash
 # Complete flow in single command
-# - Builds reopen transaction
+# - Builds resume transaction
 # - Signs with configured wallet
 # - Submits to network immediately
-charli3 oracle reopen --config deploy-testnet.yaml
+charli3 oracle resume --config deploy-testnet.yaml
 ```
 
 #### Option 2: Multi-Signature Flow (threshold > 1)
 ```bash
 # 1. First Wallet: Build transaction
-# - Creates reopen transaction
-# - Generates tx_oracle_reopen.json
-charli3 oracle reopen --config deploy-testnet-wallet-1.yaml
+# - Creates resume transaction
+# - Generates tx_oracle_resume.json
+charli3 oracle resume --config deploy-testnet-wallet-1.yaml
 
 # 2. Additional Wallets: Add signatures
 # - Validates key hasn't signed
 # - Updates transaction file
 # - Shows signature progress
-charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_reopen.json
+charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_resume.json
 
 # 3. Submit when signature threshold is met
 # - Validates all required signatures are present
-# - Submits reopen transaction to network
-charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_reopen.json
+# - Submits resume transaction to network
+charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_resume.json
 ```
 
 ### Reference Scripts Management
@@ -459,7 +459,7 @@ odv-multisig-charli3-offchain-core/
 │   │   │   ├── base.py       # Base lifecycle classes
 │   │   │   ├── orchestrator.py # Lifecycle coordination
 │   │   │   └── pause_builder.py # Pause transaction builder
-│   │   │   └── reopen_builder.py # Reopen transaction builder
+│   │   │   └── resume_builder.py # Resume transaction builder
 │   │   │
 │   │   └── utils/           # Oracle utilities
 │   │       ├── __init__.py

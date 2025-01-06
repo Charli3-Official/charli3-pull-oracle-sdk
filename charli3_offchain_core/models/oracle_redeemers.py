@@ -97,7 +97,7 @@ class PauseOracle(OracleRedeemer):
     CONSTR_ID = 9
 
 
-class ReopenOracle(OracleRedeemer):
+class ResumeOracle(OracleRedeemer):
     """Cancel oracle pause for temporary suspension"""
 
     CONSTR_ID = 10

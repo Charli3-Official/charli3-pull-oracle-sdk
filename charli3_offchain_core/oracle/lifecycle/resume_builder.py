@@ -1,4 +1,4 @@
-"""Reopen oracle transaction builder."""
+"""Resume oracle transaction builder."""
 
 from copy import deepcopy
 from typing import Any
@@ -16,7 +16,7 @@ from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     OracleSettingsVariant,
 )
-from charli3_offchain_core.models.oracle_redeemers import ReopenOracle
+from charli3_offchain_core.models.oracle_redeemers import ResumeOracle
 from charli3_offchain_core.oracle.exceptions import PauseError
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
@@ -27,8 +27,8 @@ from charli3_offchain_core.oracle.utils.state_checks import (
 from .base import BaseBuilder, LifecycleTxResult
 
 
-class ReopenBuilder(BaseBuilder):
-    """Builds oracle reopen transaction."""
+class ResumeBuilder(BaseBuilder):
+    """Builds oracle resume transaction."""
 
     FEE_BUFFER = 10_000
 
@@ -70,7 +70,7 @@ class ReopenBuilder(BaseBuilder):
                 script_inputs=[
                     (
                         settings_utxo,
-                        Redeemer(ReopenOracle()),
+                        Redeemer(ResumeOracle()),
                         script_utxo,
                     ),
                     (platform_utxo, None, platform_script),
@@ -88,4 +88,4 @@ class ReopenBuilder(BaseBuilder):
             )
 
         except Exception as e:
-            raise ValueError(f"Failed to build reopen transaction: {e!s}") from e
+            raise ValueError(f"Failed to build resume transaction: {e!s}") from e

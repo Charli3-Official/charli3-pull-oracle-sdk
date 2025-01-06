@@ -303,10 +303,10 @@ async def pause(config: Path, output: Path | None) -> None:
     help="Output file for transaction data",
 )
 @async_command
-async def reopen(config: Path, output: Path | None) -> None:
-    """Reopen a paused oracle instance using configuration file."""
+async def resume(config: Path, output: Path | None) -> None:
+    """Resume a paused oracle instance using configuration file."""
     try:
-        print_header("Oracle Reopen")
+        print_header("Oracle Resume")
         (
             management_config,
             _oracle_config,
@@ -336,7 +336,7 @@ async def reopen(config: Path, output: Path | None) -> None:
             status_callback=format_status_update,
         )
 
-        result = await orchestrator.reopen_oracle(
+        result = await orchestrator.resume_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
@@ -345,18 +345,18 @@ async def reopen(config: Path, output: Path | None) -> None:
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Reopen failed: {result.error}")
+            raise click.ClickException(f"Resume failed: {result.error}")
 
         if platform_config.threshold == 1:
-            if print_confirmation_message_prompt("Proceed with oracle reopen?"):
+            if print_confirmation_message_prompt("Proceed with oracle resume?"):
                 status, _ = await tx_manager.sign_and_submit(
                     result.transaction, [payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
-                    raise click.ClickException(f"Reopen failed: {status}")
-                print_status("Reopen", "completed successfully", success=True)
-        elif print_confirmation_message_prompt("Store multisig reopen transaction?"):
-            output_path = output or Path("tx_oracle_reopen.json")
+                    raise click.ClickException(f"Resume failed: {status}")
+                print_status("Resume", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig resume transaction?"):
+            output_path = output or Path("tx_oracle_resume.json")
             with output_path.open("w") as f:
                 json.dump(
                     {
@@ -370,7 +370,7 @@ async def reopen(config: Path, output: Path | None) -> None:
             print_hash_info("Output file", str(output_path))
 
     except Exception as e:
-        logger.error("Reopen failed", exc_info=e)
+        logger.error("Resume failed", exc_info=e)
         raise click.ClickException(str(e)) from e
 
 
