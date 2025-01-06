@@ -2,7 +2,7 @@
 #tx files
 tx_platform_mint.json
 tx_oracle_deploy.json
-tx_oracle_close.json
+tx_oracle_pause.json
 tx_oracle_update_settings.json
 tx_oracle_reopen.json
 feeds.json

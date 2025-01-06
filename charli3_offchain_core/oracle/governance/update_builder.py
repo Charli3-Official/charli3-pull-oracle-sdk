@@ -115,7 +115,7 @@ class UpdateBuilder(BaseBuilder):
                 transaction=tx, settings_utxo=modified_settings_utxo
             )
         except SettingsValidationError as e:
-            raise UpdatingError(f"Failed to build close transaction: {e!s}") from e
+            raise UpdatingError(f"Failed to build pause transaction: {e!s}") from e
 
 
 async def get_setting_value(
@@ -289,7 +289,7 @@ def build_new_settings_datum(
         time_absolute_uncertainty=current_settings[SettingOption.TIME_UNCERTAINTY],
         iqr_fence_multiplier=current_settings[SettingOption.IQR_MULTIPLIER],
         utxo_size_safety_buffer=current_settings[SettingOption.UTXO_BUFFER],
-        closing_period_started_at=deployed_core_settings.datum.closing_period_started_at,
+        pause_period_started_at=deployed_core_settings.datum.pause_period_started_at,
     )
     oracle_settings.validate_based_on_config(oracle_config)
 

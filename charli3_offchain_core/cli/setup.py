@@ -123,7 +123,7 @@ def setup_oracle_from_config(
     # Create oracle configuration
     oracle_config = OracleConfiguration(
         platform_auth_nft=bytes.fromhex(deployment_config.tokens.platform_auth_policy),
-        closing_period_length=deployment_config.timing.closing_period,
+        pause_period_length=deployment_config.timing.pause_period,
         reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
         fee_token=fee_token,
     )
@@ -211,7 +211,7 @@ def setup_management_from_config(config: Path) -> tuple[
     # Create oracle configuration
     oracle_config = OracleConfiguration(
         platform_auth_nft=bytes.fromhex(management_config.tokens.platform_auth_policy),
-        closing_period_length=management_config.timing.closing_period,
+        pause_period_length=management_config.timing.pause_period,
         reward_dismissing_period_length=management_config.timing.reward_dismissing_period,
         fee_token=setup_fee_token(
             management_config.tokens.fee_token_policy,

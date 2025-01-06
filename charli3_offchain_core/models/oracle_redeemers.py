@@ -25,7 +25,7 @@ class Scale(MintingRedeemer):
 
 
 class Burn(MintingRedeemer):
-    """Oracle close: all tokens are burned"""
+    """Oracle remove: all tokens are burned"""
 
     CONSTR_ID = 2
 
@@ -91,19 +91,19 @@ class DismissRewards(OracleRedeemer):
     CONSTR_ID = 8
 
 
-class CloseOracle(OracleRedeemer):
-    """Platform starts closing period"""
+class PauseOracle(OracleRedeemer):
+    """Platform starts pause period"""
 
     CONSTR_ID = 9
 
 
 class ReopenOracle(OracleRedeemer):
-    """Cancel oracle close for temporary suspension"""
+    """Cancel oracle pause for temporary suspension"""
 
     CONSTR_ID = 10
 
 
 class RemoveOracle(OracleRedeemer):
-    """Close oracle and destroy all UTxOs and NFTs"""
+    """Remove oracle and destroy all UTxOs and NFTs"""
 
     CONSTR_ID = 11

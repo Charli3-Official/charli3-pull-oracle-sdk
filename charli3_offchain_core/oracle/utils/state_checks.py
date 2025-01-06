@@ -319,16 +319,16 @@ def find_transport_pair(
         raise StateValidationError(f"Failed to find UTxO pair: {e}") from e
 
 
-def is_oracle_closing(settings: OracleSettingsDatum) -> bool:
-    """Check if oracle is in closing period.
+def is_oracle_paused(settings: OracleSettingsDatum) -> bool:
+    """Check if oracle is in pause period.
 
     Args:
         settings: Oracle settings datum
 
     Returns:
-        bool: True if oracle is in closing period
+        bool: True if oracle is in pause period
     """
-    return not isinstance(settings.closing_period_started_at, NoDatum)
+    return not isinstance(settings.pause_period_started_at, NoDatum)
 
 
 def can_process_rewards(

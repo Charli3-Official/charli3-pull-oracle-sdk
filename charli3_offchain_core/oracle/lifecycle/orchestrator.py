@@ -19,7 +19,7 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.constants.status import ProcessStatus
 
 from ..utils.common import get_script_utxos
-from .close_builder import CloseBuilder
+from .pause_builder import PauseBuilder
 from .reopen_builder import ReopenBuilder
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class LifecycleOrchestrator:
         if self.status_callback:
             self.status_callback(status, message)
 
-    async def close_oracle(
+    async def pause_oracle(
         self,
         oracle_policy: str,
         platform_utxo: UTxO,
@@ -67,7 +67,7 @@ class LifecycleOrchestrator:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
             policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
 
-            builder = CloseBuilder(self.chain_query, self.tx_manager)
+            builder = PauseBuilder(self.chain_query, self.tx_manager)
             result = await builder.build_tx(
                 platform_utxo=platform_utxo,
                 platform_script=platform_script,
@@ -82,7 +82,7 @@ class LifecycleOrchestrator:
             )
 
         except Exception as e:
-            logger.error("Close oracle failed: %s", str(e))
+            logger.error("Pause oracle failed: %s", str(e))
             return LifecycleResult(status=ProcessStatus.FAILED, error=e)
 
     async def reopen_oracle(
@@ -93,7 +93,7 @@ class LifecycleOrchestrator:
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
     ) -> LifecycleResult:
-        """Reopen a closed oracle.
+        """Reopen a paused oracle.
 
         Args:
             oracle_policy: Oracle policy ID

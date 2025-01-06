@@ -98,7 +98,7 @@ class OracleDeploymentOrchestrator:
         admin_address: Address,
         script_address: Address,
         # Timing configuration
-        closing_period_length: int,
+        pause_period_length: int,
         reward_dismissing_period_length: int,
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
@@ -120,7 +120,7 @@ class OracleDeploymentOrchestrator:
             script_config: Reference script configuration
             admin_address: Address for reference scripts
             script_address: Address for oracle script
-            closing_period_length: Time allowed for closing period
+            pause_period_length: Time allowed for pause period
             reward_dismissing_period_length: Time allowed for reward dismissal
             aggregation_liveness_period: Time window for aggregation
             time_absolute_uncertainty: Allowed time uncertainty
@@ -141,7 +141,7 @@ class OracleDeploymentOrchestrator:
             # Create oracle configuration
             config = OracleConfiguration(
                 platform_auth_nft=platform_auth_policy_id,
-                closing_period_length=closing_period_length,
+                pause_period_length=pause_period_length,
                 reward_dismissing_period_length=reward_dismissing_period_length,
                 fee_token=fee_token,
             )

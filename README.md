@@ -10,7 +10,7 @@ Core off-chain infrastructure for Charli3's Oracle Data Verification (ODV) syste
   - Reward distribution management
   - Oracle node operations
   - Oracle lifecycle management
-    - Oracle closing with multisig support
+    - Oracle pause with multisig support
     - Oracle reopening with multisig support
 - **Smart Contract Integration**
   - Aiken blueprint parsing and handling
@@ -116,7 +116,7 @@ fees:
   platform_fee: 500000   # 0.5 ADA
 
 timing:
-  closing_period: 3600000        # 1 hour in ms
+  pause_period: 3600000        # 1 hour in ms
   reward_dismissing_period: 7200000  # 2 hours in ms
   aggregation_liveness: 300000   # 5 minutes in ms
   time_uncertainty: 60000        # 1 minute in ms
@@ -251,69 +251,69 @@ This transaction allows you to modify the following settings:
 
 Command: `charli3 oracle update-settings --config platform-config.yaml`
 
-### Oracle Closing
+### Oracle Pause
 
 #### Option 1: Single Signature Flow (threshold = 1)
 ```bash
 # Complete flow in single command
-# - Builds close transaction
+# - Builds pause transaction
 # - Signs with configured wallet
 # - Submits to network immediately
-charli3 oracle close --config deploy-testnet.yaml
+charli3 oracle pause --config deploy-testnet.yaml
 ```
 
 #### Option 2: Multi-Signature Flow (threshold > 1)
 ```bash
 # 1. First Wallet: Build transaction
-# - Creates close transaction
-# - Generates tx_oracle_close.json
-charli3 oracle close --config deploy-testnet-wallet-1.yaml
+# - Creates pause transaction
+# - Generates tx_oracle_pause.json
+charli3 oracle pause --config deploy-testnet-wallet-1.yaml
 
 # 2. Additional Wallets: Add signatures
 # - Validates key hasn't signed
 # - Updates transaction file
 # - Shows signature progress
-charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_close.json
+charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_pause.json
 
 # 3. Submit when signature threshold is met
 # - Validates all required signatures are present
-# - Submits close transaction to network
-charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_close.json
+# - Submits pause transaction to network
+charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_pause.json
 ```
 
-### Oracle Closing
+### Oracle Pause
 
 #### Option 1: Single Signature Flow (threshold = 1)
 ```bash
 # Complete flow in single command
-# - Builds close transaction
+# - Builds pause transaction
 # - Signs with configured wallet
 # - Submits to network immediately
-charli3 oracle close --config deploy-testnet.yaml
+charli3 oracle pause --config deploy-testnet.yaml
 ```
 
 #### Option 2: Multi-Signature Flow (threshold > 1)
 ```bash
 # 1. First Wallet: Build transaction
-# - Creates close transaction
-# - Generates tx_oracle_close.json
-charli3 oracle close --config deploy-testnet-wallet-1.yaml
+# - Creates pause transaction
+# - Generates tx_oracle_pause.json
+charli3 oracle pause --config deploy-testnet-wallet-1.yaml
 
 # 2. Additional Wallets: Add signatures
 # - Validates key hasn't signed
 # - Updates transaction file
 # - Shows signature progress
-charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_close.json
+charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_pause.json
 
 # 3. Submit when signature threshold is met
 # - Validates all required signatures are present
-# - Submits close transaction to network
-charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_close.json
+# - Submits pause transaction to network
+charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_pause.json
 ```
 
 ### Oracle Reopening
 
-You can reopen a closed oracle instance using the following commands:
+You can reopen a paused oracle instance using the following commands:
 
 #### Option 1: Single Signature Flow (threshold = 1)
 ```bash
@@ -374,7 +374,7 @@ The deployment configuration supports multiple options and backends:
    - Configurable token names for oracle NFTs
 
 4. **Timing Parameters**
-   - Closing period length
+   - Pause period length
    - Reward dismissing period
    - Aggregation liveness period
    - Time uncertainty handling
@@ -458,7 +458,7 @@ odv-multisig-charli3-offchain-core/
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py       # Base lifecycle classes
 │   │   │   ├── orchestrator.py # Lifecycle coordination
-│   │   │   └── close_builder.py # Close transaction builder
+│   │   │   └── pause_builder.py # Pause transaction builder
 │   │   │   └── reopen_builder.py # Reopen transaction builder
 │   │   │
 │   │   └── utils/           # Oracle utilities

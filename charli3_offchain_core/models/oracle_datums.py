@@ -143,7 +143,7 @@ class OracleConfiguration(PlutusData):
 
     CONSTR_ID = 0
     platform_auth_nft: PolicyId
-    closing_period_length: PosixTimeDiff
+    pause_period_length: PosixTimeDiff
     reward_dismissing_period_length: PosixTimeDiff
     fee_token: Union[SomeAsset, NoDatum]
 
@@ -165,7 +165,7 @@ class OracleSettingsDatum(PlutusData):
     time_absolute_uncertainty: PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
     utxo_size_safety_buffer: int  # Lovelace
-    closing_period_started_at: Union[SomePosixTime, NoDatum]
+    pause_period_started_at: Union[SomePosixTime, NoDatum]
 
     def __post_init__(self) -> None:
         if (
@@ -197,7 +197,7 @@ class OracleSettingsDatum(PlutusData):
             )
 
         if (
-            oracle_conf.closing_period_length <= self.time_absolute_uncertainty
+            oracle_conf.pause_period_length <= self.time_absolute_uncertainty
             or oracle_conf.reward_dismissing_period_length
             <= self.time_absolute_uncertainty
         ):

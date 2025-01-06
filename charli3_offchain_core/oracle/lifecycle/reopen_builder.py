@@ -17,11 +17,11 @@ from charli3_offchain_core.models.oracle_datums import (
     OracleSettingsVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import ReopenOracle
-from charli3_offchain_core.oracle.exceptions import ClosingError
+from charli3_offchain_core.oracle.exceptions import PauseError
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
     get_oracle_settings_by_policy_id,
-    is_oracle_closing,
+    is_oracle_paused,
 )
 
 from .base import BaseBuilder, LifecycleTxResult
@@ -50,12 +50,12 @@ class ReopenBuilder(BaseBuilder):
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
 
-            if not is_oracle_closing(settings_datum):
-                raise ClosingError("Oracle not in closing period")
+            if not is_oracle_paused(settings_datum):
+                raise PauseError("Oracle not in pause period")
 
             modified_datum = deepcopy(settings_datum)
             modified_settings_utxo = deepcopy(settings_utxo)
-            modified_datum.closing_period_started_at = NoDatum()
+            modified_datum.pause_period_started_at = NoDatum()
 
             modified_settings_utxo.output.datum = OracleSettingsVariant(modified_datum)
 

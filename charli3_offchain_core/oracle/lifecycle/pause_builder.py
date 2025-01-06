@@ -1,4 +1,4 @@
-"""Close oracle transaction builder."""
+"""Pause oracle transaction builder."""
 
 from copy import deepcopy
 from typing import Any
@@ -17,19 +17,19 @@ from charli3_offchain_core.models.oracle_datums import (
     OracleSettingsVariant,
     SomePosixTime,
 )
-from charli3_offchain_core.models.oracle_redeemers import CloseOracle
-from charli3_offchain_core.oracle.exceptions import ClosingError
+from charli3_offchain_core.models.oracle_redeemers import PauseOracle
+from charli3_offchain_core.oracle.exceptions import PauseError
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
     get_oracle_settings_by_policy_id,
-    is_oracle_closing,
+    is_oracle_paused,
 )
 
 from .base import BaseBuilder, LifecycleTxResult
 
 
-class CloseBuilder(BaseBuilder):
-    """Builds oracle close transaction"""
+class PauseBuilder(BaseBuilder):
+    """Builds oracle pause transaction"""
 
     FEE_BUFFER = 10_000
 
@@ -51,17 +51,17 @@ class CloseBuilder(BaseBuilder):
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
 
-            if is_oracle_closing(settings_datum):
-                raise ClosingError("Oracle already in closing period")
+            if is_oracle_paused(settings_datum):
+                raise PauseError("Oracle already in pause period")
 
-            closing_time_ms, validity_start, validity_end = (
-                self._get_closing_time_and_slot_ranges(settings_datum)
+            pause_time_ms, validity_start, validity_end = (
+                self._get_pause_time_and_slot_ranges(settings_datum)
             )
 
             modified_settings_utxo = deepcopy(settings_utxo)
             modified_settings_datum = deepcopy(settings_datum)
-            modified_settings_datum.closing_period_started_at = SomePosixTime(
-                closing_time_ms
+            modified_settings_datum.pause_period_started_at = SomePosixTime(
+                pause_time_ms
             )
 
             modified_settings_utxo.output.datum = OracleSettingsVariant(
@@ -73,7 +73,7 @@ class CloseBuilder(BaseBuilder):
                 script_inputs=[
                     (
                         settings_utxo,
-                        Redeemer(CloseOracle()),
+                        Redeemer(PauseOracle()),
                         script_utxo,
                     ),
                     (platform_utxo, None, platform_script),
@@ -91,14 +91,14 @@ class CloseBuilder(BaseBuilder):
             )
 
         except Exception as e:
-            raise ValueError(f"Failed to build close transaction: {e!s}") from e
+            raise ValueError(f"Failed to build pause transaction: {e!s}") from e
 
-    def _get_closing_time_and_slot_ranges(
+    def _get_pause_time_and_slot_ranges(
         self, settings_datum: OracleSettingsDatum
     ) -> tuple[int, int, int]:
-        """Get closing time and slot ranges."""
+        """Get pause time and slot ranges."""
         current_slot = self.chain_query.last_block_slot
         validity_end = current_slot + (settings_datum.time_absolute_uncertainty // 1000)
         conversion = self.chain_query.config.network_config.slot_to_posix
-        closing_time_ms = (conversion(current_slot) + conversion(validity_end)) // 2
-        return closing_time_ms, current_slot, validity_end
+        pause_time_ms = (conversion(current_slot) + conversion(validity_end)) // 2
+        return pause_time_ms, current_slot, validity_end
