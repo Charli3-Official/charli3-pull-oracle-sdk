@@ -25,10 +25,12 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
 )
 from charli3_offchain_core.models.oracle_datums import (
+    FeeConfig,
     NoDatum,
     OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
+    RewardPrices,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     UpdateSettings,
@@ -54,7 +56,9 @@ class SettingOption(Enum):
     IQR_MULTIPLIER = ("3", "IQR Fence Multiplier")
     UTXO_BUFFER = ("4", "UTxO size safety buffer")
     THRESHOLD = ("5", "Required Node Signature Count")
-    DONE = ("6", "Done")
+    NODE_REWARD_FEE = ("6", "Reward price for node fee")
+    PLATFORM_REWARD_FEE = ("7", "Reward price for platform fee")
+    DONE = ("8", "Done")
 
     def __init__(self, id: str, label: str) -> None:
         self.id = id
@@ -136,6 +140,11 @@ async def get_setting_value(
                 )
             elif option == SettingOption.IQR_MULTIPLIER:
                 help_text.append("must be greater than 100")
+            elif option in (
+                SettingOption.NODE_REWARD_FEE,
+                SettingOption.PLATFORM_REWARD_FEE,
+            ):
+                help_text.append("must not be negative")
 
             prompt_text = (
                 f"Enter new value for {option.label} (current: {current_value})"
@@ -167,6 +176,8 @@ async def manual_settings_menu(  # noqa: C901
         SettingOption.IQR_MULTIPLIER: deployed_core_settings.datum.iqr_fence_multiplier,
         SettingOption.THRESHOLD: deployed_core_settings.datum.required_node_signatures_count,
         SettingOption.UTXO_BUFFER: deployed_core_settings.datum.utxo_size_safety_buffer,
+        SettingOption.NODE_REWARD_FEE: deployed_core_settings.datum.fee_info.reward_prices.node_fee,
+        SettingOption.PLATFORM_REWARD_FEE: deployed_core_settings.datum.fee_info.reward_prices.platform_fee,
     }
     current_settings = initial_settings.copy()
     invalid_settings = set()
@@ -252,7 +263,13 @@ def build_new_settings_datum(
     oracle_settings = OracleSettingsDatum(
         nodes=deployed_core_settings.datum.nodes,
         required_node_signatures_count=current_settings[SettingOption.THRESHOLD],
-        fee_info=deployed_core_settings.datum.fee_info,
+        fee_info=FeeConfig(
+            rate_nft=deployed_core_settings.datum.fee_info.rate_nft,
+            reward_prices=RewardPrices(
+                node_fee=current_settings[SettingOption.NODE_REWARD_FEE],
+                platform_fee=current_settings[SettingOption.PLATFORM_REWARD_FEE],
+            ),
+        ),
         aggregation_liveness_period=current_settings[
             SettingOption.AGGREGATION_LIVENESS
         ],
@@ -331,7 +348,7 @@ def display_initial_settings_context(
         click.echo(f"{option.id}. {option.label}")
 
 
-def validate_setting(
+def validate_setting(  # noqa: C901
     option: SettingOption,
     value: int,
     current_settings: dict,
@@ -375,3 +392,9 @@ def validate_setting(
             raise SettingsValidationError(
                 f"Aggregation liveness ({value}) must be greater than time uncertainty ({time_uncertainty})"
             )
+
+    if option == SettingOption.NODE_REWARD_FEE and value < 0:
+        raise SettingsValidationError("Must not have negative node reward price")
+
+    if option == SettingOption.PLATFORM_REWARD_FEE and value < 0:
+        raise SettingsValidationError("Must not have negative platform reward price")
