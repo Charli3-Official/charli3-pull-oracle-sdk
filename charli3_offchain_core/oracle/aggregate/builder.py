@@ -3,7 +3,7 @@
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from statistics import median
+from fractions import Fraction
 
 from pycardano import (
     Address,
@@ -25,6 +25,7 @@ from charli3_offchain_core.models.oracle_datums import (
     Aggregation,
     AggStateDatum,
     AggStateVariant,
+    NodeFeed,
     NoRewards,
     OracleSettingsDatum,
     RewardAccountDatum,
@@ -207,7 +208,11 @@ class OracleTransactionBuilder:
 
             # Calculate median using the current message
             feeds = list(current_message.node_feeds_sorted_by_feed.values())
-            median_value = int(median(feeds))
+            node_count = current_message.node_feeds_count
+            median_value = self.median(
+                feeds,
+                node_count,
+            )
 
             # Calculate minimum fee
             minimum_fee = rewards.calculate_min_fee_amount(
@@ -465,3 +470,67 @@ class OracleTransactionBuilder:
         validity_start_slot = self.network_config.posix_to_slot(validity_start)
         validity_end_slot = self.network_config.posix_to_slot(validity_end)
         return validity_start_slot, validity_end_slot
+
+    def median(self, node_feeds_sorted: list[NodeFeed], node_feeds_count: int) -> int:
+        """
+        Calculate the median of the node feeds
+
+        Args:
+            node_feeds_sorted: Sorted list of NodeFeed objects
+            node_feeds_count: Number of node feeds
+
+        Returns:
+            Median value as an integer
+
+        """
+        if len(node_feeds_sorted) == 1:
+            return node_feeds_sorted[0]
+
+        midpoint = Fraction(1, 2)
+        result = self.quantile(node_feeds_sorted, node_feeds_count, midpoint)
+        return self.round_even(result)
+
+    def quantile(self, xs: list[int], n: int, q: Fraction) -> Fraction:
+        """
+        Calculate the q-th quantile of the sorted list xs
+
+        Args:
+            xs: Sorted list of values
+            n: Length of the list
+            q: Desired quantile (between 0 and 1) as a Fraction
+
+        Returns:
+            Quantile value as a Fraction
+        """
+        n_sub_one = Fraction(n - 1)
+        quantile_index = q * n_sub_one
+
+        # Integral part of q * (n - 1)
+        j = int(quantile_index // 1)
+
+        # Fractional part of q * (n - 1)
+        g = quantile_index - Fraction(j)
+
+        # Get the j-th and (j+1)-th elements
+        x_j = xs[j]
+        x_j_1 = xs[j + 1] if j + 1 < len(xs) else xs[j]
+
+        # Linear interpolation
+        fst = (Fraction(1) - g) * Fraction(x_j)
+        snd = g * Fraction(x_j_1)
+
+        return fst + snd
+
+    def round_even(self, num: Fraction) -> int:
+        """
+        Round to nearest even using Fraction
+        """
+        floor = int(num // 1)
+        decimal = num - floor
+
+        if decimal < Fraction(1, 2):
+            return floor
+        elif decimal > Fraction(1, 2):
+            return floor + 1
+        else:
+            return floor if floor % 2 == 0 else floor + 1
