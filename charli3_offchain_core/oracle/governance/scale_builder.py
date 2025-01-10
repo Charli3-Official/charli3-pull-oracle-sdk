@@ -5,9 +5,9 @@ from dataclasses import dataclass
 
 from pycardano import (
     Address,
-    AssetName,
     ExtendedSigningKey,
     MultiAsset,
+    NativeScript,
     PaymentSigningKey,
     Redeemer,
     ScriptHash,
@@ -23,6 +23,7 @@ from charli3_offchain_core.models.oracle_datums import (
     AggStateVariant,
     NoDatum,
     NoRewards,
+    OracleSettingsDatum,
     RewardTransportVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
@@ -32,6 +33,9 @@ from charli3_offchain_core.models.oracle_redeemers import (
 from charli3_offchain_core.oracle.exceptions import (
     ScalingError,
     StateValidationError,
+)
+from charli3_offchain_core.oracle.utils.asset_checks import (
+    filter_utxos_by_token_name,
 )
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
@@ -71,8 +75,6 @@ class OracleScaleBuilder:
         tx_manager: TransactionManager,
         script_address: Address,
         policy_id: ScriptHash,
-        fee_token_hash: ScriptHash,
-        fee_token_name: AssetName,
     ) -> None:
         """Initialize transaction builder.
 
@@ -84,32 +86,20 @@ class OracleScaleBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
-        self.fee_token_hash = fee_token_hash
-        self.fee_token_name = fee_token_name
         self.network_config = self.tx_manager.chain_query.config.network_config
         self._standard_min_ada = self.MIN_UTXO_VALUE
-
-    def _get_standard_min_ada(self, utxos: list[UTxO], policy_hash: ScriptHash) -> int:
-        """Get standard minimum ADA amount from core settings UTxO."""
-        try:
-            # Get core settings UTxO and use its amount
-            _, settings_utxo = get_oracle_settings_by_policy_id(utxos, policy_hash)
-            return settings_utxo.output.amount.coin
-
-        except Exception as e:  # pylint: disable=broad-except
-            logger.warning("Failed to get min ADA from core settings: %s", e)
-            return self.MIN_UTXO_VALUE
 
     async def build_scale_up_tx(
         self,
         platform_utxo: UTxO,
+        platform_script: NativeScript,
         utxos: list[UTxO],
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         scale_amount: int,
         required_signers: list[VerificationKeyHash] | None = None,
         transport_name: str = "RewardTransport",
-        aggstate_name: str = "AggState",
+        aggstate_name: str = "AggregationState",
     ) -> ScaleUpResult:
         """Build transaction to increase ODV capacity by creating new UTxO pairs."""
         try:
@@ -118,9 +108,8 @@ class OracleScaleBuilder:
                 raise ValueError("Reference script UTxO not found")
 
             # Get standard min ADA from core settings
-            self._standard_min_ada = await self._get_standard_min_ada(
-                utxos, self.policy_id
-            )
+            _, settings_utxo = get_oracle_settings_by_policy_id(utxos, self.policy_id)
+            self._standard_min_ada = settings_utxo.output.amount.coin
             logger.info(
                 "Using standard min ADA amount: %s lovelace", self._standard_min_ada
             )
@@ -132,7 +121,7 @@ class OracleScaleBuilder:
                     amount=Value(
                         coin=self._standard_min_ada,
                         multi_asset=MultiAsset.from_primitive(
-                            {self.policy_id: {transport_name.encode(): 1}}
+                            {self.policy_id.payload: {transport_name.encode(): 1}}
                         ),
                     ),
                     datum=RewardTransportVariant(datum=NoRewards()),
@@ -146,7 +135,7 @@ class OracleScaleBuilder:
                     amount=Value(
                         coin=self._standard_min_ada,
                         multi_asset=MultiAsset.from_primitive(
-                            {self.policy_id: {aggstate_name.encode(): 1}}
+                            {self.policy_id.payload: {aggstate_name.encode(): 1}}
                         ),
                     ),
                     datum=AggStateVariant(datum=NoDatum()),
@@ -155,20 +144,26 @@ class OracleScaleBuilder:
             ]
 
             # Get minting script
-            nft_minting_script = self.tx_manager.chain_query.get_plutus_script(
+            nft_minting_script = await self.tx_manager.chain_query.get_plutus_script(
                 self.policy_id
             )
             mint_map = {
                 transport_name.encode(): scale_amount,
                 aggstate_name.encode(): scale_amount,
             }
-            mint = MultiAsset.from_primitive({self.policy_id: mint_map})
+            mint = MultiAsset.from_primitive({self.policy_id.payload: mint_map})
 
             # Build transaction using TransactionManager
             tx = await self.tx_manager.build_script_tx(
-                script_inputs=[],  # No script inputs for minting
-                script_outputs=[*new_transport_outputs, *new_agg_state_outputs],
-                reference_inputs={platform_utxo},
+                script_inputs=[
+                    (platform_utxo, None, platform_script),
+                ],
+                script_outputs=[
+                    *new_transport_outputs,
+                    *new_agg_state_outputs,
+                    platform_utxo.output,
+                ],
+                reference_inputs={settings_utxo},
                 mint=mint,
                 mint_redeemer=Redeemer(Scale()),
                 mint_script=nft_minting_script,
@@ -189,6 +184,7 @@ class OracleScaleBuilder:
     async def build_scale_down_tx(
         self,
         platform_utxo: UTxO,
+        platform_script: NativeScript,
         utxos: list[UTxO],
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
@@ -202,18 +198,25 @@ class OracleScaleBuilder:
                 raise ValueError("Reference script UTxO not found")
 
             # Calculate validity window
-            settings_datum, _ = get_oracle_settings_by_policy_id(utxos, self.policy_id)
-            validity_start = (
-                self.tx_manager.chain_query.get_current_posix_chain_time_ms()
+            settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
+                utxos, self.policy_id
             )
-            validity_end = validity_start + settings_datum.time_absolute_uncertainty
-            current_time = (validity_end + validity_start) // 2
+            current_time, validity_start, validity_end = (
+                self._get_current_time_and_validity_window(settings_datum)
+            )
 
             # Find UTxOs to remove
-            empty_transports = filter_empty_transports(utxos)[:scale_amount]
-            expired_and_empty_agg_states = filter_valid_agg_states(utxos, current_time)[
-                :scale_amount
-            ]
+            transport_utxos = filter_utxos_by_token_name(
+                utxos, self.policy_id, "RewardTransport"
+            )
+            aggstate_utxos = filter_utxos_by_token_name(
+                utxos, self.policy_id, "AggregationState"
+            )
+            empty_transports = filter_empty_transports(transport_utxos)[:scale_amount]
+
+            expired_and_empty_agg_states = filter_valid_agg_states(
+                aggstate_utxos, current_time
+            )[:scale_amount]
 
             if (
                 len(empty_transports) < scale_amount
@@ -226,16 +229,16 @@ class OracleScaleBuilder:
                 )
 
             # Get minting script for burning
-            nft_minting_script = self.tx_manager.chain_query.get_plutus_script(
+            nft_minting_script = await self.tx_manager.chain_query.get_plutus_script(
                 self.policy_id
             )
 
             # Add burning
             mint_map = {
                 b"RewardTransport": -scale_amount,
-                b"AggState": -scale_amount,
+                b"AggregationState": -scale_amount,
             }
-            mint = MultiAsset.from_primitive({self.policy_id: mint_map})
+            mint = MultiAsset.from_primitive({self.policy_id.payload: mint_map})
 
             # Prepare script inputs
             script_inputs = [
@@ -245,11 +248,11 @@ class OracleScaleBuilder:
 
             # Build transaction using TransactionManager
             tx = await self.tx_manager.build_script_tx(
-                script_inputs=script_inputs,
+                script_inputs=[(platform_utxo, None, platform_script), *script_inputs],
                 script_outputs=[platform_utxo.output],
-                reference_inputs={platform_utxo},
+                reference_inputs={settings_utxo},
                 mint=mint,
-                mint_redeemer=Redeemer(ScaleDown()),
+                mint_redeemer=Redeemer(Scale()),
                 mint_script=nft_minting_script,
                 required_signers=required_signers,
                 change_address=change_address,
@@ -266,3 +269,15 @@ class OracleScaleBuilder:
 
         except Exception as e:
             raise ScalingError(f"Failed to build scale down transaction: {e}") from e
+
+    def _get_current_time_and_validity_window(
+        self, settings_datum: OracleSettingsDatum
+    ) -> tuple[int, int, int]:
+        """Get closing time and slot ranges."""
+        validity_start = self.tx_manager.chain_query.last_block_slot
+        validity_end = validity_start + (
+            settings_datum.time_absolute_uncertainty // 1000
+        )
+        conversion = self.tx_manager.chain_query.config.network_config.slot_to_posix
+        curr_time_ms = (conversion(validity_start) + conversion(validity_end)) // 2
+        return curr_time_ms, validity_start, validity_end
