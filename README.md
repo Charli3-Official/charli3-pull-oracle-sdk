@@ -9,9 +9,10 @@ Core off-chain infrastructure for Charli3's Oracle Data Verification (ODV) syste
   - Multi-signature validation
   - Reward distribution management
   - Oracle node operations
-  - Oracle lifecycle management
-    - Oracle closing with multisig support
-    - Oracle reopening with multisig support
+  - Oracle lifecycle management (Multisig Support)
+    - Oracle closing
+    - Oracle reopening
+    - Oracle removing
 - **Smart Contract Integration**
   - Aiken blueprint parsing and handling
   - Plutus script management
@@ -281,34 +282,32 @@ charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle
 charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_close.json
 ```
 
-### Oracle Closing
+### Oracle Removing
 
 #### Option 1: Single Signature Flow (threshold = 1)
 ```bash
-# Complete flow in single command
-# - Builds close transaction
-# - Signs with configured wallet
-# - Submits to network immediately
-charli3 oracle close --config deploy-testnet.yaml
+# Builds and submits a removal transaction to burn all associated NFTs or a specified number of pairs.
+# - For single signature (threshold = 1), signs and submits immediately.
+# - For multi-signature (threshold > 1), generates tx_oracle_remove.json for signing.
+#
+# Optional: Specify the number of AggState and Reward Transport NFT pairs to burn using [--pair-count <number_of_pairs>]
+charli3 oracle remove --config deploy-testnet.yaml [--pair-count <number_of_pairs>]
 ```
+
+*Note: If `--pair-count` is omitted, all associated NFTs will be burned.*
 
 #### Option 2: Multi-Signature Flow (threshold > 1)
 ```bash
-# 1. First Wallet: Build transaction
-# - Creates close transaction
-# - Generates tx_oracle_close.json
-charli3 oracle close --config deploy-testnet-wallet-1.yaml
-
-# 2. Additional Wallets: Add signatures
+# 1. Additional Wallets: Add signatures
 # - Validates key hasn't signed
 # - Updates transaction file
 # - Shows signature progress
-charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_close.json
+charli3 oracle sign-tx --config deploy-testnet-wallet-2.yaml --tx-file tx_oracle_remove.json
 
-# 3. Submit when signature threshold is met
+# 2. Submit when signature threshold is met
 # - Validates all required signatures are present
-# - Submits close transaction to network
-charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_close.json
+# - Submits removal transaction to network
+charli3 oracle submit-tx --config deploy-testnet.yaml --tx-file tx_oracle_remove.json
 ```
 
 ### Oracle Reopening
