@@ -398,6 +398,7 @@ async def remove(config: Path, output: Path | None, pair_count: int | None) -> N
         print_header("Oracle Remove")
         (
             management_config,
+            _,
             payment_sk,
             oracle_addresses,
             chain_query,
