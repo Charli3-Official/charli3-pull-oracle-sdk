@@ -18,9 +18,7 @@ from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     FeeConfig,
-    NoDatum,
     OracleConfiguration,
-    SomeAsset,
 )
 from charli3_offchain_core.oracle.config import (
     OracleDeploymentConfig,
@@ -91,15 +89,11 @@ class OracleDeploymentOrchestrator:
 
     async def build_tx(
         self,
-        # Network, platform and admin configuration
-        platform_auth_policy_id: bytes,
-        fee_token: SomeAsset | NoDatum,
+        # oracle configuration
+        oracle_config: OracleConfiguration,
         platform_script: NativeScript,
         admin_address: Address,
         script_address: Address,
-        # Timing configuration
-        pause_period_length: int,
-        reward_dismissing_period_length: int,
         aggregation_liveness_period: int,
         time_absolute_uncertainty: int,
         iqr_fence_multiplier: int,
@@ -138,17 +132,9 @@ class OracleDeploymentOrchestrator:
             Exception: If deployment fails
         """
         try:
-            # Create oracle configuration
-            config = OracleConfiguration(
-                platform_auth_nft=platform_auth_policy_id,
-                pause_period_length=pause_period_length,
-                reward_dismissing_period_length=reward_dismissing_period_length,
-                fee_token=fee_token,
-            )
-
             # Handle start transaction
             start_result = await self._handle_start_transaction(
-                config=config,
+                config=oracle_config,
                 deployment_config=deployment_config,
                 nodes_config=nodes_config,
                 script_address=script_address,
