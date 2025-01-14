@@ -66,6 +66,10 @@ blueprint_path: "artifacts/testnet_plutus.json"
 # Create both reference scripts for testing
 create_reference: true
 
+# Will pay out utxo with reference script to this address.
+# By default creates reference script at this script address.
+reference_script_addr: "addr_test1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"
+
 nodes:
   nodes:
   - feed_vkh: 007df380aef26e44739db3f4fe67d8137446e630dab3df16d9fbddc5
