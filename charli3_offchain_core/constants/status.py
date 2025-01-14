@@ -18,3 +18,4 @@ class ProcessStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED_BY_USER = "cancelled_by_user"
+    VERIFICATION_FAILURE = "verification_failure"

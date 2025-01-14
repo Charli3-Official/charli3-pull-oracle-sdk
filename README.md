@@ -250,7 +250,13 @@ This transaction allows you to modify the following settings:
 4. **UTxO Size Safety Buffer**
 5. **Required Node Signature Count**
 
-Command: `charli3 oracle update-settings --config platform-config.yaml`
+Command: `charli3 oracle update-settings --config testnet.yaml`
+
+### Add Nodes
+
+The command compares the node list in the config file, and if any changes are detected (new nodes), it proceeds to add them. The built-in menu helps users identify the required validations.
+
+Command: `charli3 oracle add-nodes --config testnet.yaml`
 
 ### Oracle Closing
 
