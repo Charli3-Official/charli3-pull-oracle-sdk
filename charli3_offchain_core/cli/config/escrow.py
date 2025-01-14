@@ -23,8 +23,10 @@ class EscrowConfig:
         data = load_yaml_config(path)
 
         ref_addr = data.get("reference_script_addr", None)
-        if ref_addr is not None:
+        if ref_addr:
             ref_addr = Address.from_primitive(ref_addr)
+        else:
+            ref_addr = None
 
         return cls(
             network=NetworkConfig.from_dict(data.get("network", {})),
