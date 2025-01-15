@@ -164,7 +164,8 @@ class OracleSettingsDatum(PlutusData):
     required_node_signatures_count: int
     fee_info: FeeConfig
     aggregation_liveness_period: PosixTimeDiff
-    time_absolute_uncertainty: PosixTimeDiff
+    time_uncertainty_aggregation: PosixTimeDiff
+    time_uncertainty_platform: PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
     utxo_size_safety_buffer: int  # Lovelace
     pause_period_started_at: Union[SomePosixTime, NoDatum]
@@ -176,12 +177,15 @@ class OracleSettingsDatum(PlutusData):
         ):
             raise ValueError("Oracle Settings Validator: Must not break multisig")
 
-        if self.aggregation_liveness_period <= self.time_absolute_uncertainty:
+        if self.aggregation_liveness_period <= self.time_uncertainty_platform:
             raise ValueError("Oracle Settings Validator: Must measure time precisely")
 
-        if self.time_absolute_uncertainty <= 0:
+        if (
+            self.time_uncertainty_platform <= self.time_uncertainty_aggregation
+            or self.time_uncertainty_aggregation <= 0
+        ):
             raise ValueError(
-                "Oracle Settings Validator: Must have positive time interval lengths"
+                "Oracle Settings Validator: Must have fair time interval lengths"
             )
 
         if self.iqr_fence_multiplier <= 100:
@@ -199,9 +203,9 @@ class OracleSettingsDatum(PlutusData):
             )
 
         if (
-            oracle_conf.pause_period_length <= self.time_absolute_uncertainty
+            oracle_conf.pause_period_length <= self.time_uncertainty_platform
             or oracle_conf.reward_dismissing_period_length
-            <= self.time_absolute_uncertainty
+            <= self.time_uncertainty_platform
         ):
             raise ValueError("Oracle Settings Validator: Must measure time precisely")
 
