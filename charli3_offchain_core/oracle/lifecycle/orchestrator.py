@@ -20,6 +20,7 @@ from charli3_offchain_core.constants.status import ProcessStatus
 
 from ..utils.common import get_script_utxos
 from .close_builder import CloseBuilder
+from .remove_builder import RemoveBuilder
 from .reopen_builder import ReopenBuilder
 
 logger = logging.getLogger(__name__)
@@ -133,4 +134,56 @@ class LifecycleOrchestrator:
         except Exception as e:
             logger.error("Reopen oracle failed: %s", str(e))
             self._update_status(ProcessStatus.FAILED, f"Reopen failed: {e!s}")
+            return LifecycleResult(status=ProcessStatus.FAILED, error=e)
+
+    async def remove_oracle(
+        self,
+        oracle_policy: str,
+        platform_utxo: UTxO,
+        platform_script: NativeScript,
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        pair_count: int | None = None,
+    ) -> LifecycleResult:
+        """Remove an oracle permanently and burn all NFTs.
+
+        Args:
+            oracle_policy: Oracle policy ID
+            platform_utxo: Platform NFT UTxO
+            platform_script: Platform authorization script
+            change_address: Change address
+            signing_key: Signing key
+            pair_count: Optional number of AggregationState + RewardTransport token pairs to burn
+
+        Returns:
+            LifecycleResult containing transaction status and details
+        """
+        try:
+            utxos = await get_script_utxos(self.script_address, self.tx_manager)
+            policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
+
+            self._update_status(
+                ProcessStatus.BUILDING_TRANSACTION, "Building remove oracle transaction"
+            )
+            builder = RemoveBuilder(self.chain_query, self.tx_manager)
+            result = await builder.build_tx(
+                platform_utxo=platform_utxo,
+                platform_script=platform_script,
+                policy_hash=policy_hash,
+                utxos=utxos,
+                pair_count=pair_count,
+                change_address=change_address,
+                signing_key=signing_key,
+            )
+
+            self._update_status(
+                ProcessStatus.TRANSACTION_BUILT, "Remove oracle transaction built"
+            )
+            return LifecycleResult(
+                status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
+            )
+
+        except Exception as e:
+            logger.error("Remove oracle failed: %s", str(e))
+            self._update_status(ProcessStatus.FAILED, f"Remove failed: {e!s}")
             return LifecycleResult(status=ProcessStatus.FAILED, error=e)
