@@ -496,7 +496,7 @@ async def create_reference_script(config: Path, force: bool) -> None:
         # Create script config
         script_config = OracleScriptConfig(
             create_manager_reference=True,
-            reference_ada_amount=68205750,
+            reference_ada_amount=69528920,
         )
 
         # Check for existing script
