@@ -429,7 +429,9 @@ class OracleTransactionBuilder:
         total_fee_tokens = rewards.calculate_total_fees(
             transports, self.fee_token_hash, self.fee_token_name
         )
-        node_rewards = rewards.calculate_node_rewards_from_transports(transports)
+        node_rewards = rewards.calculate_node_rewards_from_transports(
+            transports, nodes, settings.iqr_fence_multiplier
+        )
 
         # Accumulate rewards
         new_rewards = rewards.accumulate_node_rewards(
