@@ -13,3 +13,4 @@ class CliColor(str, Enum):
     HASH = "bright_black"
     PROGRESS = "yellow"
     TITLE = "bright_cyan"
+    NEUTRAL = "white"
