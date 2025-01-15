@@ -120,7 +120,8 @@ timing:
   pause_period: 3600000        # 1 hour in ms
   reward_dismissing_period: 7200000  # 2 hours in ms
   aggregation_liveness: 300000   # 5 minutes in ms
-  time_uncertainty: 60000        # 1 minute in ms
+  time_uncertainty_aggregation: 120000 # 2 minutes in ms
+  time_uncertainty_platform: 180000 # 3 minutes in ms
   iqr_multiplier: 150           # 1.5x
 
 transport_count: 4  # Number of reward transport UTxOs
