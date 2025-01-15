@@ -118,7 +118,8 @@ class OracleDeploymentOrchestrator:
             pause_period_length: Time allowed for pause period
             reward_dismissing_period_length: Time allowed for reward dismissal
             aggregation_liveness_period: Time window for aggregation
-            time_absolute_uncertainty: Allowed time uncertainty
+            time_uncertainty_aggregation: Max tx validity interval length for odv-aggregation tx
+            time_uncertainty_platform: Max tx validity interval length for platform governance txs
             iqr_fence_multiplier: IQR multiplier for outlier detection
             deployment_config: Deployment parameters
             nodes_config: Configuration for oracle nodes

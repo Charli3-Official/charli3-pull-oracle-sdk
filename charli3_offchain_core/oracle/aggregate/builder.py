@@ -188,7 +188,9 @@ class OracleTransactionBuilder:
 
             # Calculate the transaction time window and current time ONCE
             validity_start, validity_end, current_time = (
-                self._calculate_validity_window(settings_datum)
+                self._calculate_validity_window(
+                    settings_datum.time_uncertainty_aggregation
+                )
             )
 
             validity_start_slot, validity_end_slot = self._validity_window_to_slot(
@@ -455,11 +457,11 @@ class OracleTransactionBuilder:
         )
 
     def _calculate_validity_window(
-        self, settings: OracleSettingsDatum
+        self, time_absolute_uncertainty: int
     ) -> tuple[int, int, int]:
         """Calculate transaction validity window and current time."""
         validity_start = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-        validity_end = validity_start + settings.time_absolute_uncertainty
+        validity_end = validity_start + time_absolute_uncertainty
         current_time = (validity_end + validity_start) // 2
         return validity_start, validity_end, current_time
 

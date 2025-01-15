@@ -63,7 +63,7 @@ class ResumeBuilder(BaseBuilder):
 
             validity_start = self.chain_query.last_block_slot
             validity_end = validity_start + (
-                settings_datum.time_absolute_uncertainty // 1000
+                settings_datum.time_uncertainty_platform // 1000
             )
 
             tx = await self.tx_manager.build_script_tx(
