@@ -70,15 +70,37 @@ class RewardsResult:
 
     @property
     def reward_distribution(self) -> dict[int, int]:
-        """Get reward distribution from pending transports."""
+        """Get reward distribution from pending transports.
+
+        Returns:
+            Dictionary mapping node IDs to their reward amounts.
+            The rewards are extracted from the first transport's aggregation data
+            and matched with reward amounts from the reward account datum.
+
+        Note:
+            Only processes the first transport UTxO, even if multiple are present.
+        """
+        # Early return if no pending transports
+        if not self.pending_transports:
+            return {}
+
+        # Get reward amounts list from reward account
+        reward_list = self.new_reward_account.datum.datum.nodes_to_rewards
+
+        # Get the first transport's datum
+        transport_datum = self.pending_transports[0].output.datum.datum
+
+        # Early return if no aggregation data
+        if not hasattr(transport_datum, "aggregation"):
+            return {}
+
+        # Build distribution mapping
         distribution = {}
-        for transport in self.pending_transports:
-            datum = transport.output.datum.datum
-            if hasattr(datum, "aggregation"):
-                agg = datum.aggregation
-                node_reward = agg.node_reward_price
-                for node_id in agg.message.node_feeds_sorted_by_feed.keys():
-                    distribution[node_id] = distribution.get(node_id, 0) + node_reward
+        for idx, node_id in enumerate(
+            transport_datum.aggregation.message.node_feeds_sorted_by_feed
+        ):
+            distribution[node_id] = reward_list[idx]
+
         return distribution
 
     @property
