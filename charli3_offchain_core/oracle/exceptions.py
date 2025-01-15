@@ -288,3 +288,21 @@ class UpdateCancelled(GovernanceError):  # noqa
     """Exception raised when user intentionally cancels the update."""
 
     pass
+
+
+class AddNodesValidationError(GovernanceError):
+    """Raised when settings validation fails."""
+
+    pass
+
+
+class AddNodesCancelled(GovernanceError):  # noqa
+    """Exception raised when user intentionally cancels the add nodes tx."""
+
+    pass
+
+
+class AddingNodesError(GovernanceError):
+    """Raised when oracle update operations fail."""
+
+    pass
