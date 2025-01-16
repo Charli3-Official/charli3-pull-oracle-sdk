@@ -101,11 +101,11 @@ fees:
 
 ```yaml
 timing:
-  # Period during which oracle can be closed
-  closing_period: 3600000        # 1 hour
+  # Period during which oracle can be paused
+  pause_period: 3600000        # 1 hour
 
   # Period for dismissing unclaimed rewards
-  reward_dismissing_period: 7200000  # 2 hours (must be > closing_period)
+  reward_dismissing_period: 7200000  # 2 hours (must be > pause_period)
 
   # Time window for aggregating oracle data
   aggregation_liveness: 300000   # 5 minutes
@@ -154,7 +154,7 @@ The configuration system enforces these validation rules:
 
 5. **Timing Parameters**
    - All periods must be positive
-   - Reward dismissing period must be greater than closing period
+   - Reward dismissing period must be greater than pause period
    - Valid ranges for all time values
 
 6. **Fees**
@@ -183,7 +183,7 @@ fees:
   platform_fee: 500000 # 0.5 ADA
 
 timing:
-  closing_period: 3600000
+  pause_period: 3600000
   reward_dismissing_period: 7200000
   aggregation_liveness: 300000
   time_uncertainty: 60000

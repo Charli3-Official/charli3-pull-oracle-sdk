@@ -19,7 +19,7 @@ from charli3_offchain_core.blockchain.transactions import (
     TransactionManager,
 )
 from charli3_offchain_core.models.oracle_redeemers import Burn, RemoveOracle
-from charli3_offchain_core.oracle.exceptions import ClosingError
+from charli3_offchain_core.oracle.exceptions import PauseError
 from charli3_offchain_core.oracle.utils.asset_checks import filter_utxos_by_token_name
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
@@ -27,7 +27,7 @@ from charli3_offchain_core.oracle.utils.state_checks import (
     filter_valid_agg_states,
     get_oracle_settings_by_policy_id,
     get_reward_account_by_policy_id,
-    is_oracle_closing,
+    is_oracle_paused,
 )
 
 from .base import BaseBuilder, LifecycleTxResult
@@ -62,8 +62,8 @@ class RemoveBuilder(BaseBuilder):
             settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
                 utxos, policy_hash
             )
-            if not is_oracle_closing(settings_datum):
-                raise ClosingError("Closing period has not started")
+            if not is_oracle_paused(settings_datum):
+                raise PauseError("Pause period has not started")
 
             _, reward_utxo = get_reward_account_by_policy_id(utxos, policy_hash)
             script_utxo = get_reference_script_utxo(utxos)

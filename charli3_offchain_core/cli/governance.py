@@ -180,7 +180,9 @@ async def update_settings(config: Path, output: Path | None) -> None:
             print_status("Update Status", "Operation cancelled by user", success=True)
             return
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Update failed: {result.error}")
+            raise click.ClickException(
+                f"Update failed: {result.error}"
+            ) from result.error
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt("Proceed with oracle update?"):

@@ -216,8 +216,8 @@ class OperationError(OracleError):
     pass
 
 
-class ClosingError(OperationError):
-    """Raised when oracle closing operations fail."""
+class PauseError(OperationError):
+    """Raised when oracle pause operations fail."""
 
     pass
 
