@@ -51,7 +51,7 @@ fees:
 
 timing:
   # Shorter periods for testing
-  closing_period: 1800000              # 30 minutes
+  pause_period: 1800000              # 30 minutes
   reward_dismissing_period: 3600000    # 1 hour
   aggregation_liveness: 600000         # 10 minutes
   time_uncertainty: 180000             # 3 minutes

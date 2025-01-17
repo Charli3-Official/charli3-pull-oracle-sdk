@@ -153,7 +153,7 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
             platform_script=platform_script,
             admin_address=addresses.admin_address,
             script_address=addresses.script_address,
-            closing_period_length=deployment_config.timing.closing_period,
+            pause_period_length=deployment_config.timing.pause_period,
             reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
             aggregation_liveness_period=deployment_config.timing.aggregation_liveness,
             time_absolute_uncertainty=deployment_config.timing.time_uncertainty,
@@ -221,10 +221,10 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
     help="Output file for transaction data",
 )
 @async_command
-async def close(config: Path, output: Path | None) -> None:
-    """Close an oracle instance using configuration file."""
+async def pause(config: Path, output: Path | None) -> None:
+    """Pause an oracle instance using configuration file."""
     try:
-        print_header("Oracle Close")
+        print_header("Oracle Pause")
         (
             management_config,
             _oracle_config,
@@ -253,7 +253,7 @@ async def close(config: Path, output: Path | None) -> None:
             script_address=oracle_addresses.script_address,
             status_callback=format_status_update,
         )
-        result = await orchestrator.close_oracle(
+        result = await orchestrator.pause_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
@@ -262,18 +262,18 @@ async def close(config: Path, output: Path | None) -> None:
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Close failed: {result.error}")
+            raise click.ClickException(f"Pause failed: {result.error}")
 
         if platform_config.threshold == 1:
-            if print_confirmation_message_prompt("Proceed with oracle close?"):
+            if print_confirmation_message_prompt("Proceed with oracle pause?"):
                 status, _ = await tx_manager.sign_and_submit(
                     result.transaction, [payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
-                    raise click.ClickException(f"Close failed: {status}")
-                print_status("Close", "completed successfully", success=True)
-        elif print_confirmation_message_prompt("Store multisig close transaction?"):
-            output_path = output or Path("tx_oracle_close.json")
+                    raise click.ClickException(f"Pause failed: {status}")
+                print_status("Pause", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig pause transaction?"):
+            output_path = output or Path("tx_oracle_pause.json")
             with output_path.open("w") as f:
                 json.dump(
                     {
@@ -287,7 +287,7 @@ async def close(config: Path, output: Path | None) -> None:
             print_hash_info("Output file", str(output_path))
 
     except Exception as e:
-        logger.error("Close failed", exc_info=e)
+        logger.error("Pause failed", exc_info=e)
         raise click.ClickException(str(e)) from e
 
 
@@ -304,10 +304,10 @@ async def close(config: Path, output: Path | None) -> None:
     help="Output file for transaction data",
 )
 @async_command
-async def reopen(config: Path, output: Path | None) -> None:
-    """Reopen a closed oracle instance using configuration file."""
+async def resume(config: Path, output: Path | None) -> None:
+    """Resume a paused oracle instance using configuration file."""
     try:
-        print_header("Oracle Reopen")
+        print_header("Oracle Resume")
         (
             management_config,
             _oracle_config,
@@ -337,7 +337,7 @@ async def reopen(config: Path, output: Path | None) -> None:
             status_callback=format_status_update,
         )
 
-        result = await orchestrator.reopen_oracle(
+        result = await orchestrator.resume_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
@@ -346,18 +346,18 @@ async def reopen(config: Path, output: Path | None) -> None:
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Reopen failed: {result.error}")
+            raise click.ClickException(f"Resume failed: {result.error}")
 
         if platform_config.threshold == 1:
-            if print_confirmation_message_prompt("Proceed with oracle reopen?"):
+            if print_confirmation_message_prompt("Proceed with oracle resume?"):
                 status, _ = await tx_manager.sign_and_submit(
                     result.transaction, [payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
-                    raise click.ClickException(f"Reopen failed: {status}")
-                print_status("Reopen", "completed successfully", success=True)
-        elif print_confirmation_message_prompt("Store multisig reopen transaction?"):
-            output_path = output or Path("tx_oracle_reopen.json")
+                    raise click.ClickException(f"Resume failed: {status}")
+                print_status("Resume", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig resume transaction?"):
+            output_path = output or Path("tx_oracle_resume.json")
             with output_path.open("w") as f:
                 json.dump(
                     {
@@ -371,7 +371,7 @@ async def reopen(config: Path, output: Path | None) -> None:
             print_hash_info("Output file", str(output_path))
 
     except Exception as e:
-        logger.error("Reopen failed", exc_info=e)
+        logger.error("Resume failed", exc_info=e)
         raise click.ClickException(str(e)) from e
 
 

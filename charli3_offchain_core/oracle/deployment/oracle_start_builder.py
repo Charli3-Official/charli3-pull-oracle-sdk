@@ -283,7 +283,7 @@ class OracleStartBuilder:
             time_absolute_uncertainty=time_absolute_uncertainty,
             iqr_fence_multiplier=iqr_fence_multiplier,
             utxo_size_safety_buffer=utxo_size_safety_buffer,
-            closing_period_started_at=NoDatum(),
+            pause_period_started_at=NoDatum(),
         )
         oracle_settings.validate_based_on_config(config)
 

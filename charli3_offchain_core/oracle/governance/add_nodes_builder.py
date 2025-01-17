@@ -155,7 +155,7 @@ def modified_core_utxo(
         time_absolute_uncertainty=in_core_datum.time_absolute_uncertainty,
         iqr_fence_multiplier=in_core_datum.iqr_fence_multiplier,
         utxo_size_safety_buffer=in_core_datum.utxo_size_safety_buffer,
-        closing_period_started_at=in_core_datum.closing_period_started_at,
+        pause_period_started_at=in_core_datum.pause_period_started_at,
     )
 
     in_core_utxo.output.datum = OracleSettingsVariant(new_datum)

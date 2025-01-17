@@ -46,7 +46,7 @@ fees:
 
 timing:
   # All periods in milliseconds
-  closing_period: 3600000 # 1 hour
+  pause_period: 3600000 # 1 hour
   reward_dismissing_period: 7200000 # 2 hours
   aggregation_liveness: 300000 # 5 minutes
   time_uncertainty: 180000 # 3 minutes
