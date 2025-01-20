@@ -1,7 +1,9 @@
+import asyncio
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, List
 
 from opshin import sha256
+import aiohttp
 from pycardano import (
     PlutusData,
     ScriptHash,
@@ -17,6 +19,17 @@ class Ed25519Signature(ConstrainedBytes):
     """Ed25519 signatures are only 512-bits (64 bytes)"""
 
     MAX_SIZE = MIN_SIZE = 64
+
+
+def validate_signature_ser(value: str) -> str:
+    """Validate that a hex string corresponds to a Ed25519 Signature."""
+    try:
+        signature = Ed25519Signature.from_primitive(value)
+        return signature.payload.hex()
+    except (ValueError, AssertionError, TypeError) as err:
+        raise ValueError(
+            "Should be a valid Ed25519 Signature (64 bytes) in hex format",
+        ) from err
 
 
 def validate_policy_id(value: str) -> str:
@@ -99,5 +112,87 @@ class OracleNodeMessageSerializer(BaseModel):
         )
 
 
+class OdvMessageRequest(BaseModel):
+    odv_validity_start: Annotated[str, BeforeValidator(validate_timestamp)]
+    odv_validity_end: Annotated[str, BeforeValidator(validate_timestamp)]
+    oracle_nft_policy_id_hex: Annotated[str, BeforeValidator(validate_policy_id)]
+
+    @classmethod
+    def ser(
+        cls,
+        odv_validity_start: int,
+        odv_validity_end: int,
+        oracle_nft_policy_id: ScriptHash,
+    ) -> "OdvMessageRequest":
+        return cls(
+            odv_validity_start=str(odv_validity_start),
+            odv_validity_end=str(odv_validity_end),
+            oracle_nft_policy_id_hex=oracle_nft_policy_id.payload.hex(),
+        )
+
+
+class OdvMessageResponse(BaseModel):
+    feed: Annotated[str, BeforeValidator(validate_positive_int)]
+    timestamp: Annotated[str, BeforeValidator(validate_timestamp)]
+    signature_hex: Annotated[str, BeforeValidator(validate_signature_ser)]
+
+
+@dataclass
+class NodeNetworkId:
+    root_url: str
+    pub_key: VerificationKey
+
+
 class OdvClientAPI:
-    pass
+    def __init__(
+        self,
+        headers: dict[str, str] = {
+            "Content-type": "application/json",
+            "Accepts": "application/json",
+        },
+        timeout_seconds: int = 120,  # Ideally timeout should be set to half of tx validity interval length
+    ) -> None:
+        self._headers = headers
+        self._timeout = aiohttp.ClientTimeout(timeout_seconds)
+
+    async def odv_message_request(
+        self, req: OdvMessageRequest, node: NodeNetworkId
+    ) -> OracleNodeMessage:
+        async with aiohttp.ClientSession() as session:
+            async with session.request(
+                "POST",
+                f"{node.root_url}/odv-message",
+                data=req.model_dump_json(),
+                headers=self._headers,
+                timeout=self._timeout,
+            ) as resp:
+                if not resp.ok:
+                    raise UnsuccessfulResponse(resp.status)
+                json_payload = await resp.read()
+                resp_obj = OdvMessageResponse.model_validate_json(json_payload)
+                node_msg = OracleNodeMessage(
+                    feed=int(resp_obj.feed),
+                    timestamp=int(resp_obj.timestamp),
+                    oracle_nft_policy_id=bytes.fromhex(req.oracle_nft_policy_id_hex),
+                )
+                if not node_msg.check_node_signature(
+                    node.pub_key,
+                    Ed25519Signature.from_primitive(resp_obj.signature_hex),
+                ):
+                    raise InvalidNodeSignature(node.pub_key.payload.hex())
+                return node_msg
+
+    async def odv_message_requests(
+        self, req: OdvMessageRequest, nodes: List[NodeNetworkId]
+    ) -> List[OracleNodeMessage]:
+        return await asyncio.gather(
+            *(self.odv_message_request(req, node) for node in nodes)
+        )
+
+
+class UnsuccessfulResponse(Exception):
+    """Used when the response status is more than 400"""
+
+
+class InvalidNodeSignature(Exception):
+    """Verification of node message Ed25519 Signature failed"""
