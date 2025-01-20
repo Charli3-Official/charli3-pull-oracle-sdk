@@ -143,7 +143,11 @@ class NodeNetworkId:
     pub_key: VerificationKey
 
 
-class OdvClientAPI:
+class OdvApiClient:
+    """
+    Use as context manager: async with OdvApiClient() as client
+    """
+
     def __init__(
         self,
         headers: dict[str, str] = {
@@ -154,33 +158,50 @@ class OdvClientAPI:
     ) -> None:
         self._headers = headers
         self._timeout = aiohttp.ClientTimeout(timeout_seconds)
+        self._session: aiohttp.ClientSession | None = None
+
+    async def __aenter__(self) -> "OdvApiClient":
+        self._session = aiohttp.ClientSession()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self._session:
+            await self._session.close()
+            self._session = None
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            raise RuntimeError(
+                "Client session not initialized. Use async with OdvClientAPI() as client:"
+            )
+        return self._session
 
     async def odv_message_request(
         self, req: OdvMessageRequest, node: NodeNetworkId
     ) -> OracleNodeMessage:
-        async with aiohttp.ClientSession() as session:
-            async with session.request(
-                "POST",
-                f"{node.root_url}/odv-message",
-                data=req.model_dump_json(),
-                headers=self._headers,
-                timeout=self._timeout,
-            ) as resp:
-                if not resp.ok:
-                    raise UnsuccessfulResponse(resp.status)
-                json_payload = await resp.read()
-                resp_obj = OdvMessageResponse.model_validate_json(json_payload)
-                node_msg = OracleNodeMessage(
-                    feed=int(resp_obj.feed),
-                    timestamp=int(resp_obj.timestamp),
-                    oracle_nft_policy_id=bytes.fromhex(req.oracle_nft_policy_id_hex),
-                )
-                if not node_msg.check_node_signature(
-                    node.pub_key,
-                    Ed25519Signature.from_primitive(resp_obj.signature_hex),
-                ):
-                    raise InvalidNodeSignature(node.pub_key.payload.hex())
-                return node_msg
+        session = self._get_session()
+        async with session.request(
+            "POST",
+            f"{node.root_url}/odv-message",
+            data=req.model_dump_json(),
+            headers=self._headers,
+            timeout=self._timeout,
+        ) as resp:
+            if not resp.ok:
+                raise UnsuccessfulResponse(resp.status)
+            json_payload = await resp.read()
+            resp_obj = OdvMessageResponse.model_validate_json(json_payload)
+            node_msg = OracleNodeMessage(
+                feed=int(resp_obj.feed),
+                timestamp=int(resp_obj.timestamp),
+                oracle_nft_policy_id=bytes.fromhex(req.oracle_nft_policy_id_hex),
+            )
+            if not node_msg.check_node_signature(
+                node.pub_key,
+                Ed25519Signature.from_primitive(resp_obj.signature_hex),
+            ):
+                raise InvalidNodeSignature(node.pub_key.payload.hex())
+            return node_msg
 
     async def odv_message_requests(
         self, req: OdvMessageRequest, nodes: List[NodeNetworkId]
