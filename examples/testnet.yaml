@@ -54,7 +54,8 @@ timing:
   pause_period: 1800000              # 30 minutes
   reward_dismissing_period: 3600000    # 1 hour
   aggregation_liveness: 600000         # 10 minutes
-  time_uncertainty: 180000             # 3 minutes
+  time_uncertainty_aggregation: 120000 # 2 minutes in ms
+  time_uncertainty_platform: 180000    # 3 minutes in ms
   iqr_multiplier: 150                  # 1.5x multiplier for outlier detection
 
 # Can use fewer transport UTxOs on testnet
@@ -65,6 +66,10 @@ blueprint_path: "artifacts/testnet_plutus.json"
 
 # Create both reference scripts for testing
 create_reference: true
+
+# Will pay out utxo with reference script to this address.
+# By default creates reference script at this script address.
+reference_script_addr: "addr_test1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"
 
 nodes:
   nodes:

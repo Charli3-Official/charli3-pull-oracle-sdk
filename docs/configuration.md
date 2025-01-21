@@ -111,7 +111,8 @@ timing:
   aggregation_liveness: 300000   # 5 minutes
 
   # Allowed time uncertainty for oracle operations
-  time_uncertainty: 60000        # 1 minute
+  time_uncertainty_aggregation: 120000 # 2 minutes in ms
+  time_uncertainty_platform: 180000 # 3 minutes in ms
 
   # Multiplier for IQR-based outlier detection (percentage)
   iqr_multiplier: 150           # 1.5x
@@ -186,7 +187,8 @@ timing:
   pause_period: 3600000
   reward_dismissing_period: 7200000
   aggregation_liveness: 300000
-  time_uncertainty: 60000
+  time_uncertainty_aggregation: 120000 # 2 minutes in ms
+  time_uncertainty_platform: 180000 # 3 minutes in ms
   iqr_multiplier: 150
 
 transport_count: 4

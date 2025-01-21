@@ -120,7 +120,8 @@ timing:
   pause_period: 3600000        # 1 hour in ms
   reward_dismissing_period: 7200000  # 2 hours in ms
   aggregation_liveness: 300000   # 5 minutes in ms
-  time_uncertainty: 60000        # 1 minute in ms
+  time_uncertainty_aggregation: 120000 # 2 minutes in ms
+  time_uncertainty_platform: 180000 # 3 minutes in ms
   iqr_multiplier: 150           # 1.5x
 
 transport_count: 4  # Number of reward transport UTxOs
@@ -357,6 +358,23 @@ poetry run charli3 oracle create-reference-scripts \
     --manager \
     --nft
 ```
+
+## Reward Escrow contract management
+
+Managing reward script is easy, we only need to create a reference script for it.
+Locking rewards inside the escrow script is a part of delete-nodes tx, while spending the escrow script is a part of reward-collect for the nodes/platform.
+
+The following command will:
+
+- Lookup the existing reference script utxos;
+- Interactively create the reference script.
+
+```bash
+charli3 escrow create-reference-script --config deploy-testnet.yaml
+```
+
+Configuration for this command builds on the previous oracle configuration (see [guide](#configuration-guide)) by reusing network, wallet and blueprint config.
+A new field `reference_script_addr` is added to configure which address is used for locking the reference script utxo.
 
 ## 📖 Documentation
 

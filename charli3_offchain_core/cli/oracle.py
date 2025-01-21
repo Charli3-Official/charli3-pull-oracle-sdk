@@ -87,10 +87,11 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
         setup = setup_oracle_from_config(config)
         (
             deployment_config,
+            oracle_config,
             payment_sk,
-            payment_vk,
+            _payment_vk,
             addresses,
-            chain_query,
+            _chain_query,
             tx_manager,
             orchestrator,
             platform_auth_finder,
@@ -146,17 +147,13 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
 
         # Build deployment transaction
         result = await orchestrator.build_tx(
-            platform_auth_policy_id=bytes.fromhex(
-                deployment_config.tokens.platform_auth_policy
-            ),
-            fee_token=configs["fee_token"],
+            oracle_config,
             platform_script=platform_script,
             admin_address=addresses.admin_address,
             script_address=addresses.script_address,
-            pause_period_length=deployment_config.timing.pause_period,
-            reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
             aggregation_liveness_period=deployment_config.timing.aggregation_liveness,
-            time_absolute_uncertainty=deployment_config.timing.time_uncertainty,
+            time_uncertainty_aggregation=deployment_config.timing.time_uncertainty_aggregation,
+            time_uncertainty_platform=deployment_config.timing.time_uncertainty_platform,
             iqr_fence_multiplier=deployment_config.timing.iqr_multiplier,
             deployment_config=configs["deployment"],
             fee_config=configs["fee"],
@@ -499,7 +496,7 @@ async def create_reference_script(config: Path, force: bool) -> None:
         # Create script config
         script_config = OracleScriptConfig(
             create_manager_reference=True,
-            reference_ada_amount=68205750,
+            reference_ada_amount=69528920,
         )
 
         # Check for existing script

@@ -86,7 +86,8 @@ class OracleStartBuilder:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         fee_config: FeeConfig,
         aggregation_liveness_period: int,
-        time_absolute_uncertainty: int,
+        time_uncertainty_aggregation: int,
+        time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
     ) -> StartTransactionResult:
         """
@@ -161,7 +162,8 @@ class OracleStartBuilder:
                 fee_config,
                 nodes_config,
                 aggregation_liveness_period,
-                time_absolute_uncertainty,
+                time_uncertainty_aggregation,
+                time_uncertainty_platform,
                 iqr_fence_multiplier,
             ),
             "core_settings",
@@ -260,7 +262,8 @@ class OracleStartBuilder:
         fee_config: FeeConfig,
         nodes_config: NodesConfig,
         aggregation_liveness_period: int,
-        time_absolute_uncertainty: int,
+        time_uncertainty_aggregation: int,
+        time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
@@ -280,7 +283,8 @@ class OracleStartBuilder:
             required_node_signatures_count=nodes_config.required_signatures,
             fee_info=fee_config,
             aggregation_liveness_period=aggregation_liveness_period,
-            time_absolute_uncertainty=time_absolute_uncertainty,
+            time_uncertainty_aggregation=time_uncertainty_aggregation,
+            time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
             utxo_size_safety_buffer=utxo_size_safety_buffer,
             pause_period_started_at=NoDatum(),

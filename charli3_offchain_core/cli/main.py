@@ -4,6 +4,7 @@ import click
 
 from charli3_offchain_core.cli.aggregate_txs import aggregate_tx
 from charli3_offchain_core.cli.config.utils import setup_logging
+from charli3_offchain_core.cli.escrow import escrow
 from charli3_offchain_core.cli.node_keys.generate_node_keys_command import (
     generate_node_keys_command,
 )
@@ -21,6 +22,7 @@ def cli(verbose: bool) -> None:
 
 # Add command groups
 cli.add_command(oracle)
+cli.add_command(escrow)
 cli.add_command(aggregate_tx)
 cli.add_command(platform)
 cli.add_command(simulator)
