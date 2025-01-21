@@ -6,11 +6,13 @@ from opshin import sha256
 import aiohttp
 from pycardano import (
     PlutusData,
+    Transaction,
     ScriptHash,
     VerificationKey,
     BIP32ED25519PublicKey,
     ConstrainedBytes,
 )
+from pycardano.witness import VerificationKeyWitness
 from pydantic import BaseModel, BeforeValidator
 import nacl.exceptions
 
@@ -131,10 +133,30 @@ class OdvMessageRequest(BaseModel):
         )
 
 
+class OdvTxRequest(BaseModel):
+    nodes_messages: List[OracleNodeMessageSerializer]
+    tx_cbor_hex: str
+
+    @classmethod
+    def ser(
+        cls, nodes_messages: List[OracleNodeMessage], tx: Transaction
+    ) -> "OdvTxRequest":
+        return cls(
+            nodes_messages=[
+                OracleNodeMessageSerializer.ser(msg) for msg in nodes_messages
+            ],
+            tx_cbor_hex=tx.to_cbor_hex(),
+        )
+
+
 class OdvMessageResponse(BaseModel):
     feed: Annotated[str, BeforeValidator(validate_positive_int)]
     timestamp: Annotated[str, BeforeValidator(validate_timestamp)]
     signature_hex: Annotated[str, BeforeValidator(validate_signature_ser)]
+
+
+class OdvTxResponse(BaseModel):
+    signed_tx_cbor_hex: str
 
 
 @dataclass
@@ -203,11 +225,50 @@ class OdvApiClient:
                 raise InvalidNodeSignature(node.pub_key.payload.hex())
             return node_msg
 
+    async def odv_tx_request(
+        self,
+        nodes_messages: List[OracleNodeMessage],
+        tx: Transaction,
+        node: NodeNetworkId,
+    ) -> VerificationKeyWitness:
+        req = OdvTxRequest.ser(nodes_messages, tx)
+        session = self._get_session()
+        async with session.request(
+            "POST",
+            f"{node.root_url}/odv-tx",
+            data=req.model_dump_json(),
+            headers=self._headers,
+            timeout=self._timeout,
+        ) as resp:
+            if not resp.ok:
+                raise UnsuccessfulResponse(resp.status)
+            json_payload = await resp.read()
+            resp_obj = OdvTxResponse.model_validate_json(json_payload)
+            signed_tx: Transaction = Transaction.from_cbor(resp_obj.signed_tx_cbor_hex)
+            if signed_tx.id != tx.id:
+                raise InvalidTx(
+                    f"expected {tx.id.payload.hex()}, but got {signed_tx.id.payload.hex()}"
+                )
+            signature = (signed_tx.transaction_witness_set.vkey_witnesses or [None])[0]
+            if signature is None:
+                raise InvalidNodeSignature("No signature provided")
+            return signature
+
     async def odv_message_requests(
         self, req: OdvMessageRequest, nodes: List[NodeNetworkId]
     ) -> List[OracleNodeMessage]:
         return await asyncio.gather(
             *(self.odv_message_request(req, node) for node in nodes)
+        )
+
+    async def odv_tx_requests(
+        self,
+        nodes_messages: List[OracleNodeMessage],
+        tx: Transaction,
+        nodes: List[NodeNetworkId],
+    ) -> List[VerificationKeyWitness]:
+        return await asyncio.gather(
+            *(self.odv_tx_request(nodes_messages, tx, node) for node in nodes)
         )
 
 
@@ -217,3 +278,7 @@ class UnsuccessfulResponse(Exception):
 
 class InvalidNodeSignature(Exception):
     """Verification of node message Ed25519 Signature failed"""
+
+
+class InvalidTx(Exception):
+    """Verification of tx id failed"""
