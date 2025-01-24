@@ -3,26 +3,46 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from charli3_offchain_core.cli.config.network import NetworkConfig
-from charli3_offchain_core.cli.config.token import TokenConfig
+from pycardano import VerificationKey
+
+from charli3_offchain_core.cli.aggregate_txs.base import TxConfig
 from charli3_offchain_core.cli.config.utils import load_yaml_config
+
+
+@dataclass
+class NodeNetworkId:
+    """Network identification for oracle node."""
+
+    root_url: str
+    pub_key: VerificationKey
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "NodeNetworkId":
+        """Create node config from dictionary."""
+        return cls(
+            root_url=data["root_url"],
+            pub_key=VerificationKey.from_cbor(data["pub_key"]),
+        )
 
 
 @dataclass
 class OdvClientConfig:
     """Complete Odv Client configuration."""
 
-    network: NetworkConfig
-    oracle_script_address: str
-    tokens: TokenConfig
+    tx_config: TxConfig
+    odv_validity_length: int  # milliseconds
+    nodes: list[NodeNetworkId]
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "OdvClientConfig":
         """Load configuration from YAML file."""
         data = load_yaml_config(path)
 
+        if isinstance(path, str):
+            path = Path(path)
+
         return cls(
-            network=NetworkConfig.from_dict(data.get("network", {})),
-            oracle_script_address=data["oracle_address"],
-            tokens=TokenConfig.from_dict(data.get("tokens", {})),
+            tx_config=TxConfig.from_yaml(path),
+            nodes=[NodeNetworkId.from_dict(node) for node in data["nodes"]],
+            odv_validity_length=data["odv_validity_length"],
         )

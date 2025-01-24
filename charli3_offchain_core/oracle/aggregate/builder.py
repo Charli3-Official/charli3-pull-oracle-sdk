@@ -19,7 +19,10 @@ from pycardano import (
     UTxO,
 )
 
-from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.blockchain.transactions import (
+    TransactionManager,
+    ValidityWindow,
+)
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     Aggregation,
@@ -160,6 +163,7 @@ class OracleTransactionBuilder:
         message: AggregateMessage,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         change_address: Address | None = None,
+        validity_window: ValidityWindow | None = None,
     ) -> OdvResult:
         """Build ODV aggregation transaction with comprehensive validation.
 
@@ -187,11 +191,27 @@ class OracleTransactionBuilder:
             # Update calculators with current settings
 
             # Calculate the transaction time window and current time ONCE
-            validity_start, validity_end, current_time = (
-                self._calculate_validity_window(
+            if validity_window is None:
+                validity_window = self.tx_manager.calculate_validity_window(
                     settings_datum.time_uncertainty_aggregation
                 )
-            )
+            else:
+                window_length = (
+                    validity_window.validity_end - validity_window.validity_start
+                )
+                if window_length > settings_datum.time_uncertainty_aggregation:
+                    raise ValueError(
+                        f"Incorrect validity window length: {window_length} > {settings_datum.time_uncertainty_aggregation}"
+                    )
+                if window_length <= 0:
+                    raise ValueError(
+                        f"Incorrect validity window length: {window_length}"
+                    )
+            validity_start, validity_end, current_time = [
+                validity_window.validity_start,
+                validity_window.validity_end,
+                validity_window.current_time,
+            ]
 
             validity_start_slot, validity_end_slot = self._validity_window_to_slot(
                 validity_start, validity_end
@@ -455,15 +475,6 @@ class OracleTransactionBuilder:
                 datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
             ),
         )
-
-    def _calculate_validity_window(
-        self, time_absolute_uncertainty: int
-    ) -> tuple[int, int, int]:
-        """Calculate transaction validity window and current time."""
-        validity_start = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-        validity_end = validity_start + time_absolute_uncertainty
-        current_time = (validity_end + validity_start) // 2
-        return validity_start, validity_end, current_time
 
     def _validity_window_to_slot(
         self, validity_start: int, validity_end: int

@@ -18,6 +18,8 @@ from pycardano import (
 from pycardano.witness import VerificationKeyWitness
 from pydantic import BaseModel, BeforeValidator
 
+from charli3_offchain_core.cli.config.odv_client import NodeNetworkId
+
 
 class Ed25519Signature(ConstrainedBytes):
     """Ed25519 signatures are only 512-bits (64 bytes)"""
@@ -164,12 +166,6 @@ class OdvMessageResponse(BaseModel):
 
 class OdvTxResponse(BaseModel):
     signed_tx_cbor_hex: str
-
-
-@dataclass
-class NodeNetworkId:
-    root_url: str
-    pub_key: VerificationKey
 
 
 class OdvApiClient:
