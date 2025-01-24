@@ -98,7 +98,7 @@ class PauseBuilder(BaseBuilder):
     ) -> tuple[int, int, int]:
         """Get pause time and slot ranges."""
         current_slot = self.chain_query.last_block_slot
-        validity_end = current_slot + (settings_datum.time_absolute_uncertainty // 1000)
+        validity_end = current_slot + (settings_datum.time_uncertainty_platform // 1000)
         conversion = self.chain_query.config.network_config.slot_to_posix
         pause_time_ms = (conversion(current_slot) + conversion(validity_end)) // 2
         return pause_time_ms, current_slot, validity_end

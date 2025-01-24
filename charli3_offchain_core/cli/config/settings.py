@@ -21,7 +21,8 @@ class TimingConfig:
     pause_period: int = 3600000
     reward_dismissing_period: int = 7200000
     aggregation_liveness: int = 300000
-    time_uncertainty: int = 60000
+    time_uncertainty_aggregation: int = 120000
+    time_uncertainty_platform: int = 180000
     utxo_size_safety_buffer: int = 0
     iqr_multiplier: int = 150
 
@@ -32,7 +33,10 @@ class TimingConfig:
             pause_period=data.get("pause_period", 3600000),
             reward_dismissing_period=data.get("reward_dismissing_period", 7200000),
             aggregation_liveness=data.get("aggregation_liveness", 300000),
-            time_uncertainty=data.get("time_uncertainty", 60000),
+            time_uncertainty_aggregation=data.get(
+                "time_uncertainty_aggregation", 120000
+            ),
+            time_uncertainty_platform=data.get("time_uncertainty_platform", 180000),
             utxo_size_safety_buffer=data.get("utxo_size_safety_buffer", 0),
             iqr_multiplier=data.get("iqr_multiplier", 150),
         )

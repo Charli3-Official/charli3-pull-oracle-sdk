@@ -72,7 +72,7 @@ class RemoveBuilder(BaseBuilder):
             # Calculate validity range
             validity_start_slot = self.chain_query.last_block_slot
             validity_end_slot = validity_start_slot + (
-                settings_datum.time_absolute_uncertainty // 1000
+                settings_datum.time_uncertainty_platform // 1000
             )
             current_slot_time = self.chain_query.config.network_config.slot_to_posix(
                 validity_start_slot

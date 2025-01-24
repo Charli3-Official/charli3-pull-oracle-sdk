@@ -95,7 +95,8 @@ class OracleDeploymentOrchestrator:
         admin_address: Address,
         script_address: Address,
         aggregation_liveness_period: int,
-        time_absolute_uncertainty: int,
+        time_uncertainty_aggregation: int,
+        time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
         # Deployment configuration
         deployment_config: OracleDeploymentConfig,
@@ -117,7 +118,8 @@ class OracleDeploymentOrchestrator:
             pause_period_length: Time allowed for pause period
             reward_dismissing_period_length: Time allowed for reward dismissal
             aggregation_liveness_period: Time window for aggregation
-            time_absolute_uncertainty: Allowed time uncertainty
+            time_uncertainty_aggregation: Max tx validity interval length for odv-aggregation tx
+            time_uncertainty_platform: Max tx validity interval length for platform governance txs
             iqr_fence_multiplier: IQR multiplier for outlier detection
             deployment_config: Deployment parameters
             nodes_config: Configuration for oracle nodes
@@ -144,7 +146,8 @@ class OracleDeploymentOrchestrator:
                 signing_key=signing_key,
                 fee_config=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
-                time_absolute_uncertainty=time_absolute_uncertainty,
+                time_uncertainty_aggregation=time_uncertainty_aggregation,
+                time_uncertainty_platform=time_uncertainty_platform,
                 iqr_fence_multiplier=iqr_fence_multiplier,
             )
 
@@ -209,7 +212,8 @@ class OracleDeploymentOrchestrator:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         fee_config: FeeConfig,
         aggregation_liveness_period: int,
-        time_absolute_uncertainty: int,
+        time_uncertainty_aggregation: int,
+        time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
     ) -> StartTransactionResult:
         """Build and submit oracle start transaction."""
@@ -228,6 +232,7 @@ class OracleDeploymentOrchestrator:
             signing_key=signing_key,
             fee_config=fee_config,
             aggregation_liveness_period=aggregation_liveness_period,
-            time_absolute_uncertainty=time_absolute_uncertainty,
+            time_uncertainty_aggregation=time_uncertainty_aggregation,
+            time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
         )

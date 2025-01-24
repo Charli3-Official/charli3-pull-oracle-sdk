@@ -57,13 +57,14 @@ logger = logging.getLogger(__name__)
 
 class SettingOption(Enum):
     AGGREGATION_LIVENESS = ("1", "Aggregation Liveness Period")
-    TIME_UNCERTAINTY = ("2", "Time Absolute Uncertainty")
-    IQR_MULTIPLIER = ("3", "IQR Fence Multiplier")
-    UTXO_BUFFER = ("4", "UTxO size safety buffer")
-    THRESHOLD = ("5", "Required Node Signature Count")
-    NODE_REWARD_FEE = ("6", "Reward price for node fee")
-    PLATFORM_REWARD_FEE = ("7", "Reward price for platform fee")
-    DONE = ("8", "Done")
+    TIME_UNCERTAINTY_AGGREGATION = ("2", "Time Uncertainty For ODV Aggregation")
+    TIME_UNCERTAINTY_PLATFORM = ("3", "Time Uncertainty For Platform Governance")
+    IQR_MULTIPLIER = ("4", "IQR Fence Multiplier")
+    UTXO_BUFFER = ("5", "UTxO size safety buffer")
+    THRESHOLD = ("6", "Required Node Signature Count")
+    NODE_REWARD_FEE = ("7", "Reward price for node fee")
+    PLATFORM_REWARD_FEE = ("8", "Reward price for platform fee")
+    DONE = ("9", "Done")
 
     def __init__(self, id: str, label: str) -> None:
         self.id = id
@@ -118,7 +119,7 @@ class UpdateBuilder(BaseBuilder):
             raise UpdatingError(f"Failed to build pause transaction: {e!s}") from e
 
 
-async def get_setting_value(
+async def get_setting_value(  # noqa: C901
     option: SettingOption,
     current_value: int,
     deployed_settings: Any,
@@ -132,16 +133,23 @@ async def get_setting_value(
             help_text = []
             if option == SettingOption.THRESHOLD:
                 help_text.append(f"max: {deployed_settings.datum.nodes.length}")
-            elif option == SettingOption.TIME_UNCERTAINTY:
+            elif option == SettingOption.TIME_UNCERTAINTY_AGGREGATION:
                 help_text.append("must be positive")
             elif option == SettingOption.UTXO_BUFFER:
                 help_text.append("must not be negative")
-            elif option == SettingOption.AGGREGATION_LIVENESS:
-                current_time_uncertainty = current_settings[
-                    SettingOption.TIME_UNCERTAINTY
+            elif option == SettingOption.TIME_UNCERTAINTY_PLATFORM:
+                current_time_uncertainty_agg = current_settings[
+                    SettingOption.TIME_UNCERTAINTY_AGGREGATION
                 ]
                 help_text.append(
-                    f"must be greater than time uncertainty: {current_time_uncertainty}"
+                    f"must be greater than time uncertainty for odv-aggregation: {current_time_uncertainty_agg}"
+                )
+            elif option == SettingOption.AGGREGATION_LIVENESS:
+                current_time_uncertainty_platform = current_settings[
+                    SettingOption.TIME_UNCERTAINTY_PLATFORM
+                ]
+                help_text.append(
+                    f"must be greater than time uncertainty for platform actions: {current_time_uncertainty_platform}"
                 )
             elif option == SettingOption.IQR_MULTIPLIER:
                 help_text.append("must be greater than 100")
@@ -178,7 +186,8 @@ async def manual_settings_menu(  # noqa: C901
     initial_fee_rate_nft = deployed_core_settings.datum.fee_info.rate_nft
     initial_settings = {
         SettingOption.AGGREGATION_LIVENESS: deployed_core_settings.datum.aggregation_liveness_period,
-        SettingOption.TIME_UNCERTAINTY: deployed_core_settings.datum.time_absolute_uncertainty,
+        SettingOption.TIME_UNCERTAINTY_AGGREGATION: deployed_core_settings.datum.time_uncertainty_aggregation,
+        SettingOption.TIME_UNCERTAINTY_PLATFORM: deployed_core_settings.datum.time_uncertainty_platform,
         SettingOption.IQR_MULTIPLIER: deployed_core_settings.datum.iqr_fence_multiplier,
         SettingOption.THRESHOLD: deployed_core_settings.datum.required_node_signatures_count,
         SettingOption.UTXO_BUFFER: deployed_core_settings.datum.utxo_size_safety_buffer,
@@ -286,7 +295,12 @@ def build_new_settings_datum(
         aggregation_liveness_period=current_settings[
             SettingOption.AGGREGATION_LIVENESS
         ],
-        time_absolute_uncertainty=current_settings[SettingOption.TIME_UNCERTAINTY],
+        time_uncertainty_aggregation=current_settings[
+            SettingOption.TIME_UNCERTAINTY_AGGREGATION
+        ],
+        time_uncertainty_platform=current_settings[
+            SettingOption.TIME_UNCERTAINTY_PLATFORM
+        ],
         iqr_fence_multiplier=current_settings[SettingOption.IQR_MULTIPLIER],
         utxo_size_safety_buffer=current_settings[SettingOption.UTXO_BUFFER],
         pause_period_started_at=deployed_core_settings.datum.pause_period_started_at,
@@ -370,11 +384,11 @@ def validate_setting(  # noqa: C901
 ) -> None:
     """Validate a setting value."""
     if value <= 0 and option in [
-        SettingOption.TIME_UNCERTAINTY,
+        SettingOption.TIME_UNCERTAINTY_AGGREGATION,
         SettingOption.THRESHOLD,
     ]:
         raise SettingsValidationError(
-            "Time uncertainty and Node signature count must be positive"
+            "Time uncertainty for odv-aggregation and Node signature count must be positive"
         )
 
     if option == SettingOption.UTXO_BUFFER:
@@ -399,11 +413,22 @@ def validate_setting(  # noqa: C901
             f"Threshold cannot be greater than number of deployed parties ({deployed_settings.datum.nodes.length})"
         )
 
-    if option == SettingOption.AGGREGATION_LIVENESS:
-        time_uncertainty = current_settings[SettingOption.TIME_UNCERTAINTY]
-        if value <= time_uncertainty:
+    if option == SettingOption.TIME_UNCERTAINTY_PLATFORM:
+        time_uncertainty_agg = current_settings[
+            SettingOption.TIME_UNCERTAINTY_AGGREGATION
+        ]
+        if value <= time_uncertainty_agg:
             raise SettingsValidationError(
-                f"Aggregation liveness ({value}) must be greater than time uncertainty ({time_uncertainty})"
+                f"Time uncertainty for platform actions ({value}) must be greater than time uncertainty for odv-aggregation ({time_uncertainty_agg})"
+            )
+
+    if option == SettingOption.AGGREGATION_LIVENESS:
+        time_uncertainty_platform = current_settings[
+            SettingOption.TIME_UNCERTAINTY_PLATFORM
+        ]
+        if value <= time_uncertainty_platform:
+            raise SettingsValidationError(
+                f"Aggregation liveness ({value}) must be greater than time uncertainty for platform actions ({time_uncertainty_platform})"
             )
 
     if option == SettingOption.NODE_REWARD_FEE and value < 0:
