@@ -140,7 +140,7 @@ class OracleTransactionBuilder:
         self,
         tx_manager: TransactionManager,
         script_address: Address,
-        policy_id: bytes,
+        policy_id: ScriptHash,
         fee_token_hash: ScriptHash,
         fee_token_name: AssetName,
     ) -> None:
