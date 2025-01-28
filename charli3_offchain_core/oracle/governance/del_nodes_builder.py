@@ -428,7 +428,19 @@ def modified_reward_utxo(
     )
 
     if not isinstance(reward_token, SomeAsset):
-        return None
+
+        if reward_utxo.output.amount.coin < payment_amount:
+            raise ValueError("Insufficient ADA funds for payment")
+
+        return replace(
+            reward_utxo,
+            output=replace(
+                reward_utxo.output,
+                datum=RewardAccountVariant(new_datum),
+                datum_hash=None,
+                amount=reward_utxo.output.amount.coin - payment_amount,
+            ),
+        )
 
     payment_asset = MultiAsset.from_primitive(
         {reward_token.asset.policy_id: {reward_token.asset.name: payment_amount}}
