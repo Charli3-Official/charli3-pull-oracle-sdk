@@ -101,32 +101,41 @@ class OracleNodeMessage(PlutusData):
         return Ed25519Signature.from_primitive(signature)
 
 
-class OracleNodeMessageSerializer(BaseModel):
-    feed: Annotated[str, BeforeValidator(validate_positive_int)]
-    timestamp: Annotated[str, BeforeValidator(validate_timestamp)]
-    oracle_nft_policy_id_hex: Annotated[str, BeforeValidator(validate_policy_id)]
+@dataclass
+class SignedOracleNodeMessage:
+    message: OracleNodeMessage
+    verification_key: VerificationKey
+    signature: Ed25519Signature
+
+
+class SignedOracleNodeMessageSerializer(BaseModel):
+    feed: str
+    timestamp: int
+    oracle_nft_policy_id: str
+    verification_key: str
+    signature: str
 
     @classmethod
-    def ser(cls, node_message: OracleNodeMessage) -> "OracleNodeMessageSerializer":
+    def ser(
+        cls, node_message: SignedOracleNodeMessage
+    ) -> "SignedOracleNodeMessageSerializer":
         return cls(
-            feed=str(node_message.feed),
-            timestamp=str(node_message.timestamp),
-            oracle_nft_policy_id_hex=node_message.oracle_nft_policy_id.hex(),
+            feed=str(node_message.message.feed),
+            timestamp=(node_message.message.timestamp),
+            oracle_nft_policy_id=node_message.message.oracle_nft_policy_id.hex(),
+            verification_key=node_message.verification_key.to_primitive().hex(),
+            signature=node_message.signature.to_primitive().hex(),
         )
 
-    @property
-    def deser(self) -> OracleNodeMessage:
-        return OracleNodeMessage(
-            feed=int(self.feed),
-            timestamp=int(self.timestamp),
-            oracle_nft_policy_id=bytes.fromhex(self.oracle_nft_policy_id_hex),
-        )
+
+class TxValidityIntervalSerializer(BaseModel):
+    start: int
+    end: int
 
 
 class OdvMessageRequest(BaseModel):
-    odv_validity_start: Annotated[str, BeforeValidator(validate_timestamp)]
-    odv_validity_end: Annotated[str, BeforeValidator(validate_timestamp)]
-    oracle_nft_policy_id_hex: Annotated[str, BeforeValidator(validate_policy_id)]
+    tx_validity_interval: TxValidityIntervalSerializer
+    oracle_nft_policy_id: Annotated[str, BeforeValidator(validate_policy_id)]
 
     @classmethod
     def ser(
@@ -136,36 +145,46 @@ class OdvMessageRequest(BaseModel):
         oracle_nft_policy_id: ScriptHash,
     ) -> "OdvMessageRequest":
         return cls(
-            odv_validity_start=str(odv_validity_start),
-            odv_validity_end=str(odv_validity_end),
-            oracle_nft_policy_id_hex=oracle_nft_policy_id.payload.hex(),
+            tx_validity_interval=TxValidityIntervalSerializer(
+                start=odv_validity_start, end=odv_validity_end
+            ),
+            oracle_nft_policy_id=oracle_nft_policy_id.payload.hex(),
         )
 
 
 class OdvTxRequest(BaseModel):
-    nodes_messages: list[OracleNodeMessageSerializer]
-    tx_cbor_hex: str
+    nodes_messages: dict[str, SignedOracleNodeMessageSerializer]
+    tx_cbor: str
 
     @classmethod
     def ser(
-        cls, nodes_messages: list[OracleNodeMessage], tx: Transaction
+        cls,
+        nodes: list[NodeNetworkId],
+        nodes_messages: list[SignedOracleNodeMessage],
+        tx: Transaction,
     ) -> "OdvTxRequest":
         return cls(
-            nodes_messages=[
-                OracleNodeMessageSerializer.ser(msg) for msg in nodes_messages
-            ],
-            tx_cbor_hex=tx.to_cbor_hex(),
+            nodes_messages={
+                node.pub_key.to_primitive().hex(): SignedOracleNodeMessageSerializer.ser(
+                    msg
+                )
+                for node, msg in zip(nodes, nodes_messages)
+            },
+            tx_cbor=tx.to_cbor_hex(),
         )
 
 
 class OdvMessageResponse(BaseModel):
-    feed: Annotated[str, BeforeValidator(validate_positive_int)]
-    timestamp: Annotated[str, BeforeValidator(validate_timestamp)]
-    signature_hex: Annotated[str, BeforeValidator(validate_signature_ser)]
+    # TODO feed is str or int
+    # TODO timestamp is str or int
+    feed: int
+    timestamp: int
+    # TODO verification_key
+    signature: Annotated[str, BeforeValidator(validate_signature_ser)]
 
 
 class OdvTxResponse(BaseModel):
-    signed_tx_cbor_hex: str
+    signed_tx_cbor: str
 
 
 class OdvApiClient:
@@ -204,11 +223,11 @@ class OdvApiClient:
 
     async def odv_message_request(
         self, req: OdvMessageRequest, node: NodeNetworkId
-    ) -> OracleNodeMessage:
+    ) -> SignedOracleNodeMessage:
         session = self._get_session()
         async with session.request(
             "POST",
-            f"{node.root_url}/odv-message",
+            f"{node.root_url}/odv/feed",
             data=req.model_dump_json(),
             headers=self._headers,
             timeout=self._timeout,
@@ -218,28 +237,30 @@ class OdvApiClient:
             json_payload = await resp.read()
             resp_obj = OdvMessageResponse.model_validate_json(json_payload)
             node_msg = OracleNodeMessage(
-                feed=int(resp_obj.feed),
-                timestamp=int(resp_obj.timestamp),
-                oracle_nft_policy_id=bytes.fromhex(req.oracle_nft_policy_id_hex),
+                feed=(resp_obj.feed),
+                timestamp=(resp_obj.timestamp),
+                oracle_nft_policy_id=bytes.fromhex(req.oracle_nft_policy_id),
             )
+            signature = Ed25519Signature.from_primitive(resp_obj.signature)
             if not node_msg.check_node_signature(
                 node.pub_key,
-                Ed25519Signature.from_primitive(resp_obj.signature_hex),
+                signature,
             ):
                 raise InvalidNodeSignatureError(node.pub_key.payload.hex())
-            return node_msg
+            return SignedOracleNodeMessage(
+                message=node_msg, signature=signature, verification_key=node.pub_key
+            )
 
     async def odv_tx_request(
         self,
-        nodes_messages: list[OracleNodeMessage],
+        req: OdvTxRequest,
         tx: Transaction,
         node: NodeNetworkId,
     ) -> VerificationKeyWitness:
-        req = OdvTxRequest.ser(nodes_messages, tx)
         session = self._get_session()
         async with session.request(
             "POST",
-            f"{node.root_url}/odv-tx",
+            f"{node.root_url}/odv/aggregation/sign",
             data=req.model_dump_json(),
             headers=self._headers,
             timeout=self._timeout,
@@ -248,7 +269,7 @@ class OdvApiClient:
                 raise UnsuccessfulResponseError(resp.status)
             json_payload = await resp.read()
             resp_obj = OdvTxResponse.model_validate_json(json_payload)
-            signed_tx: Transaction = Transaction.from_cbor(resp_obj.signed_tx_cbor_hex)
+            signed_tx: Transaction = Transaction.from_cbor(resp_obj.signed_tx_cbor)
             if signed_tx.id != tx.id:
                 raise InvalidTxError(
                     f"expected {tx.id.payload.hex()}, but got {signed_tx.id.payload.hex()}"
@@ -260,19 +281,20 @@ class OdvApiClient:
 
     async def odv_message_requests(
         self, req: OdvMessageRequest, nodes: list[NodeNetworkId]
-    ) -> list[OracleNodeMessage]:
+    ) -> list[SignedOracleNodeMessage]:
         return await asyncio.gather(
             *(self.odv_message_request(req, node) for node in nodes)
         )
 
     async def odv_tx_requests(
         self,
-        nodes_messages: list[OracleNodeMessage],
+        nodes_messages: list[SignedOracleNodeMessage],
         tx: Transaction,
         nodes: list[NodeNetworkId],
     ) -> list[VerificationKeyWitness]:
+        req = OdvTxRequest.ser(nodes, nodes_messages, tx)
         return await asyncio.gather(
-            *(self.odv_tx_request(nodes_messages, tx, node) for node in nodes)
+            *(self.odv_tx_request(req, tx, node) for node in nodes)
         )
 
 

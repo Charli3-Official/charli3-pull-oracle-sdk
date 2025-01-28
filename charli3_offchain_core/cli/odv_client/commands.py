@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import click
+from pycardano import ScriptHash
 
 from charli3_offchain_core.cli.aggregate_txs.base import TransactionContext, tx_options
 from charli3_offchain_core.cli.aggregate_txs.odv_aggregate import _print_odv_summary
@@ -61,17 +62,19 @@ async def send(config: Path, wait: bool) -> None:
             validity_window = ctx.tx_manager.calculate_validity_window(
                 odv_config.odv_validity_length
             )
-            message_req = OdvMessageRequest(
-                oracle_nft_policy_id_hex=odv_config.tx_config.policy_id,
-                odv_validity_start=str(validity_window.validity_start),
-                odv_validity_end=str(validity_window.validity_end),
+            message_req = OdvMessageRequest.ser(
+                oracle_nft_policy_id=ScriptHash.from_primitive(
+                    odv_config.tx_config.policy_id
+                ),
+                odv_validity_start=(validity_window.validity_start),
+                odv_validity_end=(validity_window.validity_end),
             )
             node_messages = await odv_client.odv_message_requests(
                 message_req, odv_config.nodes
             )
             aggregate_msg = make_aggregate_message(
                 feed_data={
-                    node.pub_key.hash(): msg.feed
+                    node.pub_key.hash(): msg.message.feed
                     for node, msg in zip(odv_config.nodes, node_messages)
                 },
                 timestamp=validity_window.current_time,
