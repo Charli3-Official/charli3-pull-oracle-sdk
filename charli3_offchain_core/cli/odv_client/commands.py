@@ -56,7 +56,9 @@ async def send(config: Path, wait: bool) -> None:
         )
 
         # Run simulation
-        async with OdvApiClient() as odv_client:
+        async with OdvApiClient(
+            timeout_seconds=odv_config.odv_validity_length // 2000
+        ) as odv_client:
             # First round of communication with oracle nodes
             print_progress("Sending odv message requests")
             validity_window = ctx.tx_manager.calculate_validity_window(

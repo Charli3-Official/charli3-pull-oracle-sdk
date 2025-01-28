@@ -240,6 +240,41 @@ charli3 simulator run \
 
 For detailed informations, see [Aggregate Transactions](docs/oracle_aggregate_tx_cli.md)
 
+### Simulation of ODV aggregation request-response client flow
+
+Configuration process is the same as for Transaction Configuration (tx_config.yml), see [Aggregate Transactions](docs/oracle_aggregate_tx_cli.md),
+but with these new fields added:
+
+1. Create odv-client config (tx_config.yml):
+
+```yaml
+# Include standard transaction config
+...
+
+# This is odv request validity window length, should be <= time_uncertainty_aggregation
+odv_validity_length: 180000 # milliseconds
+
+# Nodes network identifiers root url (or ip address) and public key converted to cbor hex
+nodes:
+  - root_url: "http://0.0.0.0:8000"
+    pub_key: "58203565c563de4e55714aa9e0280a8cd4a4271ef8c8a261955446cc7b830021aef8"
+  - root_url: "http://0.0.0.0:8001"
+    pub_key: "5820f5ca5b53826d2be8b5ab5505c15dd10a498e6d1eee540ded51d52eb7083979f3"
+
+```
+
+2. Run client simulation:
+
+```bash
+charli3 client send \
+  --config tx_config.yml
+```
+
+This will send requests to the oracle nodes and complete odv flow in two steps:
+
+1. Send odv message request, when nodes sign a message containing node feed and timestamp;
+2. Send odv tx request, when nodes sign transaction constructed with messages supplied on the first step.
+
 ##  Governance Operations
 ### Update Oracle Settings
 
