@@ -299,6 +299,9 @@ class DelNodesBuilder(BaseBuilder):
 
         rewards: list[TransactionOutput] = []
 
+        if reward_issuer_addr is None:
+            raise ValueError("Reward issuer address cannot be None")
+
         for node_id, reward in payment_distribution.items():
             if reward <= 0:
                 continue
@@ -415,7 +418,7 @@ def modified_reward_utxo(
 
     # Filter and sort distribution
     filtered_distribution = {
-        (node_pkh, reward)
+        node_pkh: reward
         for node_pkh, reward in distribution.items()
         if node_pkh not in nodes_to_remove
     }
@@ -698,7 +701,7 @@ def reward_distribution(
 
     # Filter and sort distribution
     filtered_distribution = {
-        (node_pkh, reward)
+        node_pkh: reward
         for node_pkh, reward in distribution.items()
         if node_pkh in nodes_to_remove
     }

@@ -70,9 +70,10 @@ class _PlutusConstrWrapper(PlutusData):
 class PlutusFullAddress(PlutusData):
     """A full address, including payment and staking keys."""
 
+    # Do not remove noqa
     CONSTR_ID = 0
-    payment: PlutusPartAddress | PlutusScriptPartAddress
-    stake: _PlutusConstrWrapper | PlutusNone | None = None
+    payment: Union[PlutusPartAddress, PlutusScriptPartAddress]  # noqa: UP007
+    stake: Union[_PlutusConstrWrapper, PlutusNone, None] = None  # noqa: UP007
 
     @classmethod
     def from_address(cls, address: Address) -> "PlutusFullAddress":
@@ -116,8 +117,6 @@ class RewardEscrowDatum(PlutusData):
 
     CONSTR_ID = 0
     reward_issuer_nft: PolicyId  # policy ID - an authorization NFT minting script hash
-    reward_issuer_address: (
-        PlutusFullAddress  # issuer will receive locked utxo ada fee to this address
-    )
+    reward_issuer_address: PlutusFullAddress  # locked ada to this address
     reward_receiver: PaymentVkh  # user vkh that signs tx claiming the rewards
     escrow_expiration_timestamp: PosixTime  # reward issuer can return unclaimed rewards after this moment in time
