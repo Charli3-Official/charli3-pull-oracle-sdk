@@ -119,11 +119,15 @@ def setup_oracle_from_config(
     # Load base contracts
     base_contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
 
-    fee_token = setup_fee_token(
-        deployment_config.tokens.fee_token_policy,
-        deployment_config.tokens.fee_token_name,
+    reward_token = setup_token(
+        deployment_config.tokens.reward_token_policy,
+        deployment_config.tokens.reward_token_name,
     )
-    if fee_token == NoDatum():
+    rate_token = setup_token(
+        deployment_config.tokens.rate_token_policy,
+        deployment_config.tokens.rate_token_name,
+    )
+    if isinstance(reward_token, NoDatum):
         escrow_script_hash = b""
     else:
         escrow_script = RewardEscrowContract.from_blueprint(
@@ -136,7 +140,7 @@ def setup_oracle_from_config(
         platform_auth_nft=bytes.fromhex(deployment_config.tokens.platform_auth_policy),
         pause_period_length=deployment_config.timing.pause_period,
         reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
-        fee_token=fee_token,
+        fee_token=reward_token,
         reward_escrow_script_hash=escrow_script_hash,
     )
 
@@ -174,14 +178,13 @@ def setup_oracle_from_config(
             network=deployment_config.network.network,
             reward_transport_count=deployment_config.transport_count,
         ),
-        "fee": FeeConfig(
-            rate_nft=NoDatum(),
+        "rate_token": FeeConfig(
+            rate_nft=rate_token,
             reward_prices=RewardPrices(
                 node_fee=deployment_config.fees.node_fee,
                 platform_fee=deployment_config.fees.platform_fee,
             ),
         ),
-        "fee_token": fee_token,
     }
 
     # Initialize platform auth finder
@@ -221,11 +224,11 @@ def setup_management_from_config(config: Path) -> tuple[
     management_config = ManagementConfig.from_yaml(config)
     base_contracts = OracleContracts.from_blueprint(management_config.blueprint_path)
 
-    fee_token = setup_fee_token(
-        management_config.tokens.fee_token_policy,
-        management_config.tokens.fee_token_name,
+    reward_token = setup_token(
+        management_config.tokens.reward_token_policy,
+        management_config.tokens.reward_token_name,
     )
-    if fee_token == NoDatum():
+    if reward_token == NoDatum():
         escrow_script_hash = b""
     else:
         escrow_script = RewardEscrowContract.from_blueprint(
@@ -238,7 +241,7 @@ def setup_management_from_config(config: Path) -> tuple[
         platform_auth_nft=bytes.fromhex(management_config.tokens.platform_auth_policy),
         pause_period_length=management_config.timing.pause_period,
         reward_dismissing_period_length=management_config.timing.reward_dismissing_period,
-        fee_token=fee_token,
+        fee_token=reward_token,
         reward_escrow_script_hash=escrow_script_hash,
     )
 
@@ -270,9 +273,11 @@ def setup_management_from_config(config: Path) -> tuple[
     )
 
 
-def setup_fee_token(fee_token_policy: str, fee_token_name: str) -> NoDatum | SomeAsset:
+def setup_token(
+    fee_token_policy: str | None, fee_token_name: str | None
+) -> NoDatum | SomeAsset:
     """Setup fee token from config params"""
-    if fee_token_policy == "" and fee_token_name == "":
+    if not (fee_token_policy and fee_token_name):
         fee_token = NoDatum()
     else:
         fee_token = SomeAsset(

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from charli3_offchain_core.cli.config.escrow import EscrowConfig
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.oracle.governance.orchestrator import GovernanceOrchestrator
 
@@ -118,6 +119,111 @@ async def add_nodes(config: Path, output: Path | None) -> None:
 
     except Exception as e:
         logger.error("Add nodes failed", exc_info=e)
+        raise click.ClickException(str(e)) from e
+
+
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to deployment configuration YAML",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output file for transaction data",
+)
+@click.command()
+@async_command
+async def del_nodes(config: Path, output: Path | None) -> None:
+    """Remove the nodes' PKHs to an Oracle instance"""
+    try:
+        print_header("Delete Nodes")
+        (
+            management_config,
+            oracle_configuration,
+            payment_sk,
+            oracle_addresses,
+            chain_query,
+            tx_manager,
+            platform_auth_finder,
+        ) = setup_management_from_config(config)
+
+        escrow_config = EscrowConfig.from_yaml(config)
+        platform_utxo = await platform_auth_finder.find_auth_utxo(
+            policy_id=management_config.tokens.platform_auth_policy,
+            platform_address=oracle_addresses.platform_address,
+        )
+
+        if not platform_utxo:
+            raise click.ClickException("No platform auth UTxO found")
+
+        platform_script = await platform_auth_finder.get_platform_script(
+            oracle_addresses.platform_address
+        )
+        platform_config = platform_auth_finder.get_script_config(platform_script)
+
+        orchestrator = GovernanceOrchestrator(
+            chain_query=chain_query,
+            tx_manager=tx_manager,
+            script_address=oracle_addresses.script_address,
+            status_callback=format_status_update,
+        )
+
+        result = await orchestrator.del_nodes_oracle(
+            oracle_policy=management_config.tokens.oracle_policy,
+            new_nodes_config=management_config.nodes,
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            change_address=oracle_addresses.admin_address,
+            tokens=management_config.tokens,
+            reward_dismissing_period_length=oracle_configuration.reward_dismissing_period_length,
+            network=management_config.network.network,
+            reward_issuer_addr=escrow_config.reward_issuer_addr,
+            escrow_address=escrow_config.reference_script_addr,
+            signing_key=payment_sk,
+        )
+        if result.status == ProcessStatus.CANCELLED_BY_USER:
+            print_status(
+                "Delete nodes Status", "Operation cancelled by user", success=True
+            )
+            return
+        if result.status == ProcessStatus.VERIFICATION_FAILURE:
+            print_status(
+                "Delete nodes Status",
+                "On-chain validation does not meet the requirements.",
+                success=False,
+            )
+            return
+        if result.status != ProcessStatus.TRANSACTION_BUILT:
+            raise click.ClickException(f"Delete nodes failed: {result.error}")
+
+        if platform_config.threshold == 1:
+            if print_confirmation_message_prompt(
+                "Proceed signing and submitting delete-nodes tx?"
+            ):
+                status, _ = await tx_manager.sign_and_submit(
+                    result.transaction, [payment_sk], wait_confirmation=True
+                )
+                if status != ProcessStatus.TRANSACTION_CONFIRMED:
+                    raise click.ClickException(f"Delete nodes failed: {status}")
+                print_status("Delete nodes", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig update transaction?"):
+            output_path = output or Path("tx_oracle_delete_nodes.json")
+            with output_path.open("w") as f:
+                json.dump(
+                    {
+                        "transaction": result.transaction.to_cbor_hex(),
+                        "signed_by": [],
+                        "threshold": platform_config.threshold,
+                    },
+                    f,
+                )
+            print_status("Transaction", "saved successfully", success=True)
+            print_hash_info("Output file", str(output_path))
+
+    except Exception as e:
+        logger.error("Delete nodes failed", exc_info=e)
         raise click.ClickException(str(e)) from e
 
 

@@ -70,6 +70,7 @@ create_reference: true
 # Will pay out utxo with reference script to this address.
 # By default creates reference script at this script address.
 reference_script_addr: "addr_test1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"
+reward_issuer_address: "addr_test1qzdxknm0t7f06vv02cqqfwumffzz654hw5u3kegkl2vy9g873avcs4c3gyqwcdr8gqklupyusvuz3wx2pdldrd65t0hq4gm9pg"
 
 nodes:
   nodes:
