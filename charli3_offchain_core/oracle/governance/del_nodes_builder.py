@@ -1,6 +1,7 @@
 """Del Nodes transaction builder. """
 
 import logging
+from copy import deepcopy
 from dataclasses import dataclass, replace
 
 import click
@@ -377,6 +378,7 @@ def modified_core_utxo(
     nodes_to_remove: set[VerificationKeyHash],
     required_signatures: int,
 ) -> UTxO:
+    modified_utxo = deepcopy(core_utxo)
 
     filtered_nodes = {
         feed: payment
@@ -391,9 +393,11 @@ def modified_core_utxo(
     )
 
     modified_utxo = replace(
-        core_utxo,
+        modified_utxo,
         output=replace(
-            core_utxo.output, datum=OracleSettingsVariant(new_datum), datum_hash=None
+            modified_utxo.output,
+            datum=OracleSettingsVariant(new_datum),
+            datum_hash=None,
         ),
     )
 
@@ -408,6 +412,7 @@ def modified_reward_utxo(
     payment_amount: int,
     reward_token: NoDatum | SomeAsset,
 ) -> UTxO | None:
+    modified_utxo = deepcopy(reward_utxo)
 
     existing_nodes = list(core_datum.nodes.node_map.values())
 
@@ -427,40 +432,31 @@ def modified_reward_utxo(
         nodes_to_rewards=list(filtered_distribution.values())
     )
 
-    if not isinstance(reward_token, SomeAsset):
+    modified_utxo.output.datum = RewardAccountVariant(new_datum)
+    modified_utxo.output.datum_hash = None
 
-        if reward_utxo.output.amount.coin < payment_amount:
+    if reward_token == NoDatum():
+
+        if modified_utxo.output.amount.coin < payment_amount:
             raise ValueError("Insufficient ADA funds for payment")
 
-        return replace(
-            reward_utxo,
-            output=replace(
-                reward_utxo.output,
-                datum=RewardAccountVariant(new_datum),
-                datum_hash=None,
-                amount=reward_utxo.output.amount.coin - payment_amount,
-            ),
-        )
+        modified_utxo.output.amount.coin -= payment_amount
+        return modified_utxo
 
-    payment_asset = MultiAsset.from_primitive(
-        {reward_token.asset.policy_id: {reward_token.asset.name: payment_amount}}
-    )
-
-    value = Value(multi_asset=payment_asset)
-
-    # Validate sufficient funds
-    if reward_utxo.output.amount < value:
+    if (
+        modified_utxo.output.amount.multi_asset[reward_token.asset.policy_id][
+            reward_token.asset.name
+        ]
+        < payment_amount
+    ):
         raise ValueError("Insufficient funds for payment")
 
-    return replace(
-        reward_utxo,
-        output=replace(
-            reward_utxo.output,
-            datum=RewardAccountVariant(new_datum),
-            datum_hash=None,
-            amount=reward_utxo.output.amount - value,
-        ),
-    )
+    if payment_amount > 0:
+        modified_utxo.output.amount.multi_asset[reward_token.asset.policy_id][
+            reward_token.asset.name
+        ] -= payment_amount
+
+    return modified_utxo
 
 
 def print_nodes_table(
