@@ -14,6 +14,7 @@ class GovernanceTxResult:
 
     transaction: Transaction | None = None
     settings_utxo: TransactionOutput | None = None
+    reason: str | None = None
 
 
 class BaseBuilder:

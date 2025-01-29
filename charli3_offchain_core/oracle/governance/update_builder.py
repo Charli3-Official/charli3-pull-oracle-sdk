@@ -7,11 +7,13 @@ from typing import Any
 import click
 from pycardano import (
     Address,
+    AssetName,
     Datum,
     ExtendedSigningKey,
     NativeScript,
     PaymentSigningKey,
     Redeemer,
+    ScriptHash,
     UTxO,
     VerificationKeyHash,
 )
@@ -25,10 +27,15 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
 )
 from charli3_offchain_core.models.oracle_datums import (
+    Asset,
+    FeeConfig,
+    FeeRateNFT,
     NoDatum,
     OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
+    RewardPrices,
+    SomeAsset,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     UpdateSettings,
@@ -50,11 +57,14 @@ logger = logging.getLogger(__name__)
 
 class SettingOption(Enum):
     AGGREGATION_LIVENESS = ("1", "Aggregation Liveness Period")
-    TIME_UNCERTAINTY = ("2", "Time Absolute Uncertainty")
-    IQR_MULTIPLIER = ("3", "IQR Fence Multiplier")
-    UTXO_BUFFER = ("4", "UTxO size safety buffer")
-    THRESHOLD = ("5", "Required Node Signature Count")
-    DONE = ("6", "Done")
+    TIME_UNCERTAINTY_AGGREGATION = ("2", "Time Uncertainty For ODV Aggregation")
+    TIME_UNCERTAINTY_PLATFORM = ("3", "Time Uncertainty For Platform Governance")
+    IQR_MULTIPLIER = ("4", "IQR Fence Multiplier")
+    UTXO_BUFFER = ("5", "UTxO size safety buffer")
+    THRESHOLD = ("6", "Required Node Signature Count")
+    NODE_REWARD_FEE = ("7", "Reward price for node fee")
+    PLATFORM_REWARD_FEE = ("8", "Reward price for platform fee")
+    DONE = ("9", "Done")
 
     def __init__(self, id: str, label: str) -> None:
         self.id = id
@@ -106,10 +116,10 @@ class UpdateBuilder(BaseBuilder):
                 transaction=tx, settings_utxo=modified_settings_utxo
             )
         except SettingsValidationError as e:
-            raise UpdatingError(f"Failed to build close transaction: {e!s}") from e
+            raise UpdatingError(f"Failed to build pause transaction: {e!s}") from e
 
 
-async def get_setting_value(
+async def get_setting_value(  # noqa: C901
     option: SettingOption,
     current_value: int,
     deployed_settings: Any,
@@ -123,19 +133,31 @@ async def get_setting_value(
             help_text = []
             if option == SettingOption.THRESHOLD:
                 help_text.append(f"max: {deployed_settings.datum.nodes.length}")
-            elif option == SettingOption.TIME_UNCERTAINTY:
+            elif option == SettingOption.TIME_UNCERTAINTY_AGGREGATION:
                 help_text.append("must be positive")
             elif option == SettingOption.UTXO_BUFFER:
                 help_text.append("must not be negative")
-            elif option == SettingOption.AGGREGATION_LIVENESS:
-                current_time_uncertainty = current_settings[
-                    SettingOption.TIME_UNCERTAINTY
+            elif option == SettingOption.TIME_UNCERTAINTY_PLATFORM:
+                current_time_uncertainty_agg = current_settings[
+                    SettingOption.TIME_UNCERTAINTY_AGGREGATION
                 ]
                 help_text.append(
-                    f"must be greater than time uncertainty: {current_time_uncertainty}"
+                    f"must be greater than time uncertainty for odv-aggregation: {current_time_uncertainty_agg}"
+                )
+            elif option == SettingOption.AGGREGATION_LIVENESS:
+                current_time_uncertainty_platform = current_settings[
+                    SettingOption.TIME_UNCERTAINTY_PLATFORM
+                ]
+                help_text.append(
+                    f"must be greater than time uncertainty for platform actions: {current_time_uncertainty_platform}"
                 )
             elif option == SettingOption.IQR_MULTIPLIER:
                 help_text.append("must be greater than 100")
+            elif option in (
+                SettingOption.NODE_REWARD_FEE,
+                SettingOption.PLATFORM_REWARD_FEE,
+            ):
+                help_text.append("must not be negative")
 
             prompt_text = (
                 f"Enter new value for {option.label} (current: {current_value})"
@@ -161,15 +183,21 @@ async def manual_settings_menu(  # noqa: C901
 ) -> UTxO:
     """Interactive menu for manual settings updates."""
     deployed_core_settings = deployed_core_utxo.output.datum
+    initial_fee_rate_nft = deployed_core_settings.datum.fee_info.rate_nft
     initial_settings = {
         SettingOption.AGGREGATION_LIVENESS: deployed_core_settings.datum.aggregation_liveness_period,
-        SettingOption.TIME_UNCERTAINTY: deployed_core_settings.datum.time_absolute_uncertainty,
+        SettingOption.TIME_UNCERTAINTY_AGGREGATION: deployed_core_settings.datum.time_uncertainty_aggregation,
+        SettingOption.TIME_UNCERTAINTY_PLATFORM: deployed_core_settings.datum.time_uncertainty_platform,
         SettingOption.IQR_MULTIPLIER: deployed_core_settings.datum.iqr_fence_multiplier,
         SettingOption.THRESHOLD: deployed_core_settings.datum.required_node_signatures_count,
         SettingOption.UTXO_BUFFER: deployed_core_settings.datum.utxo_size_safety_buffer,
+        SettingOption.NODE_REWARD_FEE: deployed_core_settings.datum.fee_info.reward_prices.node_fee,
+        SettingOption.PLATFORM_REWARD_FEE: deployed_core_settings.datum.fee_info.reward_prices.platform_fee,
     }
     current_settings = initial_settings.copy()
     invalid_settings = set()
+
+    current_fee_rate_nft = choose_fee_rate_nft(initial_fee_rate_nft)
 
     while True:
         display_initial_settings_context(
@@ -195,7 +223,7 @@ async def manual_settings_menu(  # noqa: C901
         selected_option = next(opt for opt in SettingOption if opt.id == choice)
 
         if selected_option == SettingOption.DONE:
-            if current_settings == initial_settings:
+            if current_settings == initial_settings and current_fee_rate_nft is None:
                 print_status("Update Status", "No changes detected", success=True)
                 raise UpdateCancelled()
             # Validate all settings
@@ -223,6 +251,7 @@ async def manual_settings_menu(  # noqa: C901
                         oracle_config,
                         deployed_core_settings,
                         current_settings,
+                        current_fee_rate_nft,
                     )
                 else:
                     continue
@@ -247,19 +276,34 @@ def build_new_settings_datum(
     oracle_config: OracleConfiguration,
     deployed_core_settings: Datum,
     current_settings: dict,
+    current_fee_rate_nft: FeeRateNFT | None,
 ) -> UTxO:
     print_progress("Building new settings datum")
+    if current_fee_rate_nft is None:
+        current_fee_rate_nft = deployed_core_settings.datum.fee_info.rate_nft
+
     oracle_settings = OracleSettingsDatum(
         nodes=deployed_core_settings.datum.nodes,
         required_node_signatures_count=current_settings[SettingOption.THRESHOLD],
-        fee_info=deployed_core_settings.datum.fee_info,
+        fee_info=FeeConfig(
+            rate_nft=current_fee_rate_nft,
+            reward_prices=RewardPrices(
+                node_fee=current_settings[SettingOption.NODE_REWARD_FEE],
+                platform_fee=current_settings[SettingOption.PLATFORM_REWARD_FEE],
+            ),
+        ),
         aggregation_liveness_period=current_settings[
             SettingOption.AGGREGATION_LIVENESS
         ],
-        time_absolute_uncertainty=current_settings[SettingOption.TIME_UNCERTAINTY],
+        time_uncertainty_aggregation=current_settings[
+            SettingOption.TIME_UNCERTAINTY_AGGREGATION
+        ],
+        time_uncertainty_platform=current_settings[
+            SettingOption.TIME_UNCERTAINTY_PLATFORM
+        ],
         iqr_fence_multiplier=current_settings[SettingOption.IQR_MULTIPLIER],
         utxo_size_safety_buffer=current_settings[SettingOption.UTXO_BUFFER],
-        closing_period_started_at=deployed_core_settings.datum.closing_period_started_at,
+        pause_period_started_at=deployed_core_settings.datum.pause_period_started_at,
     )
     oracle_settings.validate_based_on_config(oracle_config)
 
@@ -331,7 +375,7 @@ def display_initial_settings_context(
         click.echo(f"{option.id}. {option.label}")
 
 
-def validate_setting(
+def validate_setting(  # noqa: C901
     option: SettingOption,
     value: int,
     current_settings: dict,
@@ -340,11 +384,11 @@ def validate_setting(
 ) -> None:
     """Validate a setting value."""
     if value <= 0 and option in [
-        SettingOption.TIME_UNCERTAINTY,
+        SettingOption.TIME_UNCERTAINTY_AGGREGATION,
         SettingOption.THRESHOLD,
     ]:
         raise SettingsValidationError(
-            "Time uncertainty and Node signature count must be positive"
+            "Time uncertainty for odv-aggregation and Node signature count must be positive"
         )
 
     if option == SettingOption.UTXO_BUFFER:
@@ -369,9 +413,100 @@ def validate_setting(
             f"Threshold cannot be greater than number of deployed parties ({deployed_settings.datum.nodes.length})"
         )
 
-    if option == SettingOption.AGGREGATION_LIVENESS:
-        time_uncertainty = current_settings[SettingOption.TIME_UNCERTAINTY]
-        if value <= time_uncertainty:
+    if option == SettingOption.TIME_UNCERTAINTY_PLATFORM:
+        time_uncertainty_agg = current_settings[
+            SettingOption.TIME_UNCERTAINTY_AGGREGATION
+        ]
+        if value <= time_uncertainty_agg:
             raise SettingsValidationError(
-                f"Aggregation liveness ({value}) must be greater than time uncertainty ({time_uncertainty})"
+                f"Time uncertainty for platform actions ({value}) must be greater than time uncertainty for odv-aggregation ({time_uncertainty_agg})"
             )
+
+    if option == SettingOption.AGGREGATION_LIVENESS:
+        time_uncertainty_platform = current_settings[
+            SettingOption.TIME_UNCERTAINTY_PLATFORM
+        ]
+        if value <= time_uncertainty_platform:
+            raise SettingsValidationError(
+                f"Aggregation liveness ({value}) must be greater than time uncertainty for platform actions ({time_uncertainty_platform})"
+            )
+
+    if option == SettingOption.NODE_REWARD_FEE and value < 0:
+        raise SettingsValidationError("Must not have negative node reward price")
+
+    if option == SettingOption.PLATFORM_REWARD_FEE and value < 0:
+        raise SettingsValidationError("Must not have negative platform reward price")
+
+
+def choose_fee_rate_nft(initial_fee_rate_nft: FeeRateNFT) -> FeeRateNFT | None:
+    """
+    Choose new fee rate NFT interactively.
+    Returns None if rate NFT not changed.
+    """
+    print_current_fee_rate_nft(initial_fee_rate_nft)
+
+    if print_confirmation_message_prompt("Do you want to change the fee rate NFT?"):
+        if initial_fee_rate_nft != NoDatum():
+            if print_confirmation_message_prompt(
+                "Do you want to set the fee rate NFT to none?"
+            ):
+                current_fee_rate_nft = NoDatum()
+                print_current_fee_rate_nft(current_fee_rate_nft)
+                return current_fee_rate_nft
+
+        while True:
+            new_policy_id = click.prompt(
+                click.style(
+                    "Enter new value for policy id in hex format",
+                    fg=CliColor.WARNING,
+                    bold=True,
+                ),
+                type=str,
+            )
+            try:
+                new_policy_id = ScriptHash.from_primitive(new_policy_id)
+            except (ValueError, AssertionError, TypeError) as err:
+                print_status(
+                    "Policy Id should be a valid script hash (28 bytes) in hex format",
+                    str(err),
+                    success=False,
+                )
+                continue
+            break
+
+        while True:
+            new_token_name = click.prompt(
+                click.style(
+                    "Enter new value for token name", fg=CliColor.WARNING, bold=True
+                ),
+                type=str,
+            )
+            try:
+                new_token_name = AssetName.from_primitive(
+                    bytes(new_token_name, "utf-8")
+                )
+            except (ValueError, AssertionError, TypeError) as err:
+                print_status(
+                    "Token name should be a valid utf-8 string (max 32 bytes)",
+                    str(err),
+                    success=False,
+                )
+                continue
+            break
+
+        current_fee_rate_nft = SomeAsset(
+            Asset(policy_id=new_policy_id.payload, name=new_token_name.payload)
+        )
+        print_current_fee_rate_nft(current_fee_rate_nft)
+        return current_fee_rate_nft
+
+
+def print_current_fee_rate_nft(current_fee_rate_nft: FeeRateNFT) -> None:
+    print_header("Current Fee Rate NFT")
+    if current_fee_rate_nft == NoDatum():
+        print_status("Fee Rate NFT", "none")
+    else:
+        print_status(
+            "Fee Rate NFT policy id", current_fee_rate_nft.asset.policy_id.hex()
+        )
+        print_status("Fee Rate NFT name", str(current_fee_rate_nft.asset.name))

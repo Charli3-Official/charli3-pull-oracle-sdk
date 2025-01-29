@@ -46,10 +46,11 @@ fees:
 
 timing:
   # All periods in milliseconds
-  closing_period: 3600000 # 1 hour
+  pause_period: 3600000 # 1 hour
   reward_dismissing_period: 7200000 # 2 hours
   aggregation_liveness: 300000 # 5 minutes
-  time_uncertainty: 180000 # 3 minutes
+  time_uncertainty_aggregation: 120000 # 2 minutes in ms
+  time_uncertainty_platform: 180000 # 3 minutes in ms
   iqr_multiplier: 150 # 1.5x multiplier for outlier detection
 
 # Number of reward transport UTxOs (minimum 4 for mainnet)
@@ -60,3 +61,7 @@ blueprint_path: "artifacts/plutus.json"
 
 # Reference script creation options
 create_reference: true # Create manager reference script
+
+# Will pay out utxo with reference script to this address.
+# By default creates reference script at this script address.
+reference_script_addr: "addr1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"

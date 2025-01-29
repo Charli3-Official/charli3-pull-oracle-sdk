@@ -71,15 +71,37 @@ class RewardsResult:
 
     @property
     def reward_distribution(self) -> dict[int, int]:
-        """Get reward distribution from pending transports."""
+        """Get reward distribution from pending transports.
+
+        Returns:
+            Dictionary mapping node IDs to their reward amounts.
+            The rewards are extracted from the first transport's aggregation data
+            and matched with reward amounts from the reward account datum.
+
+        Note:
+            Only processes the first transport UTxO, even if multiple are present.
+        """
+        # Early return if no pending transports
+        if not self.pending_transports:
+            return {}
+
+        # Get reward amounts list from reward account
+        reward_list = self.new_reward_account.datum.datum.nodes_to_rewards
+
+        # Get the first transport's datum
+        transport_datum = self.pending_transports[0].output.datum.datum
+
+        # Early return if no aggregation data
+        if not hasattr(transport_datum, "aggregation"):
+            return {}
+
+        # Build distribution mapping
         distribution = {}
-        for transport in self.pending_transports:
-            datum = transport.output.datum.datum
-            if hasattr(datum, "aggregation"):
-                agg = datum.aggregation
-                node_reward = agg.node_reward_price
-                for node_id in agg.message.node_feeds_sorted_by_feed.keys():
-                    distribution[node_id] = distribution.get(node_id, 0) + node_reward
+        for idx, node_id in enumerate(
+            transport_datum.aggregation.message.node_feeds_sorted_by_feed
+        ):
+            distribution[node_id] = reward_list[idx]
+
         return distribution
 
     @property
@@ -188,7 +210,9 @@ class OracleTransactionBuilder:
 
             # Calculate the transaction time window and current time ONCE
             validity_start, validity_end, current_time = (
-                self._calculate_validity_window(settings_datum)
+                self._calculate_validity_window(
+                    settings_datum.time_uncertainty_aggregation
+                )
             )
 
             validity_start_slot, validity_end_slot = self._validity_window_to_slot(
@@ -434,7 +458,9 @@ class OracleTransactionBuilder:
         total_fee_tokens = rewards.calculate_total_fees(
             transports, self.fee_token_hash, self.fee_token_name
         )
-        node_rewards = rewards.calculate_node_rewards_from_transports(transports)
+        node_rewards = rewards.calculate_node_rewards_from_transports(
+            transports, nodes, settings.iqr_fence_multiplier
+        )
 
         # Accumulate rewards
         new_rewards = rewards.accumulate_node_rewards(
@@ -455,11 +481,11 @@ class OracleTransactionBuilder:
         )
 
     def _calculate_validity_window(
-        self, settings: OracleSettingsDatum
+        self, time_absolute_uncertainty: int
     ) -> tuple[int, int, int]:
         """Calculate transaction validity window and current time."""
         validity_start = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-        validity_end = validity_start + settings.time_absolute_uncertainty
+        validity_end = validity_start + time_absolute_uncertainty
         current_time = (validity_end + validity_start) // 2
         return validity_start, validity_end, current_time
 
@@ -474,14 +500,11 @@ class OracleTransactionBuilder:
     def median(self, node_feeds_sorted: list[NodeFeed], node_feeds_count: int) -> int:
         """
         Calculate the median of the node feeds
-
         Args:
             node_feeds_sorted: Sorted list of NodeFeed objects
             node_feeds_count: Number of node feeds
-
         Returns:
             Median value as an integer
-
         """
         if len(node_feeds_sorted) == 1:
             return node_feeds_sorted[0]
@@ -493,12 +516,10 @@ class OracleTransactionBuilder:
     def quantile(self, xs: list[int], n: int, q: Fraction) -> Fraction:
         """
         Calculate the q-th quantile of the sorted list xs
-
         Args:
             xs: Sorted list of values
             n: Length of the list
             q: Desired quantile (between 0 and 1) as a Fraction
-
         Returns:
             Quantile value as a Fraction
         """

@@ -19,8 +19,9 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.constants.status import ProcessStatus
 
 from ..utils.common import get_script_utxos
-from .close_builder import CloseBuilder
-from .reopen_builder import ReopenBuilder
+from .pause_builder import PauseBuilder
+from .remove_builder import RemoveBuilder
+from .resume_builder import ResumeBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class LifecycleOrchestrator:
         if self.status_callback:
             self.status_callback(status, message)
 
-    async def close_oracle(
+    async def pause_oracle(
         self,
         oracle_policy: str,
         platform_utxo: UTxO,
@@ -67,7 +68,7 @@ class LifecycleOrchestrator:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
             policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
 
-            builder = CloseBuilder(self.chain_query, self.tx_manager)
+            builder = PauseBuilder(self.chain_query, self.tx_manager)
             result = await builder.build_tx(
                 platform_utxo=platform_utxo,
                 platform_script=platform_script,
@@ -82,10 +83,10 @@ class LifecycleOrchestrator:
             )
 
         except Exception as e:
-            logger.error("Close oracle failed: %s", str(e))
+            logger.error("Pause oracle failed: %s", str(e))
             return LifecycleResult(status=ProcessStatus.FAILED, error=e)
 
-    async def reopen_oracle(
+    async def resume_oracle(
         self,
         oracle_policy: str,
         platform_utxo: UTxO,
@@ -93,7 +94,7 @@ class LifecycleOrchestrator:
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
     ) -> LifecycleResult:
-        """Reopen a closed oracle.
+        """Resume a paused oracle.
 
         Args:
             oracle_policy: Oracle policy ID
@@ -111,9 +112,9 @@ class LifecycleOrchestrator:
             policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
 
             self._update_status(
-                ProcessStatus.BUILDING_TRANSACTION, "Building reopen transaction"
+                ProcessStatus.BUILDING_TRANSACTION, "Building resume transaction"
             )
-            builder = ReopenBuilder(self.chain_query, self.tx_manager)
+            builder = ResumeBuilder(self.chain_query, self.tx_manager)
             result = await builder.build_tx(
                 platform_utxo=platform_utxo,
                 platform_script=platform_script,
@@ -124,13 +125,65 @@ class LifecycleOrchestrator:
             )
 
             self._update_status(
-                ProcessStatus.TRANSACTION_BUILT, "Reopen transaction built"
+                ProcessStatus.TRANSACTION_BUILT, "Resume transaction built"
             )
             return LifecycleResult(
                 status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
             )
 
         except Exception as e:
-            logger.error("Reopen oracle failed: %s", str(e))
-            self._update_status(ProcessStatus.FAILED, f"Reopen failed: {e!s}")
+            logger.error("Resume oracle failed: %s", str(e))
+            self._update_status(ProcessStatus.FAILED, f"Resume failed: {e!s}")
+            return LifecycleResult(status=ProcessStatus.FAILED, error=e)
+
+    async def remove_oracle(
+        self,
+        oracle_policy: str,
+        platform_utxo: UTxO,
+        platform_script: NativeScript,
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        pair_count: int | None = None,
+    ) -> LifecycleResult:
+        """Remove an oracle permanently and burn all NFTs.
+
+        Args:
+            oracle_policy: Oracle policy ID
+            platform_utxo: Platform NFT UTxO
+            platform_script: Platform authorization script
+            change_address: Change address
+            signing_key: Signing key
+            pair_count: Optional number of AggregationState + RewardTransport token pairs to burn
+
+        Returns:
+            LifecycleResult containing transaction status and details
+        """
+        try:
+            utxos = await get_script_utxos(self.script_address, self.tx_manager)
+            policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
+
+            self._update_status(
+                ProcessStatus.BUILDING_TRANSACTION, "Building remove oracle transaction"
+            )
+            builder = RemoveBuilder(self.chain_query, self.tx_manager)
+            result = await builder.build_tx(
+                platform_utxo=platform_utxo,
+                platform_script=platform_script,
+                policy_hash=policy_hash,
+                utxos=utxos,
+                pair_count=pair_count,
+                change_address=change_address,
+                signing_key=signing_key,
+            )
+
+            self._update_status(
+                ProcessStatus.TRANSACTION_BUILT, "Remove oracle transaction built"
+            )
+            return LifecycleResult(
+                status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
+            )
+
+        except Exception as e:
+            logger.error("Remove oracle failed: %s", str(e))
+            self._update_status(ProcessStatus.FAILED, f"Remove failed: {e!s}")
             return LifecycleResult(status=ProcessStatus.FAILED, error=e)

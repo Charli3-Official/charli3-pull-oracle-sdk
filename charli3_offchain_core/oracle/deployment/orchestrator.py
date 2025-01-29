@@ -18,9 +18,7 @@ from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     FeeConfig,
-    NoDatum,
     OracleConfiguration,
-    SomeAsset,
 )
 from charli3_offchain_core.oracle.config import (
     OracleDeploymentConfig,
@@ -91,17 +89,14 @@ class OracleDeploymentOrchestrator:
 
     async def build_tx(
         self,
-        # Network, platform and admin configuration
-        platform_auth_policy_id: bytes,
-        fee_token: SomeAsset | NoDatum,
+        # oracle configuration
+        oracle_config: OracleConfiguration,
         platform_script: NativeScript,
         admin_address: Address,
         script_address: Address,
-        # Timing configuration
-        closing_period_length: int,
-        reward_dismissing_period_length: int,
         aggregation_liveness_period: int,
-        time_absolute_uncertainty: int,
+        time_uncertainty_aggregation: int,
+        time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
         # Deployment configuration
         deployment_config: OracleDeploymentConfig,
@@ -120,10 +115,11 @@ class OracleDeploymentOrchestrator:
             script_config: Reference script configuration
             admin_address: Address for reference scripts
             script_address: Address for oracle script
-            closing_period_length: Time allowed for closing period
+            pause_period_length: Time allowed for pause period
             reward_dismissing_period_length: Time allowed for reward dismissal
             aggregation_liveness_period: Time window for aggregation
-            time_absolute_uncertainty: Allowed time uncertainty
+            time_uncertainty_aggregation: Max tx validity interval length for odv-aggregation tx
+            time_uncertainty_platform: Max tx validity interval length for platform governance txs
             iqr_fence_multiplier: IQR multiplier for outlier detection
             deployment_config: Deployment parameters
             nodes_config: Configuration for oracle nodes
@@ -138,17 +134,9 @@ class OracleDeploymentOrchestrator:
             Exception: If deployment fails
         """
         try:
-            # Create oracle configuration
-            config = OracleConfiguration(
-                platform_auth_nft=platform_auth_policy_id,
-                closing_period_length=closing_period_length,
-                reward_dismissing_period_length=reward_dismissing_period_length,
-                fee_token=fee_token,
-            )
-
             # Handle start transaction
             start_result = await self._handle_start_transaction(
-                config=config,
+                config=oracle_config,
                 deployment_config=deployment_config,
                 nodes_config=nodes_config,
                 script_address=script_address,
@@ -158,7 +146,8 @@ class OracleDeploymentOrchestrator:
                 signing_key=signing_key,
                 fee_config=fee_config,
                 aggregation_liveness_period=aggregation_liveness_period,
-                time_absolute_uncertainty=time_absolute_uncertainty,
+                time_uncertainty_aggregation=time_uncertainty_aggregation,
+                time_uncertainty_platform=time_uncertainty_platform,
                 iqr_fence_multiplier=iqr_fence_multiplier,
             )
 
@@ -223,7 +212,8 @@ class OracleDeploymentOrchestrator:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         fee_config: FeeConfig,
         aggregation_liveness_period: int,
-        time_absolute_uncertainty: int,
+        time_uncertainty_aggregation: int,
+        time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
     ) -> StartTransactionResult:
         """Build and submit oracle start transaction."""
@@ -242,6 +232,7 @@ class OracleDeploymentOrchestrator:
             signing_key=signing_key,
             fee_config=fee_config,
             aggregation_liveness_period=aggregation_liveness_period,
-            time_absolute_uncertainty=time_absolute_uncertainty,
+            time_uncertainty_aggregation=time_uncertainty_aggregation,
+            time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
         )

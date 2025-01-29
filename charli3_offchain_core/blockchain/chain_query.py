@@ -179,7 +179,6 @@ class ChainQuery:
                 )
                 if script["language"] == "plutus:v3":
                     script = PlutusV3Script(bytes.fromhex(script["script"]))
-
             if not script:
                 raise ScriptQueryError(f"Script not found for hash: {script_hash}")
 

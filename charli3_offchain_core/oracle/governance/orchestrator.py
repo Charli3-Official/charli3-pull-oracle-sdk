@@ -17,9 +17,16 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.constants.status import ProcessStatus
 from charli3_offchain_core.models.oracle_datums import OracleConfiguration
-from charli3_offchain_core.oracle.exceptions import ScalingError, StateValidationError
+from charli3_offchain_core.oracle.exceptions import (
+    AddingNodesError,
+    AddNodesValidationError,
+    ScalingError,
+    StateValidationError,
+)
+from charli3_offchain_core.oracle.governance.add_nodes_builder import AddNodesBuilder
 from charli3_offchain_core.oracle.governance.scale_builder import OracleScaleBuilder
 from charli3_offchain_core.oracle.governance.update_builder import UpdateBuilder
 from charli3_offchain_core.oracle.utils.common import get_script_utxos
@@ -56,6 +63,50 @@ class GovernanceOrchestrator:
         self.current_status = status
         if self.status_callback:
             self.status_callback(status, message)
+
+    async def add_nodes_oracle(
+        self,
+        oracle_policy: str,
+        new_nodes_config: NodesConfig,
+        platform_utxo: UTxO,
+        platform_script: NativeScript,
+        change_address: Address,
+        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        required_signers: list[VerificationKeyHash] | None = None,
+    ) -> GovernanceResult:
+        try:
+            utxos = await get_script_utxos(self.script_address, self.tx_manager)
+            policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
+
+            builder = AddNodesBuilder(self.chain_query, self.tx_manager)
+
+            try:
+                result = await builder.build_tx(
+                    platform_utxo=platform_utxo,
+                    platform_script=platform_script,
+                    policy_hash=policy_hash,
+                    utxos=utxos,
+                    change_address=change_address,
+                    signing_key=signing_key,
+                    new_nodes_config=new_nodes_config,
+                    required_signers=required_signers,
+                )
+            except (AddingNodesError, AddNodesValidationError):
+                return GovernanceResult(status=ProcessStatus.FAILED)
+
+            if result.reason:
+                return GovernanceResult(ProcessStatus.VERIFICATION_FAILURE)
+
+            if result.transaction is None and result.settings_utxo is None:
+                return GovernanceResult(ProcessStatus.CANCELLED_BY_USER)
+
+            return GovernanceResult(
+                status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
+            )
+
+        except Exception as e:
+            logger.error("Update oracle failed: %s", str(e))
+            return GovernanceResult(status=ProcessStatus.FAILED, error=e)
 
     async def update_oracle(
         self,

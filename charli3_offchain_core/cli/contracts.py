@@ -120,11 +120,12 @@ def main() -> None:
     print("\nCreating oracle configuration...")
     config = OracleConfiguration(
         platform_auth_nft=bytes.fromhex("00" * 28),
-        closing_period_length=3600,
+        pause_period_length=3600,
         reward_dismissing_period_length=7200,
         fee_token=SomeAsset(
             asset=Asset(policy_id=bytes.fromhex("00" * 28), name=b"TOKEN"),
         ),
+        reward_escrow_script_hash=bytes.fromhex("00" * 28),
     )
 
     # Create sample UTxO ref and script hash for mint policy

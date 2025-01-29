@@ -35,6 +35,105 @@ logger = logging.getLogger(__name__)
 )
 @click.command()
 @async_command
+async def add_nodes(config: Path, output: Path | None) -> None:
+    """Add the nodes' PKHs to an Oracle instance"""
+    try:
+        print_header("Add Nodes")
+        (
+            management_config,
+            _,
+            payment_sk,
+            oracle_addresses,
+            chain_query,
+            tx_manager,
+            platform_auth_finder,
+        ) = setup_management_from_config(config)
+
+        platform_utxo = await platform_auth_finder.find_auth_utxo(
+            policy_id=management_config.tokens.platform_auth_policy,
+            platform_address=oracle_addresses.platform_address,
+        )
+
+        if not platform_utxo:
+            raise click.ClickException("No platform auth UTxO found")
+
+        platform_script = await platform_auth_finder.get_platform_script(
+            oracle_addresses.platform_address
+        )
+        platform_config = platform_auth_finder.get_script_config(platform_script)
+
+        orchestrator = GovernanceOrchestrator(
+            chain_query=chain_query,
+            tx_manager=tx_manager,
+            script_address=oracle_addresses.script_address,
+            status_callback=format_status_update,
+        )
+
+        result = await orchestrator.add_nodes_oracle(
+            oracle_policy=management_config.tokens.oracle_policy,
+            new_nodes_config=management_config.nodes,
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            change_address=oracle_addresses.admin_address,
+            signing_key=payment_sk,
+        )
+        if result.status == ProcessStatus.CANCELLED_BY_USER:
+            print_status(
+                "Add nodes Status", "Operation cancelled by user", success=True
+            )
+            return
+        if result.status == ProcessStatus.VERIFICATION_FAILURE:
+            print_status(
+                "Add nodes Status",
+                "On-chain validation does not meet the requirements.",
+                success=False,
+            )
+            return
+        if result.status != ProcessStatus.TRANSACTION_BUILT:
+            raise click.ClickException(f"Add nodes failed: {result.error}")
+
+        if platform_config.threshold == 1:
+            if print_confirmation_message_prompt(
+                "Proceed signing and submitting add-nodes tx?"
+            ):
+                status, _ = await tx_manager.sign_and_submit(
+                    result.transaction, [payment_sk], wait_confirmation=True
+                )
+                if status != ProcessStatus.TRANSACTION_CONFIRMED:
+                    raise click.ClickException(f"Add nodes failed: {status}")
+                print_status("Add nodes", "completed successfully", success=True)
+        elif print_confirmation_message_prompt("Store multisig update transaction?"):
+            output_path = output or Path("tx_oracle_add_nodes.json")
+            with output_path.open("w") as f:
+                json.dump(
+                    {
+                        "transaction": result.transaction.to_cbor_hex(),
+                        "signed_by": [],
+                        "threshold": platform_config.threshold,
+                    },
+                    f,
+                )
+            print_status("Transaction", "saved successfully", success=True)
+            print_hash_info("Output file", str(output_path))
+
+    except Exception as e:
+        logger.error("Add nodes failed", exc_info=e)
+        raise click.ClickException(str(e)) from e
+
+
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to deployment configuration YAML",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output file for transaction data",
+)
+@click.command()
+@async_command
 async def update_settings(config: Path, output: Path | None) -> None:
     """Updates the core settings configuration of an Oracle instance."""
     try:
@@ -81,7 +180,9 @@ async def update_settings(config: Path, output: Path | None) -> None:
             print_status("Update Status", "Operation cancelled by user", success=True)
             return
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Update failed: {result.error}")
+            raise click.ClickException(
+                f"Update failed: {result.error}"
+            ) from result.error
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt("Proceed with oracle update?"):

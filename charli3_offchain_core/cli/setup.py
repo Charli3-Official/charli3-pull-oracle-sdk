@@ -10,7 +10,10 @@ from pycardano import (
 )
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
-from charli3_offchain_core.contracts.aiken_loader import OracleContracts
+from charli3_offchain_core.contracts.aiken_loader import (
+    OracleContracts,
+    RewardEscrowContract,
+)
 from charli3_offchain_core.models.oracle_datums import (
     Asset,
     FeeConfig,
@@ -98,6 +101,7 @@ def setup_oracle_from_config(
     config: Path,
 ) -> tuple[
     DeploymentConfig,
+    OracleConfiguration,
     PaymentSigningKey,
     PaymentVerificationKey,
     OracleAddresses,
@@ -119,13 +123,21 @@ def setup_oracle_from_config(
         deployment_config.tokens.fee_token_policy,
         deployment_config.tokens.fee_token_name,
     )
+    if fee_token == NoDatum():
+        escrow_script_hash = b""
+    else:
+        escrow_script = RewardEscrowContract.from_blueprint(
+            deployment_config.blueprint_path
+        )
+        escrow_script_hash = escrow_script.escrow_manager.script_hash.payload
 
     # Create oracle configuration
     oracle_config = OracleConfiguration(
         platform_auth_nft=bytes.fromhex(deployment_config.tokens.platform_auth_policy),
-        closing_period_length=deployment_config.timing.closing_period,
+        pause_period_length=deployment_config.timing.pause_period,
         reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
         fee_token=fee_token,
+        reward_escrow_script_hash=escrow_script_hash,
     )
 
     # Parameterize contracts
@@ -156,7 +168,7 @@ def setup_oracle_from_config(
     configs = {
         "script": OracleScriptConfig(
             create_manager_reference=deployment_config.create_reference,
-            reference_ada_amount=64_000_000,
+            reference_ada_amount=69528920,
         ),
         "deployment": OracleDeploymentConfig(
             network=deployment_config.network.network,
@@ -185,6 +197,7 @@ def setup_oracle_from_config(
 
     return (
         deployment_config,
+        oracle_config,
         keys.payment_sk,
         keys.payment_vk,
         oracle_addresses,
@@ -208,15 +221,25 @@ def setup_management_from_config(config: Path) -> tuple[
     management_config = ManagementConfig.from_yaml(config)
     base_contracts = OracleContracts.from_blueprint(management_config.blueprint_path)
 
+    fee_token = setup_fee_token(
+        management_config.tokens.fee_token_policy,
+        management_config.tokens.fee_token_name,
+    )
+    if fee_token == NoDatum():
+        escrow_script_hash = b""
+    else:
+        escrow_script = RewardEscrowContract.from_blueprint(
+            management_config.blueprint_path
+        )
+        escrow_script_hash = escrow_script.escrow_manager.script_hash.payload
+
     # Create oracle configuration
     oracle_config = OracleConfiguration(
         platform_auth_nft=bytes.fromhex(management_config.tokens.platform_auth_policy),
-        closing_period_length=management_config.timing.closing_period,
+        pause_period_length=management_config.timing.pause_period,
         reward_dismissing_period_length=management_config.timing.reward_dismissing_period,
-        fee_token=setup_fee_token(
-            management_config.tokens.fee_token_policy,
-            management_config.tokens.fee_token_name,
-        ),
+        fee_token=fee_token,
+        reward_escrow_script_hash=escrow_script_hash,
     )
 
     keys = load_keys_with_validation(management_config, base_contracts)

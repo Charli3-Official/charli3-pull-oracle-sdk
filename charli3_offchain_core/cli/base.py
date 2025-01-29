@@ -118,12 +118,12 @@ def validate_deployment_config(config: DeploymentConfig) -> None:
             f"Transport count must be at least {MIN_TRANSPORT_COUNT}"
         )
 
-    if config.timing.closing_period <= 0:
-        raise click.ClickException("Closing period must be positive")
+    if config.timing.pause_period <= 0:
+        raise click.ClickException("Pause period must be positive")
 
-    if config.timing.reward_dismissing_period <= config.timing.closing_period:
+    if config.timing.reward_dismissing_period <= config.timing.pause_period:
         raise click.ClickException(
-            "Reward dismissing period must be greater than closing period"
+            "Reward dismissing period must be greater than pause period"
         )
 
     if config.fees.node_fee <= 0 or config.fees.platform_fee <= 0:
