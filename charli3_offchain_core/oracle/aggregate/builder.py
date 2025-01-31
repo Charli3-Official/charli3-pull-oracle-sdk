@@ -159,9 +159,9 @@ class OracleTransactionBuilder:
         self,
         tx_manager: TransactionManager,
         script_address: Address,
-        policy_id: bytes,
-        fee_token_hash: ScriptHash,
-        fee_token_name: AssetName,
+        policy_id: ScriptHash,
+        reward_token_hash: ScriptHash | None = None,
+        reward_token_name: AssetName | None = None,
     ) -> None:
         """Initialize transaction builder.
 
@@ -173,8 +173,8 @@ class OracleTransactionBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
-        self.fee_token_hash = fee_token_hash
-        self.fee_token_name = fee_token_name
+        self.reward_token_hash = reward_token_hash
+        self.reward_token_name = reward_token_name
         self.network_config = self.tx_manager.chain_query.config.network_config
 
     async def build_odv_tx(
@@ -369,21 +369,75 @@ class OracleTransactionBuilder:
         """Helper method to create transport output with consistent data."""
         transport_output = deepcopy(transport.output)
 
-        # Add fees to output
+        self._add_reward_to_output(transport_output, minimum_fee)
+
+        return self._create_final_output(
+            transport_output,
+            current_message,
+            median_value,
+            node_reward_price,
+            minimum_fee,
+        )
+
+    def _add_reward_to_output(
+        self, transport_output: TransactionOutput, minimum_fee: int
+    ) -> None:
+        """
+        Add fees to the transport output based on reward token configuration.
+
+        Args:
+            transport_output: The output to add fees to
+            minimum_fee: The fee amount to add
+        """
+        if not (self.reward_token_hash or self.reward_token_name):
+            transport_output.amount.coin += minimum_fee
+            return
+
+        self._add_token_fees(transport_output, minimum_fee)
+
+    def _add_token_fees(
+        self, transport_output: TransactionOutput, minimum_fee: int
+    ) -> None:
+        """
+        Add token-based fees to the output.
+
+        Args:
+            transport_output: The output to add token fees to
+            minimum_fee: The fee amount to add
+        """
+        token_hash = self.reward_token_hash
+        token_name = self.reward_token_name
+
         if (
-            self.fee_token_hash in transport_output.amount.multi_asset
-            and self.fee_token_name
-            in transport_output.amount.multi_asset[self.fee_token_hash]
+            token_hash in transport_output.amount.multi_asset
+            and token_name in transport_output.amount.multi_asset[token_hash]
         ):
-            transport_output.amount.multi_asset[self.fee_token_hash][
-                self.fee_token_name
-            ] += minimum_fee
+            transport_output.amount.multi_asset[token_hash][token_name] += minimum_fee
         else:
-            fee_asset = MultiAsset(
-                {self.fee_token_hash: Asset({self.fee_token_name: minimum_fee})}
-            )
+            fee_asset = MultiAsset({token_hash: Asset({token_name: minimum_fee})})
             transport_output.amount.multi_asset += fee_asset
 
+    def _create_final_output(
+        self,
+        transport_output: TransactionOutput,
+        current_message: AggregateMessage,
+        median_value: int,
+        node_reward_price: int,
+        minimum_fee: int,
+    ) -> TransactionOutput:
+        """
+        Create the final transaction output with all necessary data.
+
+        Args:
+            transport_output: The processed transport output
+            current_message: Current aggregate message
+            median_value: The calculated median value
+            node_reward_price: Price for node reward
+            minimum_fee: Minimum fee added
+
+        Returns:
+            TransactionOutput: The final transaction output
+        """
         return TransactionOutput(
             address=self.script_address,
             amount=transport_output.amount,

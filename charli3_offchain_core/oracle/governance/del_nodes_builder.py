@@ -273,7 +273,7 @@ class DelNodesBuilder(BaseBuilder):
 
     def _create_direct_payments(
         self,
-        payment_distribution: dict[str, int],
+        payment_distribution: dict[VerificationKeyHash, int],
         network: Network,
     ) -> list[TransactionOutput]:
         """Create direct payment outputs for node operators."""

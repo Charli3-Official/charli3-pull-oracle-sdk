@@ -1,6 +1,6 @@
 """ Common utility functions for oracle operations. """
 
-from pycardano import ScriptHash, UTxO
+from pycardano import Address, ScriptHash, UTxO
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.oracle.utils.asset_checks import validate_token_quantities
@@ -15,7 +15,7 @@ from ..exceptions import StateValidationError, TransactionError, ValidationError
 
 
 async def get_script_utxos(
-    script_address: str, tx_manager: TransactionManager
+    script_address: Address, tx_manager: TransactionManager
 ) -> list[UTxO]:
     """Get and validate UTxOs at script address."""
     try:
