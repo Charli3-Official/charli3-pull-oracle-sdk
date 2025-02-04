@@ -68,6 +68,7 @@ class RewardsResult:
     transaction: Transaction
     pending_transports: list[UTxO]
     new_reward_account: TransactionOutput
+    in_settings: OracleSettingsDatum | None = None
 
     @property
     def reward_distribution(self) -> dict[int, int]:
@@ -97,9 +98,12 @@ class RewardsResult:
 
         # Build distribution mapping
         distribution = {}
-        for idx, node_id in enumerate(
-            transport_datum.aggregation.message.node_feeds_sorted_by_feed
-        ):
+        node_map_keys = list(self.in_settings.nodes.node_map.keys())
+        for node_id in transport_datum.aggregation.message.node_feeds_sorted_by_feed:
+            if node_id not in node_map_keys:
+                continue
+
+            idx = node_map_keys.index(node_id)
             distribution[node_id] = reward_list[idx]
 
         return distribution
@@ -353,6 +357,7 @@ class OracleTransactionBuilder:
                 transaction=tx,
                 pending_transports=pending_transports,
                 new_reward_account=reward_account_output,
+                in_settings=settings_datum,
             )
 
         except Exception as e:
