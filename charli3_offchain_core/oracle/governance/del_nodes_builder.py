@@ -195,6 +195,7 @@ class DelNodesBuilder(BaseBuilder):
                         nodes_to_remove,
                         payment_distribution,
                         reward_token,
+                        self.MIN_UTXO_VALUE,
                     )
                 except RemoveNodesValidationError as e:
                     error_msg = f"Failed to validate Delete Nodes rules: {e}"
@@ -280,7 +281,7 @@ class DelNodesBuilder(BaseBuilder):
         return [
             TransactionOutput(
                 address=Address(payment_part=node_id, network=network),
-                amount=Value(coin=reward),
+                amount=Value(coin=max(reward, self.MIN_UTXO_VALUE)),
             )
             for node_id, reward in payment_distribution.items()
             if reward > 0
@@ -462,6 +463,7 @@ def modified_reward_utxo(
 def print_nodes_table(
     node_map: dict[VerificationKeyHash, VerificationKeyHash],
     payment_distribution: dict[VerificationKeyHash, int],
+    min_utxo_value: int,
     success: bool = True,
     is_ada: bool = True,
     is_current: bool = True,
@@ -472,11 +474,11 @@ def print_nodes_table(
     title = "NODES TO REMOVE" if is_current else "NODES REMOVED VS REMAINING"
     print_title(title)
     subtitle = (
-        "Rewards are paid in ADA"
+        "Rewards distributed in ₳ (lovelace) with minimum UTxO validation"
         if is_ada
-        else "Rewards are paid in CNT using an escrow contract"
+        else "Rewards distributed in CNT through escrow contract"
     )
-    print_information(subtitle)
+    display_payment_method(subtitle)
     headers = [
         "Node #",
         "Feed Verification Key Hash",
@@ -484,10 +486,24 @@ def print_nodes_table(
         "Reward Amount",
     ]
     table_data = [
-        [f"{i}", feed_vkh, payment_vkh, payment_distribution.get(payment_vkh, 0)]
+        [
+            f"{i}",
+            feed_vkh,
+            payment_vkh,
+            payment_distribution.get(payment_vkh, 0),
+        ]
         for i, (feed_vkh, payment_vkh) in enumerate(node_map.items(), 1)
     ]
-    # click.secho(header, fg=color)
+
+    if is_ada:
+        for row in table_data:
+            reward = row[3]  # Get the reward amount
+            if reward > 0 and reward < min_utxo_value:
+                row[3] = (
+                    f"Original: {reward:,.2f} ₳, "
+                    f"Final (Min UTxO): {min_utxo_value:,.2f} ₳"
+                )
+
     table = tabulate(
         table_data,
         headers=headers,
@@ -560,6 +576,7 @@ def show_nodes_update_info(
     config_nodes_to_remove: set[VerificationKeyHash],
     payment_distribution: dict[VerificationKeyHash, int],
     reward_token: NoDatum | SomeAsset,
+    min_utxo_value: int,
 ) -> bool:
     """
     Displays information about the changes that will be made to the nodes.
@@ -587,6 +604,7 @@ def show_nodes_update_info(
         print_nodes_table(
             nodes_to_remove,
             payment_distribution,
+            min_utxo_value,
             is_current=True,
             is_ada=isinstance(reward_token, NoDatum),
         )
@@ -654,12 +672,22 @@ def display_signature_change(current: int, new: int) -> None:
     )
 
 
+def display_payment_method(text: str) -> None:
+    """Display signature requirement changes."""
+    click.secho(
+        f"\n{text}",
+        fg="red",
+        bold=True,
+    )
+
+
 def confirm_node_updates(
     in_core_datum: OracleSettingsDatum,
     out_core_datum: OracleSettingsDatum,
     nodes_to_remove: set[VerificationKeyHash],
     payment_distribution: dict[VerificationKeyHash, int],
     reward_token: NoDatum | SomeAsset,
+    min_utxo_value: int,
 ) -> bool:
     """
     Validate and confirm node updates with the user.
@@ -681,6 +709,7 @@ def confirm_node_updates(
         nodes_to_remove,
         payment_distribution,
         reward_token,
+        min_utxo_value,
     )
     if not changes_valid:
         logger.warning("Validation failed for delete nodes")
