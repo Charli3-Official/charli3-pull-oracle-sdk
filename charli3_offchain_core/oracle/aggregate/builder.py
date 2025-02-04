@@ -482,9 +482,11 @@ class OracleTransactionBuilder:
         # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
         if (
             output_amount.multi_asset
-            and self.fee_token_hash in output_amount.multi_asset
+            and self.reward_token_hash in output_amount.multi_asset
         ):
-            output_amount.multi_asset[self.fee_token_hash][self.fee_token_name] = 0
+            output_amount.multi_asset[self.reward_token_hash][
+                self.reward_token_name
+            ] = 0
 
         return TransactionOutput(
             address=self.script_address,
@@ -509,8 +511,11 @@ class OracleTransactionBuilder:
         nodes = list(settings.nodes.node_map.keys())
 
         # Calculate total fees and rewards
-        total_fee_tokens = rewards.calculate_total_fees(
-            transports, self.fee_token_hash, self.fee_token_name
+        total_payment_tokens = rewards.calculate_total_fees(
+            transports,
+            self.reward_token_hash,
+            self.reward_token_name,
+            self.tx_manager.config.min_utxo_value,
         )
         node_rewards = rewards.calculate_node_rewards_from_transports(
             transports, nodes, settings.iqr_fence_multiplier
@@ -522,13 +527,16 @@ class OracleTransactionBuilder:
         )
 
         # Update fee tokens
-        rewards.update_fee_tokens(
-            output_amount, self.fee_token_hash, self.fee_token_name, total_fee_tokens
+        new_value = rewards.update_fee_tokens(
+            output_amount,
+            self.reward_token_hash,
+            self.reward_token_name,
+            total_payment_tokens,
         )
 
         return TransactionOutput(
             address=self.script_address,
-            amount=output_amount,
+            amount=new_value,
             datum=RewardAccountVariant(
                 datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
             ),
