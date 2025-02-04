@@ -69,3 +69,4 @@ create_reference: true # Create manager reference script
 # Will pay out utxo with reference script to this address.
 # By default creates reference script at this script address.
 reference_script_addr: "addr1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"
+reward_issuer_address: "addr1qylfnxq8p2p5t8svf7q6r2v3kn47humag3q9qulzjc20auvzz8sc749jnq8pu5l6gvnfyql3azfxgtup77swyxpf95kq8y8y4e"
