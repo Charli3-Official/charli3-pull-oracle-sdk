@@ -1,8 +1,11 @@
 """ Common utility functions for oracle operations. """
 
-from pycardano import ScriptHash, UTxO, VerificationKeyHash
+from typing import Any
+
+from pycardano import RawPlutusData, ScriptHash, UTxO, VerificationKeyHash
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.models.node_types import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
 from charli3_offchain_core.oracle.utils.asset_checks import validate_token_quantities
 from charli3_offchain_core.oracle.utils.state_checks import (
@@ -91,3 +94,45 @@ def make_aggregate_message(
         node_feeds_count=len(feeds),
         timestamp=timestamp,
     )
+
+
+def build_aggregate_message(
+    node_responses: list[dict | SignedOracleNodeMessage],
+) -> AggregateMessage:
+    """Build aggregate message from list of node responses (JSON or SignedOracleNodeMessage)."""
+    if not node_responses:
+        raise ValueError("No node responses provided")
+
+    signed_messages = [
+        (
+            response
+            if isinstance(response, SignedOracleNodeMessage)
+            else SignedOracleNodeMessage.from_json(response)
+        )
+        for response in node_responses
+    ]
+
+    if not all(msg.validate() for msg in signed_messages):
+        raise ValueError("Invalid signature detected")
+
+    timestamp = signed_messages[0].message.timestamp
+
+    feeds = {
+        msg.verification_key.hash(): msg.message.feed
+        for msg in signed_messages
+        if msg.verification_key
+    }
+
+    return AggregateMessage(
+        node_feeds_sorted_by_feed=dict(sorted(feeds.items(), key=lambda x: x[1])),
+        node_feeds_count=len(feeds),
+        timestamp=timestamp,
+    )
+
+
+def try_parse_datum(datum: RawPlutusData, datum_class: Any) -> Any:
+    """Attempt to parse a datum using the provided class."""
+    try:
+        return datum_class.from_cbor(datum.to_cbor())
+    except Exception:
+        return None
