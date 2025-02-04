@@ -472,7 +472,9 @@ def print_nodes_table(
     color = CliColor.SUCCESS if success else CliColor.ERROR
 
     title = "NODES TO REMOVE" if is_current else "NODES REMOVED VS REMAINING"
+
     print_title(title)
+
     subtitle = (
         "Rewards distributed in ₳ (lovelace) with minimum UTxO validation"
         if is_ada
@@ -500,9 +502,11 @@ def print_nodes_table(
             reward = row[3]  # Get the reward amount
             if reward > 0 and reward < min_utxo_value:
                 row[3] = (
-                    f"Original: {reward:,.2f} ₳, "
-                    f"Final (Min UTxO): {min_utxo_value:,.2f} ₳"
+                    f"Original: {reward:_} ₳, "
+                    f"Final (Min UTxO): {min_utxo_value:r_} ₳"
                 )
+            else:
+                row[3] = f"{reward:_} ₳ "
 
     table = tabulate(
         table_data,

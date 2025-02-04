@@ -263,6 +263,18 @@ Command: `charli3 oracle update-settings --config testnet.yaml`
 The command compares the node list in the config file, and if any changes are detected (new nodes), it proceeds to add them. The built-in menu helps users identify the required validations.
 
 Command: `charli3 oracle add-nodes --config testnet.yaml`
+### Remove Nodes
+
+This command manages node removal from the contract configuration:
+
+1. Removes nodes listed in the config file from the contract's existing node list
+2. If nodes are found, they are removed from the configuration
+
+Payment handling differs based on the reward type:
+- For CNT rewards: Payments are sent to an escrow contract where operators must withdraw them and pay back the associated minimum UTxO
+- For ADA rewards: Payments are sent directly to the operators' payment verification keys
+
+Command: `charli3 oracle del-nodes --config testnet.yaml`
 
 ### Oracle Pause
 
@@ -481,12 +493,14 @@ odv-multisig-charli3-offchain-core/
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py                     # Base Governance classes
 │   │   │   ├── orchestrator.py             # Governance coordination
-│   │   │   └── updater_builder.py          # Governance transaction builder
-│   │   ├── lifecycle/        # Lifecycle operations
+│   │   │   ├── updater_builder.py          # Update Core settings
+│   │   │   ├── add_nodes_builder.py        # Add Nodes
+│   │   │   └── del_nodes__builder.py       # Remove Nodes and Payment
+│   │   ├── lifecycle/            # Lifecycle operations
 │   │   │   ├── __init__.py
-│   │   │   ├── base.py       # Base lifecycle classes
-│   │   │   ├── orchestrator.py # Lifecycle coordination
-│   │   │   └── pause_builder.py # Pause transaction builder
+│   │   │   ├── base.py           # Base lifecycle classes
+│   │   │   ├── orchestrator.py   # Lifecycle coordination
+│   │   │   └── pause_builder.py  # Pause transaction builder
 │   │   │   └── resume_builder.py # Resume transaction builder
 │   │   │
 │   │   └── utils/           # Oracle utilities
