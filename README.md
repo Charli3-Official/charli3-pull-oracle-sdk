@@ -109,9 +109,11 @@ addresses:
 
 tokens:
   platform_auth_policy: "hex_policy_id_for_platform_auth_nft"
-  fee_token_policy: "hex_policy_id_for_fee_token"
-  fee_token_name: "hex_asset_name_for_fee_token"
+  reward_token_policy: "hex_policy_id_for_reward_token"
+  reward_token_name: "hex_asset_name_for_reward_token"
 
+  rate_token_policy: "hex_policy_id_for_rate_token"
+  rate_token_name: "hex_asset_name_for_rate_token"
 fees:
   node_fee: 1000000      # 1 ADA
   platform_fee: 500000   # 0.5 ADA
@@ -181,9 +183,12 @@ network:
 oracle_address: "addr_test1..."
 policy_id: "1234..."
 
-fee_token:
-  fee_token_policy: "hex_policy_id_here"
-  fee_token_name: "hex_token_name_here"
+tokens:
+  reward_token_policy: "hex_policy_id_here"
+  reward_token_name: "hex_token_name_here"
+
+  rate_token_policy: "hex_policy_id_here"
+  rate_token_name: "hex_token_name_here"
 
 wallet:
   mnemonic: "your 24 word mnemonic"

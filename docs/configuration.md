@@ -64,10 +64,13 @@ tokens:
   # Policy ID of the platform authorization NFT (28 bytes)
   platform_auth_policy: "hex_policy_id"
 
-  # Fee token details
-  # Use empty strings for ada (lovelace)
-  fee_token_policy: "hex_policy_id"  # 28 bytes
-  fee_token_name: "hex_asset_name"   # Asset name in hex
+  # Reward and Rate token details
+  # Use empty strings for ADA (Lovelace) or when the rate is not specified
+  reward_token_policy: "hex_policy_id"  # 28 bytes
+  reward_token_name: "hex_asset_name"   # Asset name in hex
+
+  rate_token_policy: "hex_policy_id"  # 28 bytes
+  rate_token_name: "hex_asset_name"   # Asset name in hex
 ```
 
 ### Oracle NFT Token Names
@@ -176,9 +179,11 @@ network:
 
 tokens:
   platform_auth_policy: "1234...cdef"  # 28 bytes hex
-  fee_token_policy: "5678...abcd"      # 28 bytes hex
-  fee_token_name: "434841524C4933"     # "CHARLI3" in hex
+  reward_token_policy: "5678...abcd"      # 28 bytes hex
+  reward_token_name: "434841524C4933"     # "CHARLI3" in hex
 
+  rate_token_policy: "5678...abcd"      # 28 bytes hex
+  rate_token_name: "434841524C4933"     # "CHARLI3" in hex
 fees:
   node_fee: 1000000    # 1 ADA
   platform_fee: 500000 # 0.5 ADA

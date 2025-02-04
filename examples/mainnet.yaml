@@ -32,8 +32,12 @@ tokens:
   oracle_policy: "7d6687ae264f367dcd803851a7c899ccf0f6740b1b37705018c8799d"
   # Fee token details
   # Use empty strings for ada (lovelace)
-  fee_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
-  fee_token_name: "43485249" # "CHRI" in hex
+  reward_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  reward_token_name: "43485249" # "CHRI" in hex
+
+  # External rate for payment conversion
+  rate_token_policy:
+  rate_token_name:
 
 oracle_address: "addr1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"
 

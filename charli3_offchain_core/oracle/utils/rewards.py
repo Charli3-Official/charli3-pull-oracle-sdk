@@ -167,15 +167,15 @@ def accumulate_node_rewards(
 def calculate_total_fees(
     transports: list[UTxO],
     reward_token_hash: ScriptHash | None,
-    fee_token_name: AssetName | None,
+    reward_token_name: AssetName | None,
     min_utxo_value: int,
 ) -> int:
     """Calculate total fees from transport UTxOs."""
     try:
-        if reward_token_hash and fee_token_name:
+        if reward_token_hash and reward_token_name:
             return sum(
                 transport.output.amount.multi_asset.get(reward_token_hash, {}).get(
-                    fee_token_name, 0
+                    reward_token_name, 0
                 )
                 for transport in transports
             )

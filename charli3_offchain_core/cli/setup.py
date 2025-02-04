@@ -274,16 +274,16 @@ def setup_management_from_config(config: Path) -> tuple[
 
 
 def setup_token(
-    fee_token_policy: str | None, fee_token_name: str | None
+    token_policy: str | None, token_name: str | None
 ) -> NoDatum | SomeAsset:
     """Setup fee token from config params"""
-    if not (fee_token_policy and fee_token_name):
+    if not (token_policy and token_name):
         fee_token = NoDatum()
     else:
         fee_token = SomeAsset(
             asset=Asset(
-                policy_id=bytes.fromhex(fee_token_policy),
-                name=bytes.fromhex(fee_token_name),
+                policy_id=bytes.fromhex(token_policy),
+                name=bytes.fromhex(token_name),
             )
         )
     return fee_token
