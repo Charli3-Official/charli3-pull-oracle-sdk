@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from typing import Union
 
-from pycardano import Address, DatumHash, PlutusData, VerificationKeyHash
+from pycardano import Address, PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.extension_types import PosixTime
-from charli3_offchain_core.models.oracle_datums import PolicyId
+from charli3_offchain_core.models.oracle_datums import NoDatum, PolicyId
 
 PaymentVkh = bytes
 
@@ -29,14 +29,6 @@ class ReturnToIssuer(RewardEscrowRedeemer):
 
 
 @dataclass
-class ReceiverDatum(PlutusData):
-    """The receiver address."""
-
-    CONSTR_ID = 0
-    datum_hash: DatumHash | None = None
-
-
-@dataclass
 class PlutusPartAddress(PlutusData):
     """Encode a plutus address part (i.e. payment, stake, etc)."""
 
@@ -52,15 +44,8 @@ class PlutusScriptPartAddress(PlutusPartAddress):
 
 
 @dataclass
-class PlutusNone(PlutusData):
-    """Placeholder for a receiver datum."""
-
-    CONSTR_ID = 1
-
-
-@dataclass
 class _PlutusConstrWrapper(PlutusData):
-    """Hidden wrapper to match Minswap stake address constructs."""
+    """Hidden wrapper to match stake address constructs."""
 
     CONSTR_ID = 0
     wrapped: Union["_PlutusConstrWrapper", PlutusPartAddress, PlutusScriptPartAddress]
@@ -73,7 +58,7 @@ class PlutusFullAddress(PlutusData):
     # Do not remove noqa
     CONSTR_ID = 0
     payment: Union[PlutusPartAddress, PlutusScriptPartAddress]  # noqa: UP007
-    stake: Union[_PlutusConstrWrapper, PlutusNone, None] = None  # noqa: UP007
+    stake: Union[_PlutusConstrWrapper, NoDatum, None] = None  # noqa: UP007
 
     @classmethod
     def from_address(cls, address: Address) -> "PlutusFullAddress":
@@ -81,7 +66,7 @@ class PlutusFullAddress(PlutusData):
         error_msg = "Only addresses with staking and payment parts are accepted."
         if None in [address.staking_part, address.payment_part]:
             raise ValueError(error_msg)
-        stake: _PlutusConstrWrapper | PlutusNone = PlutusNone()
+        stake: _PlutusConstrWrapper | NoDatum = NoDatum()
         if address.staking_part is not None:
             stake = _PlutusConstrWrapper(
                 _PlutusConstrWrapper(
@@ -97,7 +82,7 @@ class PlutusFullAddress(PlutusData):
     def to_address(self) -> Address:
         """Convert back to an address."""
         payment_part = VerificationKeyHash(self.payment.address[:28])
-        if isinstance(self.stake, PlutusNone) or self.stake is None:
+        if isinstance(self.stake, NoDatum) or self.stake is None:
             stake_part = None
         else:
             stake_part = VerificationKeyHash(self.stake.wrapped.wrapped.address[:28])
