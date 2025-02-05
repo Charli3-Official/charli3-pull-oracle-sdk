@@ -234,7 +234,7 @@ class DelNodesBuilder(BaseBuilder):
                 return GovernanceTxResult()
 
         except Exception as e:
-            error_msg = f"Unexpected error building add nodes transaction: {e}"
+            error_msg = f"Unexpected error building delete nodes transaction: {e}"
             logger.error(error_msg)
             raise e
 
