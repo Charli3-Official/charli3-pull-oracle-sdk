@@ -236,6 +236,7 @@ class DelNodesBuilder(BaseBuilder):
         except Exception as e:
             error_msg = f"Unexpected error building add nodes transaction: {e}"
             logger.error(error_msg)
+            raise e
 
     def node_operator_reward_distribution(
         self,
@@ -444,8 +445,10 @@ def modified_reward_utxo(
         modified_utxo.output.amount.coin -= payment_amount
         return modified_utxo
 
-    if (
-        modified_utxo.output.amount.multi_asset[reward_token.asset.policy_id][
+    if payment_amount > 0 and (
+        modified_utxo.output.amount.multi_asset.get(reward_token.asset.policy_id)
+        is None
+        or modified_utxo.output.amount.multi_asset[reward_token.asset.policy_id][
             reward_token.asset.name
         ]
         < payment_amount
