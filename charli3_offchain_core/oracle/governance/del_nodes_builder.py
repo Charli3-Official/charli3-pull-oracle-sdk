@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 import click
 from pycardano import (
     Address,
+    AssetName,
     ExtendedSigningKey,
     MultiAsset,
     NativeScript,
@@ -52,6 +53,7 @@ from charli3_offchain_core.models.reward_escrow import (
 from charli3_offchain_core.oracle.exceptions import (
     RemoveNodesCancelled,
     RemoveNodesValidationError,
+    RemovingNodesError,
 )
 from charli3_offchain_core.oracle.utils.common import (
     get_reference_script_utxo,
@@ -146,92 +148,94 @@ class DelNodesBuilder(BaseBuilder):
             # Nodes to remove
             nodes_to_remove = {node.payment_vkh for node in new_nodes_config.nodes}
 
-            try:
-                # Compute the PKh that should receive a payment
-                # and calculate the total sum of all payments
-                payment_distribution, total_amount = reward_distribution(
-                    nodes_to_remove,
-                    in_core_datum,
-                    in_reward_account_datum,
-                )
+            # Compute the PKh that should receive a payment
+            # and calculate the total sum of all payments
+            payment_distribution, total_amount = reward_distribution(
+                nodes_to_remove,
+                in_core_datum,
+                in_reward_account_datum,
+            )
 
-                # Modified Core Settings: removed `Nodes`
-                out_core_utxo = modified_core_utxo(
-                    in_core_utxo,
-                    in_core_datum,
-                    nodes_to_remove,
-                    new_nodes_config.required_signatures,
-                )
+            # Modified Core Settings: removed `Nodes`
+            out_core_utxo = modified_core_utxo(
+                in_core_utxo,
+                in_core_datum,
+                nodes_to_remove,
+                new_nodes_config.required_signatures,
+            )
 
-                # Modified Reward Account: removed payment amounts
-                out_reward_account_utxo = modified_reward_utxo(
-                    in_reward_account_utxo,
-                    in_reward_account_datum,
-                    nodes_to_remove,
-                    in_core_datum,
-                    total_amount,
+            # Modified Reward Account: removed payment amounts
+            out_reward_account_utxo = modified_reward_utxo(
+                in_reward_account_utxo,
+                in_reward_account_datum,
+                nodes_to_remove,
+                in_core_datum,
+                total_amount,
+                reward_token,
+            )
+
+            # Creation of node UTxOs if payments are available
+            node_operator_rewards, validity_window = (
+                self.node_operator_reward_distribution(
+                    payment_distribution,
                     reward_token,
+                    escrow_address,
+                    reward_issuer_addr,
+                    auth_policy_id,
+                    reward_dismissing_period_length,
+                    in_core_datum.time_uncertainty_platform,
+                    network=network,
                 )
+            )
 
-                # Creation of node UTxOs if payments are available
-                node_operator_rewards, validity_window = (
-                    self.node_operator_reward_distribution(
-                        payment_distribution,
-                        reward_token,
-                        escrow_address,
-                        reward_issuer_addr,
-                        auth_policy_id,
-                        reward_dismissing_period_length,
-                        in_core_datum.time_uncertainty_platform,
-                        network=network,
-                    )
-                )
+            # Confirmation of changes
+            confirm_node_updates(
+                in_core_datum,
+                out_core_utxo.output.datum.datum,
+                nodes_to_remove,
+                payment_distribution,
+                reward_token,
+                self.MIN_UTXO_VALUE,
+            )
+            # Build the transaction
+            tx = await self.tx_manager.build_script_tx(
+                script_inputs=[
+                    (in_reward_account_utxo, Redeemer(DelNodes()), script_utxo),
+                    (in_core_utxo, Redeemer(DelNodes()), script_utxo),
+                    (platform_utxo, None, platform_script),
+                ],
+                script_outputs=[
+                    out_core_utxo.output,
+                    out_reward_account_utxo.output,
+                    platform_utxo.output,
+                    *node_operator_rewards,
+                ],
+                fee_buffer=self.FEE_BUFFER,
+                change_address=change_address,
+                signing_key=signing_key,
+                validity_start=validity_window.start_slot,
+                validity_end=validity_window.end_slot,
+                required_signers=required_signers,
+            )
+            return GovernanceTxResult(
+                transaction=tx, settings_utxo=out_core_utxo.output
+            )
 
-                # Confirmation of changes
-                try:
-                    confirm_node_updates(
-                        in_core_datum,
-                        out_core_utxo.output.datum.datum,
-                        nodes_to_remove,
-                        payment_distribution,
-                        reward_token,
-                        self.MIN_UTXO_VALUE,
-                    )
-                except RemoveNodesValidationError as e:
-                    error_msg = f"Failed to validate Delete Nodes rules: {e}"
-                    logger.error(error_msg)
-                    return GovernanceTxResult(reason=error_msg)
+        except RemoveNodesValidationError as e:
+            error_msg = f"Failed to validate Delete Nodes rules: {e}"
+            logger.error(error_msg)
+            return GovernanceTxResult(reason=error_msg)
 
-                except RemoveNodesCancelled as e:
-                    logger.info(f"Node update cancelled: {e}")
-                    return GovernanceTxResult()
+        except RemovingNodesError as e:
+            error_msg = (
+                f"Provided inputs do not account for payment rewards processing: {e}"
+            )
+            logger.info(error_msg)
+            return GovernanceTxResult(reason=error_msg)
 
-                # Build the transaction
-                tx = await self.tx_manager.build_script_tx(
-                    script_inputs=[
-                        (in_reward_account_utxo, Redeemer(DelNodes()), script_utxo),
-                        (in_core_utxo, Redeemer(DelNodes()), script_utxo),
-                        (platform_utxo, None, platform_script),
-                    ],
-                    script_outputs=[
-                        out_core_utxo.output,
-                        out_reward_account_utxo.output,
-                        platform_utxo.output,
-                        *node_operator_rewards,
-                    ],
-                    fee_buffer=self.FEE_BUFFER,
-                    change_address=change_address,
-                    signing_key=signing_key,
-                    validity_start=validity_window.start_slot,
-                    validity_end=validity_window.end_slot,
-                    required_signers=required_signers,
-                )
-                return GovernanceTxResult(
-                    transaction=tx, settings_utxo=out_core_utxo.output
-                )
-            except (RemoveNodesCancelled, click.Abort):
-                logger.info("Operation cancelled")
-                return GovernanceTxResult()
+        except (RemoveNodesCancelled, click.Abort):
+            logger.info("Operation cancelled")
+            return GovernanceTxResult()
 
         except Exception as e:
             error_msg = f"Unexpected error building delete nodes transaction: {e}"
@@ -437,29 +441,33 @@ def modified_reward_utxo(
     modified_utxo.output.datum = RewardAccountVariant(new_datum)
     modified_utxo.output.datum_hash = None
 
-    if reward_token == NoDatum():
+    if isinstance(reward_token, NoDatum):
 
         if modified_utxo.output.amount.coin < payment_amount:
-            raise ValueError("Insufficient ADA funds for payment")
+            raise RemovingNodesError("Insufficient ADA funds for payment")
 
         modified_utxo.output.amount.coin -= payment_amount
         return modified_utxo
 
-    if payment_amount > 0 and (
-        modified_utxo.output.amount.multi_asset.get(reward_token.asset.policy_id)
-        is None
-        or modified_utxo.output.amount.multi_asset[reward_token.asset.policy_id][
-            reward_token.asset.name
-        ]
-        < payment_amount
-    ):
-        raise ValueError("Insufficient funds for payment")
+    multi_asset = modified_utxo.output.amount.multi_asset
 
-    if payment_amount > 0:
-        modified_utxo.output.amount.multi_asset[reward_token.asset.policy_id][
-            reward_token.asset.name
-        ] -= payment_amount
+    asset_name_bytes = reward_token.asset.name
+    asset_name = AssetName(asset_name_bytes)
 
+    policy_id_bytes = reward_token.asset.policy_id
+    policy_id = ScriptHash.from_primitive(policy_id_bytes.hex())
+    token_balance = multi_asset.get(policy_id, {}).get(asset_name, 0)
+
+    # Check if payment token exists and covers withdrawal amount
+    if token_balance <= 0 or token_balance < payment_amount:
+        raise RemovingNodesError(
+            "Insufficient funds in the payment token to complete the transaction. "
+            f"token balance {token_balance} "
+            f"payment amount {payment_amount}"
+        )
+
+    multi_asset[policy_id][asset_name] -= payment_amount
+    modified_utxo.output.amount.multi_asset = multi_asset
     return modified_utxo
 
 

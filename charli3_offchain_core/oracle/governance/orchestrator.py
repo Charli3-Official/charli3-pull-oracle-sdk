@@ -125,17 +125,39 @@ class GovernanceOrchestrator:
         escrow_address: Address | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> GovernanceResult:
+        """
+        Delete oracle nodes
+
+        Args:
+            oracle_policy: Policy ID for the oracle
+            new_nodes_config: Configuration for the new node setup
+            platform_utxo: Platform UTxO
+            platform_script: Platform native script
+            change_address: Address for change
+            signing_key: Signing key for the transaction
+            tokens: Token configuration
+            reward_dismissing_period_length: Period length for reward dismissal
+            network: Network configuration
+            reward_issuer_addr: Optional reward issuer address
+            escrow_address: Optional escrow address
+            required_signers: Optional list of required signers
+
+        Returns:
+            GovernanceResult containing transaction status and details
+        """
         try:
 
             auth_policy_id = bytes.fromhex(tokens.platform_auth_policy)
+            oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
 
             contract_utxos = await get_script_utxos(
                 self.script_address, self.tx_manager
             )
-            oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
+
             reward_token = setup_token(
                 tokens.reward_token_policy, tokens.reward_token_name
             )
+
             builder = DelNodesBuilder(self.chain_query, self.tx_manager)
             try:
                 result = await builder.build_tx(
@@ -154,18 +176,22 @@ class GovernanceOrchestrator:
                     escrow_address=escrow_address,
                     required_signers=required_signers,
                 )
-            except (RemovingNodesError, RemoveNodesValidationError):
-                return GovernanceResult(status=ProcessStatus.FAILED)
 
-            if result.reason:
-                return GovernanceResult(ProcessStatus.VERIFICATION_FAILURE)
+                if result.reason:
+                    logger.warning(f"Verification failed: {result.reason}")
+                    return GovernanceResult(status=ProcessStatus.VERIFICATION_FAILURE)
 
-            if result.transaction is None and result.settings_utxo is None:
-                return GovernanceResult(ProcessStatus.CANCELLED_BY_USER)
+                if result.transaction is None and result.settings_utxo is None:
+                    logger.info("Transaction cancelled by user")
+                    return GovernanceResult(ProcessStatus.CANCELLED_BY_USER)
 
-            return GovernanceResult(
-                status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
-            )
+                return GovernanceResult(
+                    status=ProcessStatus.TRANSACTION_BUILT,
+                    transaction=result.transaction,
+                )
+            except (RemovingNodesError, RemoveNodesValidationError) as e:
+                logger.error(f"Node removal error: {e}")
+                return GovernanceResult(status=ProcessStatus.FAILED, error=e)
 
         except Exception as e:
             logger.error("Update oracle failed: %s", str(e))

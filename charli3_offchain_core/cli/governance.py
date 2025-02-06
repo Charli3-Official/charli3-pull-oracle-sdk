@@ -190,11 +190,12 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             return
         if result.status == ProcessStatus.VERIFICATION_FAILURE:
             print_status(
-                "Delete nodes Status",
-                "On-chain validation does not meet the requirements.",
+                "Delete Nodes",
+                "On-Chain validation requirements not met",
                 success=False,
             )
             return
+
         if result.status != ProcessStatus.TRANSACTION_BUILT:
             raise click.ClickException(
                 f"Delete nodes failed: {result.error}"
