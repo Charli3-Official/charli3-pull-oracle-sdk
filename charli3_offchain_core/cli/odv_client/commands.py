@@ -1,23 +1,29 @@
-"""CLI commands for oracle ODV client simulation."""
-
 from pathlib import Path
 
 import click
-from pycardano import ScriptHash
 
 from charli3_offchain_core.cli.aggregate_txs.base import TransactionContext, tx_options
-from charli3_offchain_core.cli.aggregate_txs.odv_aggregate import _print_odv_summary
 from charli3_offchain_core.cli.config.formatting import (
     print_header,
+    print_information,
     print_progress,
     print_status,
 )
 from charli3_offchain_core.cli.config.odv_client import OdvClientConfig
 from charli3_offchain_core.cli.config.utils import async_command
-from charli3_offchain_core.cli.odv_client.api import OdvApiClient, OdvMessageRequest
+from charli3_offchain_core.cli.odv_client.formatting import (
+    print_aggregate_summary,
+    print_collection_stats,
+    print_node_messages,
+    print_send_summary,
+    print_signature_status,
+)
+from charli3_offchain_core.client.odv import ODVClient
+from charli3_offchain_core.models.base import TxValidityInterval
+from charli3_offchain_core.models.client import OdvFeedRequest, OdvTxSignatureRequest
 from charli3_offchain_core.oracle.aggregate.builder import OracleTransactionBuilder
 from charli3_offchain_core.oracle.exceptions import TransactionError
-from charli3_offchain_core.oracle.utils.common import make_aggregate_message
+from charli3_offchain_core.oracle.utils.common import build_aggregate_message
 
 
 @click.group()
@@ -36,17 +42,13 @@ def client() -> None:
 async def send(config: Path, wait: bool) -> None:
     """Send oracle client requests for ODV flow."""
     try:
-        print_header("Send oracle client requests for ODV flow")
-
-        # Load configuration and contracts
-        print_progress("Loading configuration")
+        print_header("ODV Send Request")
+        print_progress("Loading configuration and initializing network connection")
         odv_config = OdvClientConfig.from_yaml(config)
         ctx = TransactionContext(odv_config.tx_config)
 
-        # Load primary signing key
         signing_key, change_address = ctx.load_keys()
 
-        # Initialize transaction builder
         builder = OracleTransactionBuilder(
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
@@ -55,72 +57,100 @@ async def send(config: Path, wait: bool) -> None:
             fee_token_name=ctx.fee_token_name,
         )
 
-        # Run simulation
-        async with OdvApiClient(
-            timeout_seconds=odv_config.odv_validity_length // 2000
-        ) as odv_client:
-            # First round of communication with oracle nodes
-            print_progress("Sending odv message requests")
-            validity_window = ctx.tx_manager.calculate_validity_window(
-                odv_config.odv_validity_length
-            )
-            message_req = OdvMessageRequest.ser(
-                oracle_nft_policy_id=ScriptHash.from_primitive(
-                    odv_config.tx_config.policy_id
-                ),
-                odv_validity_start=(validity_window.validity_start),
-                odv_validity_end=(validity_window.validity_end),
-            )
-            node_messages = await odv_client.odv_message_requests(
-                message_req, odv_config.nodes
-            )
-            aggregate_msg = make_aggregate_message(
-                feed_data={
-                    node.pub_key.hash(): msg.message.feed
-                    for node, msg in zip(odv_config.nodes, node_messages)
-                },
-                timestamp=validity_window.current_time,
-            )
-            # Build ODV transaction
-            print_progress("Building ODV Aggregate transaction")
-            result = await builder.build_odv_tx(
-                message=aggregate_msg,
-                signing_key=signing_key,
-                change_address=change_address,
-                validity_window=validity_window,
-            )
-            # Second round of communication with oracle nodes
-            print_progress("Sending odv tx requests")
-            node_witnesses = await odv_client.odv_tx_requests(
-                node_messages, result.transaction, odv_config.nodes
-            )
-            result.transaction.transaction_witness_set.vkey_witnesses.extend(
-                node_witnesses
-            )
+        odv_client = ODVClient()
 
-        print_progress("Submitting odv tx")
+        validity_window = ctx.tx_manager.calculate_validity_window(
+            odv_config.odv_validity_length
+        )
+
+        feed_request = OdvFeedRequest(
+            oracle_nft_policy_id=odv_config.tx_config.policy_id,
+            tx_validity_interval=TxValidityInterval(
+                start=validity_window.validity_start, end=validity_window.validity_end
+            ),
+        )
+
+        print_progress("Initiating node feed collection process")
+        node_messages = await odv_client.collect_feed_updates(
+            nodes=odv_config.nodes, feed_request=feed_request
+        )
+
+        if not node_messages:
+            print_status(
+                "Node Collection", "No valid responses received", success=False
+            )
+            raise click.ClickException("No valid node responses received")
+
+        print_collection_stats(
+            received=len(node_messages),
+            total=len(odv_config.nodes),
+            collection_type="feed responses",
+        )
+        print_node_messages(node_messages)
+
+        print_progress("Constructing ODV aggregate transaction")
+        aggregate_message = build_aggregate_message(
+            list(node_messages.values()), validity_window.current_time
+        )
+        print_aggregate_summary(aggregate_message, validity_window)
+
+        result = await builder.build_odv_tx(
+            message=aggregate_message,
+            signing_key=signing_key,
+            change_address=change_address,
+            validity_window=validity_window,
+        )
+
+        print_information("Transaction Construction Complete")
+
+        print_progress("Initiating signature collection from oracle nodes")
+        tx_request = OdvTxSignatureRequest(
+            node_messages=node_messages,
+            tx_cbor=result.transaction.to_cbor_hex(),
+        )
+
+        signed_txs = await odv_client.collect_tx_signatures(
+            nodes=odv_config.nodes, tx_request=tx_request
+        )
+
+        print_collection_stats(
+            received=len(signed_txs),
+            total=len(odv_config.nodes),
+            collection_type="signatures",
+        )
+        print_signature_status(signed_txs)
+
+        if not signed_txs:
+            print_status(
+                "Signature Collection", "No valid signatures received", success=False
+            )
+            raise click.ClickException("No valid signatures received")
+
+        print_progress("Finalizing transaction with collected signatures")
+
+        odv_client.attach_tx_signatures(
+            transaction=result.transaction,
+            signed_txs=signed_txs,
+        )
+
+        print_progress("Initiating ODV transaction submission")
         tx_status, _ = await ctx.tx_manager.sign_and_submit(
             result.transaction, [signing_key], wait_confirmation=wait
         )
 
-        # Get transaction ID from the original transaction
-        tx_id = result.transaction.id
-
         if tx_status == "confirmed":
-            print_status(
-                "ODV aggregation completed successfully",
-                f"tx id {tx_id}",
-                success=True,
-            )
+            print_send_summary(result)
         else:
+            print_status(
+                "Transaction Submission",
+                f"Failed with status: {tx_status}",
+                success=False,
+            )
             raise click.ClickException(f"Transaction failed with status: {tx_status}")
 
-        # Display additional details
-        if tx_status == "confirmed":
-            _print_odv_summary(result)
-
     except TransactionError as e:
-        raise click.ClickException(f"Transaction failed: {e}") from e
-
+        print_status("Transaction Processing", str(e), success=False)
+        raise click.ClickException(str(e)) from e
     except Exception as e:
-        raise click.ClickException(f"Odv Client simulation failed: {e}") from e
+        print_status("ODV Process", str(e), success=False)
+        raise click.ClickException(str(e)) from e

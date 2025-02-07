@@ -5,7 +5,8 @@ from typing import Any
 from pycardano import RawPlutusData, ScriptHash, UTxO, VerificationKeyHash
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
-from charli3_offchain_core.models.node_types import SignedOracleNodeMessage
+from charli3_offchain_core.models.base import PosixTime
+from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
 from charli3_offchain_core.oracle.utils.asset_checks import validate_token_quantities
 from charli3_offchain_core.oracle.utils.state_checks import (
@@ -97,35 +98,37 @@ def make_aggregate_message(
 
 
 def build_aggregate_message(
-    node_responses: list[dict | SignedOracleNodeMessage],
+    nodes_messages: list[SignedOracleNodeMessage],
+    timestamp: PosixTime,
 ) -> AggregateMessage:
-    """Build aggregate message from list of node responses (JSON or SignedOracleNodeMessage)."""
-    if not node_responses:
-        raise ValueError("No node responses provided")
+    """Build aggregate message from node messages and timestamp.
 
-    signed_messages = [
-        (
-            response
-            if isinstance(response, SignedOracleNodeMessage)
-            else SignedOracleNodeMessage.from_json(response)
-        )
-        for response in node_responses
-    ]
+    Args:
+        nodes_messages: List of signed oracle messages from nodes
+        timestamp: POSIX timestamp in milliseconds
 
-    if not all(msg.validate() for msg in signed_messages):
-        raise ValueError("Invalid signature detected")
+    Returns:
+        AggregateMessage with sorted feeds and provided timestamp
 
-    timestamp = signed_messages[0].message.timestamp
+    Raises:
+        ValueError: If no messages provided or signature validation fails
+    """
+    if not nodes_messages:
+        raise ValueError("No node messages provided")
 
-    feeds = {
-        msg.verification_key.hash(): msg.message.feed
-        for msg in signed_messages
-        if msg.verification_key
-    }
+    for msg in nodes_messages:
+        try:
+            msg.validate_signature()
+        except ValueError as e:
+            raise ValueError(f"Invalid message signature: {e}") from e
+
+    feeds = {msg.verification_key.hash(): msg.message.feed for msg in nodes_messages}
+
+    sorted_feeds = dict(sorted(feeds.items(), key=lambda x: x[1]))
 
     return AggregateMessage(
-        node_feeds_sorted_by_feed=dict(sorted(feeds.items(), key=lambda x: x[1])),
-        node_feeds_count=len(feeds),
+        node_feeds_sorted_by_feed=sorted_feeds,
+        node_feeds_count=len(sorted_feeds),
         timestamp=timestamp,
     )
 

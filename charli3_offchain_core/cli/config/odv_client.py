@@ -3,8 +3,6 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from pycardano import VerificationKey
-
 from charli3_offchain_core.cli.aggregate_txs.base import TxConfig
 from charli3_offchain_core.cli.config.utils import load_yaml_config
 
@@ -14,14 +12,14 @@ class NodeNetworkId:
     """Network identification for oracle node."""
 
     root_url: str
-    pub_key: VerificationKey
+    pub_key: str
 
     @classmethod
     def from_dict(cls, data: dict) -> "NodeNetworkId":
         """Create node config from dictionary."""
         return cls(
             root_url=data["root_url"],
-            pub_key=VerificationKey.from_cbor(data["pub_key"]),
+            pub_key=data["pub_key"],
         )
 
 

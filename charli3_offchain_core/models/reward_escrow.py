@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from pycardano import Address, PlutusData, ScriptHash, VerificationKeyHash
 
-from charli3_offchain_core.models.extension_types import PosixTime
+from charli3_offchain_core.models.base import PosixTime
 
 
 @dataclass
