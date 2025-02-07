@@ -25,6 +25,7 @@ from charli3_offchain_core.models.oracle_datums import (
     Aggregation,
     AggStateDatum,
     AggStateVariant,
+    NoDatum,
     NodeFeed,
     NoRewards,
     OracleSettingsDatum,
@@ -263,6 +264,13 @@ class OracleTransactionBuilder:
                 liveness_period=settings_datum.aggregation_liveness_period,
             )
 
+            reference_inputs = {settings_utxo}
+            if settings_datum.fee_info.rate_nft != NoDatum():
+                oracle_fee_rate_utxo = common.get_fee_rate_reference_utxo(
+                    self.tx_manager.chain_query, settings_datum.fee_info.rate_nft
+                )
+                reference_inputs.add(oracle_fee_rate_utxo)
+
             # Build and return transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -270,7 +278,7 @@ class OracleTransactionBuilder:
                     (agg_state, Redeemer(OdvAggregate()), script_utxo),
                 ],
                 script_outputs=[transport_output, agg_state_output],
-                reference_inputs=[settings_utxo],
+                reference_inputs=reference_inputs,
                 required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
                 change_address=change_address,
                 signing_key=signing_key,

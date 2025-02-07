@@ -1,8 +1,16 @@
 """ Common utility functions for oracle operations. """
 
-from pycardano import Address, ScriptHash, UTxO
+import time
 
+from pycardano import Address, AssetName, ScriptHash, UTxO
+
+from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.models.oracle_datums import (
+    AggStateVariant,
+    NoDatum,
+    SomeAsset,
+)
 from charli3_offchain_core.oracle.utils.asset_checks import validate_token_quantities
 from charli3_offchain_core.oracle.utils.state_checks import (
     filter_empty_agg_states,
@@ -25,6 +33,38 @@ async def get_script_utxos(
         return utxos
     except Exception as e:
         raise TransactionError(f"Failed to get script UTxOs: {e}") from e
+
+
+def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) -> UTxO:
+    """Get fee rate UTxOs and return the most fresh Aggregation State."""
+    try:
+        rate_policy_id = ScriptHash.from_primitive(rate_nft.asset.policy_id)
+        rate_name = AssetName.from_primitive(rate_nft.asset.name)
+
+        utxos = chain_query.get_utxos_with_asset_from_kupo(rate_policy_id, rate_name)
+        if not utxos:
+            raise ValidationError("No UTxOs found with asset name")
+
+        current_time = int(time.time_ns() * 1e-6)
+        non_expired_agg_states = [
+            utxo
+            for utxo in utxos
+            if utxo.output.datum
+            and isinstance(utxo.output.datum, AggStateVariant)
+            and not isinstance(utxo.output.datum.datum, NoDatum)
+            and utxo.output.datum.datum.aggstate.expiry_timestamp > current_time
+        ]
+        if not non_expired_agg_states:
+            raise ValidationError(
+                "No Aggregation State Rate datum with fresh timestamp"
+            )
+
+        non_expired_agg_states.sort(
+            key=lambda utxo: utxo.output.datum.datum.aggstate.expiry_timestamp
+        )
+        return non_expired_agg_states.pop()
+    except Exception as e:
+        raise TransactionError(f"Failed to get fee rate UTxOs: {e}") from e
 
 
 def get_reference_script_utxo(utxos: list[UTxO]) -> UTxO:
