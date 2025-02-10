@@ -11,7 +11,7 @@ wallet:
   mnemonic: "$WALLET_MNEMONIC"
 
 oracle_address: "addr_test1wp64w0v5g850pwe3e4q3hdxpy8fywfsp9y66qp3kcngjcfgmuay77"
-policy_id: "33e20a5766eaf4dacb7be267d9766e5730d94f05c5de78221775808d" 
+policy_id: "33e20a5766eaf4dacb7be267d9766e5730d94f05c5de78221775808d"
 
 fee_token:
   fee_token_policy: "c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828"
