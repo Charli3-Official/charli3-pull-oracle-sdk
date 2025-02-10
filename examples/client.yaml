@@ -1,0 +1,28 @@
+# ODV Client configuration file
+
+network:
+  # Network type (mainnet/testnet)
+  network: "testnet"
+  ogmios_kupo:
+    ogmios_url: "ws://ogmios-url:1337"
+    kupo_url: "http://kupo-url:1442"
+
+wallet:
+  mnemonic: "$WALLET_MNEMONIC"
+
+oracle_address: "addr_test1wp64w0v5g850pwe3e4q3hdxpy8fywfsp9y66qp3kcngjcfgmuay77"
+policy_id: "33e20a5766eaf4dacb7be267d9766e5730d94f05c5de78221775808d" 
+
+fee_token:
+  fee_token_policy: "c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828"
+  fee_token_name: "546573744333"
+
+# This is odv request validity window length, should be <= time_uncertainty_aggregation
+odv_validity_length: 120000 # milliseconds
+
+# Nodes network identifiers root url (or ip address) and public key converted to cbor hex
+nodes:
+  - root_url: "http://localhost:8000"
+    pub_key: "58203565c563de4e55714aa9e0280a8cd4a4271ef8c8a261955446cc7b830021aef8"
+  - root_url: "http://localhost:8001"
+    pub_key: "5820f5ca5b53826d2be8b5ab5505c15dd10a498e6d1eee540ded51d52eb7083979f3"
