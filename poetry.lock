@@ -1233,7 +1233,7 @@ websockets = "^13.0"
 type = "git"
 url = "https://github.com/stanislav-az/pycardano.git"
 reference = "odv-multisig-extension"
-resolved_reference = "34dc6b8cac1d24919ba3493c903e4a541cb8edb0"
+resolved_reference = "34255f05267e7c8710c7193f3487ae79e2f15999"
 
 [[package]]
 name = "pycparser"
