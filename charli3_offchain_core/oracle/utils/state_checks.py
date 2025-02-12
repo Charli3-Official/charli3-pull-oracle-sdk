@@ -279,7 +279,7 @@ def filter_valid_agg_states(utxos: Sequence[UTxO], current_time: int) -> list[UT
 
 
 def find_transport_pair(
-    utxos: Sequence[UTxO], policy_id: bytes, current_time: int
+    utxos: Sequence[UTxO], policy_id: ScriptHash, current_time: int
 ) -> tuple[UTxO, UTxO]:
     """Find empty transport and agg state pair (empty or expired).
 

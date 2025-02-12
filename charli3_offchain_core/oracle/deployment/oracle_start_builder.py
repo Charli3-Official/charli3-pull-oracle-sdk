@@ -84,7 +84,7 @@ class OracleStartBuilder:
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        fee_config: FeeConfig,
+        rate_config: FeeConfig,
         aggregation_liveness_period: int,
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
@@ -159,7 +159,7 @@ class OracleStartBuilder:
             mint_policy.policy_id,
             self._create_settings_datum(
                 config,
-                fee_config,
+                rate_config,
                 nodes_config,
                 aggregation_liveness_period,
                 time_uncertainty_aggregation,
@@ -259,7 +259,7 @@ class OracleStartBuilder:
     def _create_settings_datum(
         self,
         config: OracleConfiguration,
-        fee_config: FeeConfig,
+        rate_config: FeeConfig,
         nodes_config: NodesConfig,
         aggregation_liveness_period: int,
         time_uncertainty_aggregation: int,
@@ -281,7 +281,7 @@ class OracleStartBuilder:
         oracle_settings = OracleSettingsDatum(
             nodes=Nodes(node_map=node_map),
             required_node_signatures_count=nodes_config.required_signatures,
-            fee_info=fee_config,
+            fee_info=rate_config,
             aggregation_liveness_period=aggregation_liveness_period,
             time_uncertainty_aggregation=time_uncertainty_aggregation,
             time_uncertainty_platform=time_uncertainty_platform,

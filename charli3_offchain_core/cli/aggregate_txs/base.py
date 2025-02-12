@@ -24,9 +24,9 @@ class TxConfig:
     network: NetworkConfig
     script_address: str  # Oracle script address
     policy_id: str  # Oracle NFT policy ID
-    fee_token_policy_id: str  # Fee token policy ID
-    fee_token_name: str  # Fee token name
     wallet: WalletConfig  # Wallet configuration with mnemonic
+    reward_token_policy: str | None = None  # Fee token policy ID
+    reward_token_name: str | None = None  # Fee token name
 
     def validate(self) -> None:
         """Validate complete configuration."""
@@ -35,15 +35,11 @@ class TxConfig:
             raise ValueError("Network configuration required")
         self.network.validate()
 
-        # Validate addresses and IDs
+        # Validate addresses and ID
         if not self.script_address:
             raise ValueError("Script address required")
         if not self.policy_id:
             raise ValueError("Policy ID required")
-        if not self.fee_token_policy_id:
-            raise ValueError("Fee token policy ID required")
-        if not self.fee_token_name:
-            raise ValueError("Fee token name required")
 
         # Validate wallet configuration
         if not self.wallet:
@@ -56,30 +52,19 @@ class TxConfig:
         """Load transaction config from YAML file."""
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
-
         try:
             with path.open("r") as f:
                 data = yaml.safe_load(f)
 
-            # Handle both old and new fee token field names
-            if "fee_token" in data:
-                fee_token = data["fee_token"]
-                fee_token_policy_id = fee_token.get(
-                    "fee_token_policy"
-                ) or fee_token.get("fee_token_policy_id")
-                fee_token_name = fee_token["fee_token_name"]
-            else:
-                raise ValueError("Missing fee_token configuration")
-
-            if not fee_token_policy_id:
-                raise ValueError("Missing fee token policy ID")
+            # Reward token information
+            tokens = data.get("tokens", {})
 
             return cls(
                 network=NetworkConfig.from_dict(data.get("network", {})),
                 script_address=data["oracle_address"],
                 policy_id=data["policy_id"],
-                fee_token_policy_id=fee_token_policy_id,
-                fee_token_name=fee_token_name,
+                reward_token_policy=tokens.get("reward_token_policy"),
+                reward_token_name=tokens.get("reward_token_name"),
                 wallet=WalletConfig.from_dict(data["wallet"]),
             )
         except KeyError as e:
@@ -107,8 +92,16 @@ class TransactionContext:
         self.tx_manager = TransactionManager(self.chain_query)
         self.script_address = config.get_script_address()
         self.policy_id = config.get_policy_id()
-        self.fee_token_policy_id = ScriptHash(bytes.fromhex(config.fee_token_policy_id))
-        self.fee_token_name = AssetName(bytes.fromhex(config.fee_token_name))
+        self.reward_token_hash = (
+            ScriptHash(bytes.fromhex(config.reward_token_policy))
+            if config.reward_token_policy is not None
+            else None
+        )
+        self.reward_token_name = (
+            AssetName(bytes.fromhex(config.reward_token_name))
+            if config.reward_token_name is not None
+            else None
+        )
 
     def load_keys(self) -> tuple[PaymentSigningKey, Address]:
         """Load keys from mnemonic."""

@@ -1,6 +1,6 @@
 """Reward calculation utilities for oracle operations."""
 
-from pycardano import Asset, MultiAsset, UTxO, VerificationKeyHash
+from pycardano import Asset, AssetName, ScriptHash, UTxO, Value, VerificationKeyHash
 
 from charli3_offchain_core.models.oracle_datums import (
     FeeConfig,
@@ -23,9 +23,9 @@ def calculate_min_fee_amount(fee_config: FeeConfig, node_count: int) -> int:
 
 def calculate_node_rewards_from_transports(
     transports: list[UTxO],
-    nodes: list[int],
+    nodes: list[FeedVkh],
     iqr: int,
-) -> dict[int, int]:
+) -> dict[FeedVkh, int]:
     """Calculate node rewards from transport UTxOs."""
     try:
         node_rewards = {node_id: 0 for node_id in nodes}
@@ -136,7 +136,7 @@ def iqr_fence(
 def accumulate_node_rewards(
     current_datum: RewardAccountDatum,
     node_rewards: dict[FeedVkh, int],
-    nodes: list[int],
+    nodes: list[FeedVkh],
 ) -> list[int]:
     """Accumulate new rewards with existing rewards in datum format.
 
@@ -165,39 +165,69 @@ def accumulate_node_rewards(
 
 
 def calculate_total_fees(
-    transports: list[UTxO], fee_token_hash: bytes, fee_token_name: str
+    transports: list[UTxO],
+    reward_token_hash: ScriptHash | None,
+    reward_token_name: AssetName | None,
+    min_utxo_value: int,
 ) -> int:
     """Calculate total fees from transport UTxOs."""
     try:
-        total_fees = 0
-        for transport in transports:
-            if (
-                transport.output.amount.multi_asset
-                and fee_token_hash in transport.output.amount.multi_asset
-            ):
-                fee_tokens = transport.output.amount.multi_asset[fee_token_hash][
-                    fee_token_name
-                ]
-                total_fees += fee_tokens
-        return total_fees
+        if reward_token_hash and reward_token_name:
+            return sum(
+                transport.output.amount.multi_asset.get(reward_token_hash, {}).get(
+                    reward_token_name, 0
+                )
+                for transport in transports
+            )
+
+        return sum(
+            transport.output.amount.coin - min_utxo_value for transport in transports
+        )
+
     except Exception as e:
         raise DistributionError(f"Failed to calculate total fees: {e}") from e
 
 
 def update_fee_tokens(
-    output_amount: MultiAsset,
-    fee_token_hash: bytes,
-    fee_token_name: str,
-    fee_amount: int,
-) -> None:
-    """Update fee tokens in output amount."""
+    output_amount: Value,
+    reward_token_hash: ScriptHash | None,
+    reward_token_name: AssetName | None,
+    reward_amount: int,
+) -> Value:
+    """Update fee tokens in output amount.
+
+    Args:
+        output_amount: Reward Account Value
+        reward_token_hash: Optional hash of the fee token script
+        reward_token_name: Optional name of the fee token asset
+        reward_amount: Amount of fees to add (defaults to 0)
+
+    Returns:
+        Value: Updated output amount object
+
+    Raises:
+        DistributionError: If fee token update fails
+        ValueError: If fee_amount is negative
+    """
+    if reward_amount < 0:
+        raise ValueError("Reward amount cannot be negative")
+
+    if reward_amount == 0:
+        return output_amount
+
     try:
-        if fee_amount > 0:
-            if fee_token_hash not in output_amount.multi_asset:
-                output_amount.multi_asset[fee_token_hash] = Asset()
-            output_amount.multi_asset[fee_token_hash][fee_token_name] = (
-                output_amount.multi_asset[fee_token_hash].get(fee_token_name, 0)
-                + fee_amount
+        if reward_token_hash and reward_token_name:
+            # Handle custom token rewards
+            token_assets = output_amount.multi_asset.setdefault(
+                reward_token_hash, Asset()
             )
+            current_amount = token_assets.get(reward_token_name, 0)
+            token_assets[reward_token_name] = current_amount + reward_amount
+        else:
+            # Handle ADA rewards
+            output_amount.coin += reward_amount
+
+        return output_amount
+
     except Exception as e:
-        raise DistributionError(f"Failed to update fee tokens: {e}") from e
+        raise DistributionError(f"Failed to update reward tokens: {e}") from e
