@@ -190,13 +190,16 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             return
         if result.status == ProcessStatus.VERIFICATION_FAILURE:
             print_status(
-                "Delete nodes Status",
-                "On-chain validation does not meet the requirements.",
+                "Delete Nodes",
+                "On-Chain validation requirements not met",
                 success=False,
             )
             return
+
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Delete nodes failed: {result.error}")
+            raise click.ClickException(
+                f"Delete nodes failed: {result.error}"
+            ) from result.error
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt(
@@ -206,7 +209,9 @@ async def del_nodes(config: Path, output: Path | None) -> None:
                     result.transaction, [payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
-                    raise click.ClickException(f"Delete nodes failed: {status}")
+                    raise click.ClickException(
+                        f"Delete nodes failed: {status}"
+                    ) from result.error
                 print_status("Delete nodes", "completed successfully", success=True)
         elif print_confirmation_message_prompt("Store multisig update transaction?"):
             output_path = output or Path("tx_oracle_delete_nodes.json")
