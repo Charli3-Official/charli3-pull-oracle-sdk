@@ -276,6 +276,17 @@ Payment handling differs based on the reward type:
 
 Command: `charli3 oracle del-nodes --config testnet.yaml`
 
+## Rewards Operations
+### Node Collect
+This command provides a guided process for Node Operators to withdraw their accumulated rewards.  Node Operators must provide their payment verification key hash (VKH) to authenticate and initiate the withdrawal. The tool then allows the selection of a  withdrawal address, either a derived enterprise address or a user-specified address. Finally, it constructs the necessary transaction to withdraw the rewards, supporting both ADA and any token as reward currencies.
+
+Command: `charli3 oracle node-collect --config testnet.yaml`
+
+### Platform Collect
+To withdraw accumulated rewards, platform operators must use this command to specify the destination address and confirm the withdrawal amount. The command then constructs and executes the withdrawal transaction after validating the safety buffer.
+
+Command: `charli3 oracle platform-collect --config testnet.yaml`
+
 ### Oracle Pause
 
 #### Option 1: Single Signature Flow (threshold = 1)
@@ -496,6 +507,12 @@ odv-multisig-charli3-offchain-core/
 │   │   │   ├── updater_builder.py          # Update Core settings
 │   │   │   ├── add_nodes_builder.py        # Add Nodes
 │   │   │   └── del_nodes__builder.py       # Remove Nodes and Payment
+│   │   ├── rewards/                        # Rewards operations
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py                     # Base Rewards classes
+│   │   │   ├── orchestrator.py             # Rewards coordination
+│   │   │   ├── node_collect_builder.py     # Node Reward Withdrawal
+│   │   │   └─ platform_collect_builder.py # Platform Reward Withdrawal
 │   │   ├── lifecycle/            # Lifecycle operations
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py           # Base lifecycle classes
@@ -527,6 +544,7 @@ odv-multisig-charli3-offchain-core/
 │       ├── platform.py       # Platform commands
 │       ├── transaction.py    # Transaction processing
 │       ├── governance.py     # Governance utilities
+│       ├── rewards.py        # Reward utilities
 │       ├── setup.py          # Setup utilities
 │       └── config/           # CLI configuration
 │           ├── __init__.py

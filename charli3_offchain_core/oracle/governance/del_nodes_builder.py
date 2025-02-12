@@ -232,10 +232,10 @@ class DelNodesBuilder(BaseBuilder):
             except (RemoveNodesCancelled, click.Abort):
                 logger.info("Operation cancelled")
                 return GovernanceTxResult()
-
         except Exception as e:
             error_msg = f"Unexpected error building add nodes transaction: {e}"
             logger.error(error_msg)
+            return GovernanceTxResult()
 
     def node_operator_reward_distribution(
         self,
@@ -437,7 +437,6 @@ def modified_reward_utxo(
     modified_utxo.output.datum_hash = None
 
     if reward_token == NoDatum():
-
         if modified_utxo.output.amount.coin < payment_amount:
             raise ValueError("Insufficient ADA funds for payment")
 

@@ -324,3 +324,39 @@ class RemovingNodesError(GovernanceError):
     """Raised when oracle delete nodes operations fail."""
 
     pass
+
+
+class NodeCollectValidationError(GovernanceError):
+    """Raised when remove nodes validation fails."""
+
+    pass
+
+
+class NodeCollectCancelled(GovernanceError):  # noqa
+    """Exception raised when user intentionally cancels the delete nodes tx."""
+
+    pass
+
+
+class CollectingNodesError(GovernanceError):
+    """Raised when oracle delete nodes operations fail."""
+
+    pass
+
+
+class PlatformCollectValidationError(GovernanceError):
+    """Raised when remove nodes validation fails."""
+
+    pass
+
+
+class PlatformCollectCancelled(GovernanceError):  # noqa
+    """Exception raised when user intentionally cancels the delete nodes tx."""
+
+    pass
+
+
+class CollectingPlatformError(GovernanceError):
+    """Raised when oracle delete nodes operations fail."""
+
+    pass
