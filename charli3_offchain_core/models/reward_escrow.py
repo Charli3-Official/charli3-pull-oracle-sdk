@@ -3,8 +3,8 @@ from typing import Union
 
 from pycardano import Address, PlutusData, VerificationKeyHash
 
-from charli3_offchain_core.models.extension_types import PosixTime
-from charli3_offchain_core.models.oracle_datums import NoDatum, PolicyId
+from charli3_offchain_core.models.base import PolicyId, PosixTime
+from charli3_offchain_core.models.oracle_datums import NoDatum
 
 PaymentVkh = bytes
 

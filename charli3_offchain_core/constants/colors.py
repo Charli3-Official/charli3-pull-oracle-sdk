@@ -14,3 +14,10 @@ class CliColor(str, Enum):
     PROGRESS = "yellow"
     TITLE = "bright_cyan"
     NEUTRAL = "white"
+
+    DETAIL = "bright_white"
+    PROCESSING = "magenta"
+    HIGHLIGHT = "bright_yellow"
+    VALUE = "bright_magenta"
+    SECONDARY = "white"
+    EMPHASIS = "bright_red"

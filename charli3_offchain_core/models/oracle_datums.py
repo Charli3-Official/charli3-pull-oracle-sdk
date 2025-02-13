@@ -5,15 +5,17 @@ from typing import Any, Dict, List, Union
 
 from pycardano import PlutusData, VerificationKeyHash
 
-from charli3_offchain_core.models.extension_types import PosixTime, PosixTimeDiff
-
-PolicyId = bytes
-AssetName = bytes
-ScriptHash = bytes
-OracleFeed = int
-NodeFeed = int
-FeedVkh = VerificationKeyHash
-PaymentVkh = VerificationKeyHash
+from charli3_offchain_core.models.base import (
+    AssetName,
+    FeedVkh,
+    NodeFeed,
+    OracleFeed,
+    PaymentVkh,
+    PolicyId,
+    PosixTime,
+    PosixTimeDiff,
+    ScriptHash,
+)
 
 MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE = 5_500_000
 
