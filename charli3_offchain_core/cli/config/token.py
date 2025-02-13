@@ -6,16 +6,20 @@ class TokenConfig:
     """Token configuration."""
 
     platform_auth_policy: str
-    fee_token_policy: str
-    fee_token_name: str
-    oracle_policy: str | None = None
+    reward_token_policy: str | None
+    reward_token_name: str | None
+    rate_token_policy: str | None
+    rate_token_name: str | None
+    oracle_policy: str | None
 
     @classmethod
     def from_dict(cls, data: dict) -> "TokenConfig":
         """Create token config from dictionary."""
         return cls(
             platform_auth_policy=data["platform_auth_policy"],
-            fee_token_policy=data["fee_token_policy"],
-            fee_token_name=data["fee_token_name"],
+            reward_token_policy=data.get("reward_token_policy", None),
+            reward_token_name=data.get("reward_token_name", None),
+            rate_token_policy=data.get("rate_token_policy", None),
+            rate_token_name=data.get("rate_token_name", None),
             oracle_policy=data.get("oracle_policy", None),
         )

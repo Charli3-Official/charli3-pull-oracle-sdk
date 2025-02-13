@@ -53,8 +53,8 @@ async def send(config: Path, wait: bool) -> None:
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
-            fee_token_hash=ctx.fee_token_policy_id,
-            fee_token_name=ctx.fee_token_name,
+            reward_token_hash=ctx.reward_token_hash,
+            reward_token_name=ctx.reward_token_name,
         )
 
         odv_client = ODVClient()

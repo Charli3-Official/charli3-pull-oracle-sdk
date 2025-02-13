@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pycardano import RawPlutusData, ScriptHash, UTxO, VerificationKeyHash
+from pycardano import Address, RawPlutusData, ScriptHash, UTxO, VerificationKeyHash
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.base import PosixTime
@@ -20,7 +20,7 @@ from ..exceptions import StateValidationError, TransactionError, ValidationError
 
 
 async def get_script_utxos(
-    script_address: str, tx_manager: TransactionManager
+    script_address: Address, tx_manager: TransactionManager
 ) -> list[UTxO]:
     """Get and validate UTxOs at script address."""
     try:

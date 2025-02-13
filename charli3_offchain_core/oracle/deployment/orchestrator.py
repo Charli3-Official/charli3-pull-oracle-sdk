@@ -101,7 +101,7 @@ class OracleDeploymentOrchestrator:
         # Deployment configuration
         deployment_config: OracleDeploymentConfig,
         nodes_config: NodesConfig,
-        fee_config: FeeConfig,
+        rate_config: FeeConfig,
         # Transaction signing
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         platform_utxo: UTxO,
@@ -123,7 +123,7 @@ class OracleDeploymentOrchestrator:
             iqr_fence_multiplier: IQR multiplier for outlier detection
             deployment_config: Deployment parameters
             nodes_config: Configuration for oracle nodes
-            fee_config: Fee configuration
+            rate_config: Rate fee configuration
             signing_key: Key for signing transactions
             platform_utxo: UTxO containing platform auth NFT
 
@@ -144,7 +144,7 @@ class OracleDeploymentOrchestrator:
                 platform_script=platform_script,
                 admin_address=admin_address,
                 signing_key=signing_key,
-                fee_config=fee_config,
+                rate_config=rate_config,
                 aggregation_liveness_period=aggregation_liveness_period,
                 time_uncertainty_aggregation=time_uncertainty_aggregation,
                 time_uncertainty_platform=time_uncertainty_platform,
@@ -210,7 +210,7 @@ class OracleDeploymentOrchestrator:
         platform_script: NativeScript,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        fee_config: FeeConfig,
+        rate_config: FeeConfig,
         aggregation_liveness_period: int,
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
@@ -230,7 +230,7 @@ class OracleDeploymentOrchestrator:
             platform_script=platform_script,
             change_address=admin_address,
             signing_key=signing_key,
-            fee_config=fee_config,
+            rate_config=rate_config,
             aggregation_liveness_period=aggregation_liveness_period,
             time_uncertainty_aggregation=time_uncertainty_aggregation,
             time_uncertainty_platform=time_uncertainty_platform,

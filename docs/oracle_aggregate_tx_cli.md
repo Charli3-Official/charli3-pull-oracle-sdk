@@ -32,10 +32,13 @@ network:
 oracle_address: "addr_test1..."  # Oracle script address
 policy_id: "1234..."            # Oracle NFT policy ID
 
-# Fee token configuration
-fee_token:
-  fee_token_policy: "hex_policy_id_here"
-  fee_token_name: "hex_token_name_here"
+# Reward and Rate token configuration
+tokens:
+  reward_token_policy: "hex_policy_id_here"
+  reward_token_name: "hex_token_name_here"
+
+  rate_token_policy: "hex_policy_id_here"
+  rate_token_name: "hex_token_name_here"
 
 # Wallet configuration
 wallet:

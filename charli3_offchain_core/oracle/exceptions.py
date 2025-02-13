@@ -306,3 +306,21 @@ class AddingNodesError(GovernanceError):
     """Raised when oracle update operations fail."""
 
     pass
+
+
+class RemoveNodesValidationError(GovernanceError):
+    """Raised when remove nodes validation fails."""
+
+    pass
+
+
+class RemoveNodesCancelled(GovernanceError):  # noqa
+    """Exception raised when user intentionally cancels the delete nodes tx."""
+
+    pass
+
+
+class RemovingNodesError(GovernanceError):
+    """Raised when oracle delete nodes operations fail."""
+
+    pass

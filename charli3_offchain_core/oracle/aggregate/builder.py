@@ -70,6 +70,7 @@ class RewardsResult:
     transaction: Transaction
     pending_transports: list[UTxO]
     new_reward_account: TransactionOutput
+    in_settings: OracleSettingsDatum | None = None
 
     @property
     def reward_distribution(self) -> dict[int, int]:
@@ -99,9 +100,12 @@ class RewardsResult:
 
         # Build distribution mapping
         distribution = {}
-        for idx, node_id in enumerate(
-            transport_datum.aggregation.message.node_feeds_sorted_by_feed
-        ):
+        node_map_keys = list(self.in_settings.nodes.node_map.keys())
+        for node_id in transport_datum.aggregation.message.node_feeds_sorted_by_feed:
+            if node_id not in node_map_keys:
+                continue
+
+            idx = node_map_keys.index(node_id)
             distribution[node_id] = reward_list[idx]
 
         return distribution
@@ -162,8 +166,8 @@ class OracleTransactionBuilder:
         tx_manager: TransactionManager,
         script_address: Address,
         policy_id: ScriptHash,
-        fee_token_hash: ScriptHash,
-        fee_token_name: AssetName,
+        reward_token_hash: ScriptHash | None = None,
+        reward_token_name: AssetName | None = None,
     ) -> None:
         """Initialize transaction builder.
 
@@ -175,8 +179,8 @@ class OracleTransactionBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
-        self.fee_token_hash = fee_token_hash
-        self.fee_token_name = fee_token_name
+        self.reward_token_hash = reward_token_hash
+        self.reward_token_name = reward_token_name
         self.network_config = self.tx_manager.chain_query.config.network_config
 
     async def build_odv_tx(
@@ -372,6 +376,7 @@ class OracleTransactionBuilder:
                 transaction=tx,
                 pending_transports=pending_transports,
                 new_reward_account=reward_account_output,
+                in_settings=settings_datum,
             )
 
         except Exception as e:
@@ -388,21 +393,75 @@ class OracleTransactionBuilder:
         """Helper method to create transport output with consistent data."""
         transport_output = deepcopy(transport.output)
 
-        # Add fees to output
+        self._add_reward_to_output(transport_output, minimum_fee)
+
+        return self._create_final_output(
+            transport_output,
+            current_message,
+            median_value,
+            node_reward_price,
+            minimum_fee,
+        )
+
+    def _add_reward_to_output(
+        self, transport_output: TransactionOutput, minimum_fee: int
+    ) -> None:
+        """
+        Add fees to the transport output based on reward token configuration.
+
+        Args:
+            transport_output: The output to add fees to
+            minimum_fee: The fee amount to add
+        """
+        if not (self.reward_token_hash or self.reward_token_name):
+            transport_output.amount.coin += minimum_fee
+            return
+
+        self._add_token_fees(transport_output, minimum_fee)
+
+    def _add_token_fees(
+        self, transport_output: TransactionOutput, minimum_fee: int
+    ) -> None:
+        """
+        Add token-based fees to the output.
+
+        Args:
+            transport_output: The output to add token fees to
+            minimum_fee: The fee amount to add
+        """
+        token_hash = self.reward_token_hash
+        token_name = self.reward_token_name
+
         if (
-            self.fee_token_hash in transport_output.amount.multi_asset
-            and self.fee_token_name
-            in transport_output.amount.multi_asset[self.fee_token_hash]
+            token_hash in transport_output.amount.multi_asset
+            and token_name in transport_output.amount.multi_asset[token_hash]
         ):
-            transport_output.amount.multi_asset[self.fee_token_hash][
-                self.fee_token_name
-            ] += minimum_fee
+            transport_output.amount.multi_asset[token_hash][token_name] += minimum_fee
         else:
-            fee_asset = MultiAsset(
-                {self.fee_token_hash: Asset({self.fee_token_name: minimum_fee})}
-            )
+            fee_asset = MultiAsset({token_hash: Asset({token_name: minimum_fee})})
             transport_output.amount.multi_asset += fee_asset
 
+    def _create_final_output(
+        self,
+        transport_output: TransactionOutput,
+        current_message: AggregateMessage,
+        median_value: int,
+        node_reward_price: int,
+        minimum_fee: int,
+    ) -> TransactionOutput:
+        """
+        Create the final transaction output with all necessary data.
+
+        Args:
+            transport_output: The processed transport output
+            current_message: Current aggregate message
+            median_value: The calculated median value
+            node_reward_price: Price for node reward
+            minimum_fee: Minimum fee added
+
+        Returns:
+            TransactionOutput: The final transaction output
+        """
         return TransactionOutput(
             address=self.script_address,
             amount=transport_output.amount,
@@ -447,9 +506,11 @@ class OracleTransactionBuilder:
         # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
         if (
             output_amount.multi_asset
-            and self.fee_token_hash in output_amount.multi_asset
+            and self.reward_token_hash in output_amount.multi_asset
         ):
-            output_amount.multi_asset[self.fee_token_hash][self.fee_token_name] = 0
+            output_amount.multi_asset[self.reward_token_hash][
+                self.reward_token_name
+            ] = 0
 
         return TransactionOutput(
             address=self.script_address,
@@ -474,8 +535,11 @@ class OracleTransactionBuilder:
         nodes = list(settings.nodes.node_map.keys())
 
         # Calculate total fees and rewards
-        total_fee_tokens = rewards.calculate_total_fees(
-            transports, self.fee_token_hash, self.fee_token_name
+        total_payment_tokens = rewards.calculate_total_fees(
+            transports,
+            self.reward_token_hash,
+            self.reward_token_name,
+            self.tx_manager.config.min_utxo_value,
         )
         node_rewards = rewards.calculate_node_rewards_from_transports(
             transports, nodes, settings.iqr_fence_multiplier
@@ -487,13 +551,16 @@ class OracleTransactionBuilder:
         )
 
         # Update fee tokens
-        rewards.update_fee_tokens(
-            output_amount, self.fee_token_hash, self.fee_token_name, total_fee_tokens
+        new_value = rewards.update_fee_tokens(
+            output_amount,
+            self.reward_token_hash,
+            self.reward_token_name,
+            total_payment_tokens,
         )
 
         return TransactionOutput(
             address=self.script_address,
-            amount=output_amount,
+            amount=new_value,
             datum=RewardAccountVariant(
                 datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
             ),

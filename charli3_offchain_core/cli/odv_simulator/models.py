@@ -136,8 +136,8 @@ class SimulationConfig(TxConfig):
         network: NetworkConfig,
         script_address: str,
         policy_id: str,
-        fee_token_policy_id: str,
-        fee_token_name: str,
+        reward_token_policy: str,
+        reward_token_name: str,
         wallet: WalletConfig,
         simulation: SimulationSettings,
     ) -> None:
@@ -146,8 +146,8 @@ class SimulationConfig(TxConfig):
             network,
             script_address,
             policy_id,
-            fee_token_policy_id,
-            fee_token_name,
+            reward_token_policy,
+            reward_token_name,
             wallet,
         )
         self.simulation = simulation
@@ -178,8 +178,8 @@ class SimulationConfig(TxConfig):
             network=NetworkConfig.from_dict(data.get("network", {})),
             script_address=data["oracle_address"],
             policy_id=data["policy_id"],
-            fee_token_policy_id=data["fee_token"]["fee_token_policy"],
-            fee_token_name=data["fee_token"]["fee_token_name"],
+            reward_token_policy=data["tokens"]["reward_token_policy"],
+            reward_token_name=data["tokens"]["reward_token_name"],
             wallet=WalletConfig.from_dict(data["wallet"]),
             simulation=sim_settings,
         )
