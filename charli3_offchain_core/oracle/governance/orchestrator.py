@@ -22,7 +22,7 @@ from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
-from charli3_offchain_core.models.extension_types import PosixTimeDiff
+from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import OracleConfiguration
 from charli3_offchain_core.oracle.exceptions import (
     AddingNodesError,

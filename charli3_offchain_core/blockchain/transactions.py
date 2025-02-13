@@ -41,6 +41,15 @@ class TransactionConfig:
     default_script_utxo_cost: int = 5_000_000
 
 
+@dataclass
+class ValidityWindow:
+    """Validity start, end, and current time."""
+
+    validity_start: int
+    validity_end: int
+    current_time: int
+
+
 class TransactionManager:
     """Manages transaction building and submission."""
 
@@ -298,3 +307,12 @@ class TransactionManager:
             raise TransactionBuildError(
                 f"Failed to estimate execution units: {e}"
             ) from e
+
+    def calculate_validity_window(
+        self, time_absolute_uncertainty: int
+    ) -> ValidityWindow:
+        """Calculate transaction validity window and current time."""
+        validity_start = self.chain_query.get_current_posix_chain_time_ms()
+        validity_end = validity_start + time_absolute_uncertainty
+        current_time = (validity_end + validity_start) // 2
+        return ValidityWindow(validity_start, validity_end, current_time)

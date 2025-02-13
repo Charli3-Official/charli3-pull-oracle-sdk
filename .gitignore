@@ -161,6 +161,7 @@ node_keys/
 # Cython debug symbols
 cython_debug/
 deploy-*.yaml
+client-*.yaml
 tx_config*.yml
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
