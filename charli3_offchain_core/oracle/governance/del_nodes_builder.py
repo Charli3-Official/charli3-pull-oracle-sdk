@@ -32,7 +32,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_title,
 )
 from charli3_offchain_core.cli.config.nodes import NodesConfig
-from charli3_offchain_core.models.extension_types import PosixTimeDiff
+from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     Nodes,

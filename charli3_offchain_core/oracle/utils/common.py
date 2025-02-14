@@ -1,8 +1,13 @@
 """ Common utility functions for oracle operations. """
 
-from pycardano import Address, ScriptHash, UTxO
+from typing import Any
+
+from pycardano import Address, RawPlutusData, ScriptHash, UTxO, VerificationKeyHash
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.models.base import PosixTime
+from charli3_offchain_core.models.message import SignedOracleNodeMessage
+from charli3_offchain_core.models.oracle_datums import AggregateMessage
 from charli3_offchain_core.oracle.utils.asset_checks import validate_token_quantities
 from charli3_offchain_core.oracle.utils.state_checks import (
     filter_empty_agg_states,
@@ -70,3 +75,67 @@ def get_oracle_utxos(
         reward_transports or [],
         agg_states or [],
     )
+
+
+def make_aggregate_message(
+    feed_data: dict[VerificationKeyHash, int], timestamp: int
+) -> AggregateMessage:
+    """Make aggregate message from node feeds.
+
+    Args:
+        feed_data: Dictionary of node feed data
+
+    Returns:
+        AggregateMessage for ODV submission
+    """
+    feeds = dict(sorted(feed_data.items(), key=lambda x: x[1]))
+
+    return AggregateMessage(
+        node_feeds_sorted_by_feed=feeds,
+        node_feeds_count=len(feeds),
+        timestamp=timestamp,
+    )
+
+
+def build_aggregate_message(
+    nodes_messages: list[SignedOracleNodeMessage],
+    timestamp: PosixTime,
+) -> AggregateMessage:
+    """Build aggregate message from node messages and timestamp.
+
+    Args:
+        nodes_messages: List of signed oracle messages from nodes
+        timestamp: POSIX timestamp in milliseconds
+
+    Returns:
+        AggregateMessage with sorted feeds and provided timestamp
+
+    Raises:
+        ValueError: If no messages provided or signature validation fails
+    """
+    if not nodes_messages:
+        raise ValueError("No node messages provided")
+
+    for msg in nodes_messages:
+        try:
+            msg.validate_signature()
+        except ValueError as e:
+            raise ValueError(f"Invalid message signature: {e}") from e
+
+    feeds = {msg.verification_key.hash(): msg.message.feed for msg in nodes_messages}
+
+    sorted_feeds = dict(sorted(feeds.items(), key=lambda x: x[1]))
+
+    return AggregateMessage(
+        node_feeds_sorted_by_feed=sorted_feeds,
+        node_feeds_count=len(sorted_feeds),
+        timestamp=timestamp,
+    )
+
+
+def try_parse_datum(datum: RawPlutusData, datum_class: Any) -> Any:
+    """Attempt to parse a datum using the provided class."""
+    try:
+        return datum_class.from_cbor(datum.to_cbor())
+    except Exception:
+        return None

@@ -3,7 +3,6 @@
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from fractions import Fraction
 
 from pycardano import (
     Address,
@@ -19,13 +18,15 @@ from pycardano import (
     UTxO,
 )
 
-from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.blockchain.transactions import (
+    TransactionManager,
+    ValidityWindow,
+)
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     Aggregation,
     AggStateDatum,
     AggStateVariant,
-    NodeFeed,
     NoRewards,
     OracleSettingsDatum,
     RewardAccountDatum,
@@ -44,6 +45,7 @@ from charli3_offchain_core.oracle.exceptions import (
 )
 from charli3_offchain_core.oracle.utils import (
     asset_checks,
+    calc_methods,
     common,
     rewards,
     state_checks,
@@ -186,6 +188,7 @@ class OracleTransactionBuilder:
         message: AggregateMessage,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         change_address: Address | None = None,
+        validity_window: ValidityWindow | None = None,
     ) -> OdvResult:
         """Build ODV aggregation transaction with comprehensive validation.
 
@@ -213,11 +216,27 @@ class OracleTransactionBuilder:
             # Update calculators with current settings
 
             # Calculate the transaction time window and current time ONCE
-            validity_start, validity_end, current_time = (
-                self._calculate_validity_window(
+            if validity_window is None:
+                validity_window = self.tx_manager.calculate_validity_window(
                     settings_datum.time_uncertainty_aggregation
                 )
-            )
+            else:
+                window_length = (
+                    validity_window.validity_end - validity_window.validity_start
+                )
+                if window_length > settings_datum.time_uncertainty_aggregation:
+                    raise ValueError(
+                        f"Incorrect validity window length: {window_length} > {settings_datum.time_uncertainty_aggregation}"
+                    )
+                if window_length <= 0:
+                    raise ValueError(
+                        f"Incorrect validity window length: {window_length}"
+                    )
+            validity_start, validity_end, current_time = [
+                validity_window.validity_start,
+                validity_window.validity_end,
+                validity_window.current_time,
+            ]
 
             validity_start_slot, validity_end_slot = self._validity_window_to_slot(
                 validity_start, validity_end
@@ -237,7 +256,7 @@ class OracleTransactionBuilder:
             # Calculate median using the current message
             feeds = list(current_message.node_feeds_sorted_by_feed.values())
             node_count = current_message.node_feeds_count
-            median_value = self.median(
+            median_value = calc_methods.median(
                 feeds,
                 node_count,
             )
@@ -560,15 +579,6 @@ class OracleTransactionBuilder:
             ),
         )
 
-    def _calculate_validity_window(
-        self, time_absolute_uncertainty: int
-    ) -> tuple[int, int, int]:
-        """Calculate transaction validity window and current time."""
-        validity_start = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-        validity_end = validity_start + time_absolute_uncertainty
-        current_time = (validity_end + validity_start) // 2
-        return validity_start, validity_end, current_time
-
     def _validity_window_to_slot(
         self, validity_start: int, validity_end: int
     ) -> tuple[int, int]:
@@ -576,62 +586,3 @@ class OracleTransactionBuilder:
         validity_start_slot = self.network_config.posix_to_slot(validity_start)
         validity_end_slot = self.network_config.posix_to_slot(validity_end)
         return validity_start_slot, validity_end_slot
-
-    def median(self, node_feeds_sorted: list[NodeFeed], node_feeds_count: int) -> int:
-        """
-        Calculate the median of the node feeds
-        Args:
-            node_feeds_sorted: Sorted list of NodeFeed objects
-            node_feeds_count: Number of node feeds
-        Returns:
-            Median value as an integer
-        """
-        if len(node_feeds_sorted) == 1:
-            return node_feeds_sorted[0]
-
-        midpoint = Fraction(1, 2)
-        result = self.quantile(node_feeds_sorted, node_feeds_count, midpoint)
-        return self.round_even(result)
-
-    def quantile(self, xs: list[int], n: int, q: Fraction) -> Fraction:
-        """
-        Calculate the q-th quantile of the sorted list xs
-        Args:
-            xs: Sorted list of values
-            n: Length of the list
-            q: Desired quantile (between 0 and 1) as a Fraction
-        Returns:
-            Quantile value as a Fraction
-        """
-        n_sub_one = Fraction(n - 1)
-        quantile_index = q * n_sub_one
-
-        # Integral part of q * (n - 1)
-        j = int(quantile_index // 1)
-
-        # Fractional part of q * (n - 1)
-        g = quantile_index - Fraction(j)
-
-        # Get the j-th and (j+1)-th elements
-        x_j = xs[j]
-        x_j_1 = xs[j + 1] if j + 1 < len(xs) else xs[j]
-
-        # Linear interpolation
-        fst = (Fraction(1) - g) * Fraction(x_j)
-        snd = g * Fraction(x_j_1)
-
-        return fst + snd
-
-    def round_even(self, num: Fraction) -> int:
-        """
-        Round to nearest even using Fraction
-        """
-        floor = int(num // 1)
-        decimal = num - floor
-
-        if decimal < Fraction(1, 2):
-            return floor
-        elif decimal > Fraction(1, 2):
-            return floor + 1
-        else:
-            return floor if floor % 2 == 0 else floor + 1
