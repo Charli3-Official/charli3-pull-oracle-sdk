@@ -123,7 +123,7 @@ class SimulationResult:
     """Results of oracle simulation."""
 
     nodes: list[SimulatedNode]
-    feeds: dict[int, dict]  # node_id -> {feed, signature, verification_key}
+    feeds: dict[int, dict]
     odv_tx: str
     rewards: RewardsResult
 
@@ -136,19 +136,19 @@ class SimulationConfig(TxConfig):
         network: NetworkConfig,
         script_address: str,
         policy_id: str,
-        reward_token_policy: str,
-        reward_token_name: str,
         wallet: WalletConfig,
         simulation: SimulationSettings,
+        reward_token_policy: str | None = None,
+        reward_token_name: str | None = None,
     ) -> None:
         """Initialize simulation config with base config and simulation settings."""
         super().__init__(
-            network,
-            script_address,
-            policy_id,
-            reward_token_policy,
-            reward_token_name,
-            wallet,
+            network=network,
+            script_address=script_address,
+            policy_id=policy_id,
+            wallet=wallet,
+            reward_token_policy=reward_token_policy,
+            reward_token_name=reward_token_name,
         )
         self.simulation = simulation
 
@@ -158,7 +158,6 @@ class SimulationConfig(TxConfig):
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
 
-        # Load base config first
         with path.open("r") as f:
             data = yaml.safe_load(f)
 
@@ -174,23 +173,32 @@ class SimulationConfig(TxConfig):
             wait_time=sim_data.get("wait_time", 60),
         )
 
+        tokens = data.get("tokens", {})
+
         return cls(
             network=NetworkConfig.from_dict(data.get("network", {})),
             script_address=data["oracle_address"],
             policy_id=data["policy_id"],
-            reward_token_policy=data["tokens"]["reward_token_policy"],
-            reward_token_name=data["tokens"]["reward_token_name"],
             wallet=WalletConfig.from_dict(data["wallet"]),
             simulation=sim_settings,
+            reward_token_policy=tokens.get("reward_token_policy"),
+            reward_token_name=tokens.get("reward_token_name"),
         )
 
     def validate(self) -> None:
         """Validate complete configuration."""
-        # Validate base config
-        self.network.validate()
+        super().validate()
 
         if not 0 < self.simulation.variance < 1:
             raise ValueError("Variance must be between 0 and 1")
 
         if self.simulation.wait_time < 0:
             raise ValueError("Wait time cannot be negative")
+
+        if not self.simulation.node_keys_dir.is_dir():
+            raise ValueError(
+                f"Node keys directory not found: {self.simulation.node_keys_dir}"
+            )
+
+        if self.simulation.base_feed <= 0:
+            raise ValueError("Base feed value must be positive")
