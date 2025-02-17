@@ -18,9 +18,16 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.base import LoadedKeys
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
+from charli3_offchain_core.oracle.exceptions import (
+    NodeCollectCancelled,
+    NodeNotRegisteredError,
+    NoRewardsAvailableError,
+    RewardsError,
+)
 from charli3_offchain_core.oracle.rewards.node_collect_builder import (
     NodeCollectBuilder,
 )
@@ -35,12 +42,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class RewardResult:
+class RewardOrchestratorResult:
     """Result of reward operation"""
 
     status: ProcessStatus
     transaction: Transaction | None = None
-    error: Exception | None = None
+    error: RewardsError | None = None
 
 
 class RewardOrchestrator:
@@ -71,10 +78,10 @@ class RewardOrchestrator:
         oracle_policy: str | None,
         user_address: Address | str,
         tokens: TokenConfig,
-        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        loaded_key: LoadedKeys,
         network: Network,
         required_signers: list[VerificationKeyHash] | None = None,
-    ) -> RewardResult:
+    ) -> RewardOrchestratorResult:
         try:
             if not oracle_policy:
                 raise ValueError("oracle_policy cannot be None or empty")
@@ -102,21 +109,36 @@ class RewardOrchestrator:
                 contract_utxos=contract_utxos,
                 user_address=validated_user_address,
                 reward_token=reward_token,
+                loaded_key=loaded_key,
                 network=network,
-                signing_key=signing_key,
                 required_signers=required_signers,
             )
 
-            if result.transaction is None and result.reward_utxo is None:
-                return RewardResult(ProcessStatus.CANCELLED_BY_USER)
+            if isinstance(result.exception_type, NodeNotRegisteredError):
+                return RewardOrchestratorResult(
+                    status=ProcessStatus.VERIFICATION_FAILURE,
+                    error=result.exception_type,
+                )
 
-            return RewardResult(
+            if isinstance(result.exception_type, NoRewardsAvailableError):
+                return RewardOrchestratorResult(
+                    status=ProcessStatus.COMPLETED, error=result.exception_type
+                )
+            if isinstance(result.exception_type, NodeCollectCancelled):
+                return RewardOrchestratorResult(
+                    status=ProcessStatus.CANCELLED_BY_USER, error=result.exception_type
+                )
+            # if isinstance():
+            #     # TODO
+            #     pass
+
+            return RewardOrchestratorResult(
                 status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
             )
 
         except Exception as e:
             logger.error("Collect Node failed: %s", str(e))
-            return RewardResult(status=ProcessStatus.FAILED, error=e)
+            return RewardOrchestratorResult(status=ProcessStatus.FAILED, error=e)
 
     async def collect_platform_oracle(
         self,
@@ -128,7 +150,7 @@ class RewardOrchestrator:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         network: Network,
         required_signers: list[VerificationKeyHash] | None = None,
-    ) -> RewardResult:
+    ) -> RewardOrchestratorResult:
         try:
             if not oracle_policy:
                 raise ValueError("oracle_policy cannot be None or empty")
@@ -164,12 +186,17 @@ class RewardOrchestrator:
             )
 
             if result.transaction is None and result.reward_utxo is None:
-                return RewardResult(ProcessStatus.CANCELLED_BY_USER)
+                return RewardOrchestratorResult(ProcessStatus.CANCELLED_BY_USER)
 
-            return RewardResult(
+            # if isinstance(result.exception_type, NodeNotRegisteredError):
+            #     return RewardOrchestratorResult(
+            #         status="a",
+            # )
+
+            return RewardOrchestratorResult(
                 status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
             )
 
         except Exception as e:
             logger.error("Collect Platform failed: %s", str(e))
-            return RewardResult(status=ProcessStatus.FAILED, error=e)
+            return RewardOrchestratorResult(status=ProcessStatus.FAILED, error=e)

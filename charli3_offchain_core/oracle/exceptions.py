@@ -326,37 +326,55 @@ class RemovingNodesError(GovernanceError):
     pass
 
 
-class NodeCollectValidationError(GovernanceError):
+class RewardsError(OracleError):
+    """Base exception for all governance-related errors."""
+
+    pass
+
+
+class NodeCollectValidationError(RewardsError):
     """Raised when remove nodes validation fails."""
 
     pass
 
 
-class NodeCollectCancelled(GovernanceError):  # noqa
+class NodeCollectCancelled(RewardsError):  # noqa
     """Exception raised when user intentionally cancels the delete nodes tx."""
 
     pass
 
 
-class CollectingNodesError(GovernanceError):
+class CollectingNodesError(RewardsError):
     """Raised when oracle delete nodes operations fail."""
 
     pass
 
 
-class PlatformCollectValidationError(GovernanceError):
+class NodeNotRegisteredError(RewardsError):
+    pass
+
+
+class NoRewardsAvailableError(RewardsError):
+    pass
+
+
+class ADABalanceNotFoundError(RewardsError):
+    pass
+
+
+class PlatformCollectValidationError(RewardsError):
     """Raised when remove nodes validation fails."""
 
     pass
 
 
-class PlatformCollectCancelled(GovernanceError):  # noqa
+class PlatformCollectCancelled(RewardsError):  # noqa
     """Exception raised when user intentionally cancels the delete nodes tx."""
 
     pass
 
 
-class CollectingPlatformError(GovernanceError):
+class CollectingPlatformError(RewardsError):
     """Raised when oracle delete nodes operations fail."""
 
     pass

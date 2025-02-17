@@ -1,7 +1,6 @@
 """Reward transaction builder. """
 
 import logging
-import sys
 from copy import deepcopy
 from dataclasses import replace
 
@@ -9,10 +8,8 @@ import click
 from pycardano import (
     Address,
     AssetName,
-    ExtendedSigningKey,
     MultiAsset,
     Network,
-    PaymentSigningKey,
     Redeemer,
     ScriptHash,
     TransactionOutput,
@@ -23,9 +20,11 @@ from pycardano import (
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
+from charli3_offchain_core.cli.base import LoadedKeys
 from charli3_offchain_core.cli.config.formatting import (
     CliColor,
     print_information,
+    print_progress,
     print_status,
     print_title,
 )
@@ -40,9 +39,12 @@ from charli3_offchain_core.models.oracle_redeemers import (
     NodeCollect,
 )
 from charli3_offchain_core.oracle.exceptions import (
+    ADABalanceNotFoundError,
     CollectingNodesError,
     NodeCollectCancelled,
     NodeCollectValidationError,
+    NodeNotRegisteredError,
+    NoRewardsAvailableError,
 )
 from charli3_offchain_core.oracle.rewards.base import BaseBuilder, RewardTxResult
 from charli3_offchain_core.oracle.utils.common import (
@@ -60,24 +62,17 @@ class NodeCollectBuilder(BaseBuilder):
     FEE_BUFFER = 10_000
     EXTRA_COLLATERAL = 5_000_000
 
-    async def build_tx(
+    async def build_tx(  # noqa
         self,
         policy_hash: ScriptHash,
         contract_utxos: list[UTxO],
         user_address: Address,
         reward_token: NoDatum | SomeAsset,
+        loaded_key: LoadedKeys,
         network: Network,
-        signing_key: PaymentSigningKey | ExtendedSigningKey,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> RewardTxResult:
         try:
-
-            node_payment_vkh = node_id_for_withdrawal_prompt()
-
-            if not node_payment_vkh:
-                raise NodeCollectValidationError(
-                    "Please provide the Node Operator Payment Verification Key Hash to proceed."
-                )
 
             # Input Core Settings UTxO
             in_core_datum, in_core_utxo = get_oracle_settings_by_policy_id(
@@ -92,24 +87,23 @@ class NodeCollectBuilder(BaseBuilder):
             # Contract Script
             script_utxo = get_reference_script_utxo(contract_utxos)
 
-            # Modified Reward Account: Removed withdrawal amount
+            # Get withdrawal address
             out_reward_account_utxo, node_reward = self.modified_reward_utxo(
                 in_reward_account_utxo,
                 in_reward_account_datum,
-                node_payment_vkh,
+                loaded_key.payment_vk.hash(),
                 in_core_datum,
                 reward_token,
             )
 
-            # Get withdrawal address
+            # Modified Reward Account: Removed withdrawal amount
             requested_address = await confirm_withdrawal_amount_and_address(
-                user_address,
-                node_payment_vkh,
-                network,
-                node_reward,
+                loaded_key,
                 reward_token,
+                node_reward,
                 self.EXTRA_COLLATERAL,
                 self.chain_query,
+                network=network,
             )
 
             # Create withdrawal output UTxO
@@ -132,7 +126,7 @@ class NodeCollectBuilder(BaseBuilder):
                 reference_inputs={in_core_utxo},
                 required_signers=required_signers,
                 change_address=user_address,
-                signing_key=signing_key,
+                signing_key=loaded_key.payment_sk,
                 external_collateral=self.EXTRA_COLLATERAL,
             )
             return RewardTxResult(
@@ -140,7 +134,7 @@ class NodeCollectBuilder(BaseBuilder):
             )
 
         except NodeCollectValidationError as e:
-            error_msg = f"Failed to validate Delete Nodes rules: {e}"
+            error_msg = f"Failed to validate Collect rules: {e}"
             logger.error(error_msg)
             return RewardTxResult(reason=error_msg)
 
@@ -151,8 +145,20 @@ class NodeCollectBuilder(BaseBuilder):
             logger.info(error_msg)
             return RewardTxResult(reason=error_msg)
 
-        except (NodeCollectCancelled, click.Abort):
-            logger.info("Operation cancelled")
+        except NodeCollectCancelled as e:
+            logger.info("Node collect cancelled")
+            return RewardTxResult(exception_type=e)
+
+        except NodeNotRegisteredError as e:
+            logger.error("Node not registered error")
+            return RewardTxResult(exception_type=e)
+
+        except NoRewardsAvailableError as e:
+            logging.error("No rewards available error")
+            return RewardTxResult(exception_type=e)
+
+        except ADABalanceNotFoundError:
+            logging.error("ADA balance not found error")
             return RewardTxResult()
 
     def modified_reward_utxo(
@@ -164,24 +170,20 @@ class NodeCollectBuilder(BaseBuilder):
         reward_token: NoDatum | SomeAsset,
     ) -> tuple[UTxO, int]:
 
-        registered_reward: int = 0
         node_rewards = in_reward_datum.nodes_to_rewards
-        nodes = list(settings.nodes.node_map.values())
+        payment_vkhs = list(settings.nodes.node_map.values())
 
-        if node_to_redeem not in nodes:
-            raise CollectingNodesError(
-                "Input Payment Verification Key not found on registered Nodes"
-            )
+        try:
+            node_index = payment_vkhs.index(node_to_redeem)
+        except ValueError as err:
+            raise NodeNotRegisteredError(str(node_to_redeem)) from err
 
-        node_index = nodes.index(node_to_redeem)
         registered_reward = node_rewards[node_index]
         new_rewards = [0 if i == node_index else r for i, r in enumerate(node_rewards)]
         modified_datum = RewardAccountDatum(new_rewards)
 
         if registered_reward <= 0:
-            raise CollectingNodesError(
-                "There are no rewards available in your account at this time"
-            )
+            raise NoRewardsAvailableError(str(node_to_redeem))
 
         if isinstance(reward_token, NoDatum):
             return self.ada_payment_token_withdrawal(
@@ -302,63 +304,49 @@ class NodeCollectBuilder(BaseBuilder):
         return TransactionOutput(address=address, amount=value)
 
 
-def node_id_for_withdrawal_prompt() -> VerificationKeyHash | None:
-    while True:
-        payment_vkh = click.prompt(
-            click.style(
-                "Enter Node Operator Payment Verification Key Hash",
-                fg=CliColor.WARNING,
-                bold=True,
-            ),
-            type=str,
-            default="",
-        )
-
-        if not payment_vkh:  # Check for empty input
-            return None
-
-        try:
-            return VerificationKeyHash.from_primitive(bytes.fromhex(payment_vkh))
-        except (ValueError, AssertionError, TypeError) as err:
-            print_status(
-                "Verification Key Hash valid utf-8 string (max 32 bytes)",
-                str(err),
-                success=False,
-            )
-
-
 async def confirm_withdrawal_amount_and_address(
-    base_address: Address,
-    node_vkh: VerificationKeyHash,
-    network: Network,
-    node_reward: int,
+    loaded_key: LoadedKeys,
     reward_token: SomeAsset | NoDatum,
+    node_reward: int,
     extra_collateral: int,
     chain_query: ChainQuery,
+    network: Network,
 ) -> Address:
     """
-    Prompts the user to confirm or change a Cardano address.
+    Prompts the user to confirm or change a address.
     """
-    enterprise_address = Address(payment_part=node_vkh, network=network)
+    print_progress("Loading wallet configuration...")
 
     symbol = "₳ (lovelace)" if isinstance(reward_token, NoDatum) else "C3 (Charli3)"
 
-    print_information(f"VKH Total Accumulated Rewards: {node_reward:_} {symbol}")
+    print_status(
+        "Verififcaion Key Hash assciated with user's wallet",
+        message=f"{loaded_key.payment_vk.hash()}",
+    )
+    print_information(f"Total Accumulated Rewards: {node_reward:_} {symbol}")
 
-    print_title("Select a withdrawal address (derived from your VKH):")
-    click.secho("1. Enterprise Address:", fg="blue")
-    print(enterprise_address)
-    click.secho("2. Base Address:", fg="blue")
-    print(base_address)
+    print_title(
+        "Select a withdrawal address (derived from your mnemonic configuration):"
+    )
+    click.secho("1. Base Address:", fg="blue")
+    print(loaded_key.address)
+    click.secho("2. Enterprise Address:", fg="blue")
+    print(Address(payment_part=loaded_key.payment_vk.hash(), network=network))
     click.secho("3. Enter a new address", fg="blue")
     click.secho("q. Quit", fg="blue")
 
-    collateral_utxo = await chain_query.find_collateral(base_address, extra_collateral)
-    amount = collateral_utxo.output.amount.coin // 1_000_000
+    # try:
+    #     collateral_utxo = await chain_query.find_collateral(
+    #         loaded_key.address, extra_collateral
+    #     )
+    #     amount = collateral_utxo.output.amount.coin // 1_000_000
+    # except Exception as err:
+    #     raise ADABalanceNotFoundError() from err
+
     click.secho(
-        f"To withdraw rewards, your base address needs to have enough ADA to cover transaction fees.\n"
-        f"The minimum required is 5 ADA in one UTxO. I found {amount} ADA in your wallet.\n"
-        f"If not found, the system will automatically create a new UTxO with 5 ADA from a larger UTxO.\n"
+        "To withdraw rewards, your base address needs to have enough ADA to cover transaction fees.\n"
+        "The minimum required is 5 ADA in one UTxO. I didn't found ADA in your wallet address.\n"
+        "If not found, the system will automatically create a new UTxO with 5 ADA from a larger UTxO.\n"
         "This will involve two transactions to ensure your withdrawal is successful\n",
         fg=CliColor.WARNING,
         bold=True,
@@ -372,11 +360,11 @@ async def confirm_withdrawal_amount_and_address(
 
         if choice == "q":
             click.echo("Exiting.")
-            sys.exit()
-        elif choice == "1":
-            return enterprise_address
-        elif choice == "2":
-            return base_address
+            raise NodeCollectCancelled()
+        # elif choice == "1":
+        #     return enterprise_address
+        # elif choice == "2":
+        #     return base_address
         else:  # choice == "3"
             while True:  # Keep prompting until a valid address is entered
                 new_address_str = click.prompt("Please enter a new address")

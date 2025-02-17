@@ -7,6 +7,11 @@ from pathlib import Path
 import click
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.oracle.exceptions import (
+    NodeCollectCancelled,
+    NodeNotRegisteredError,
+    NoRewardsAvailableError,
+)
 from charli3_offchain_core.oracle.rewards.orchestrator import RewardOrchestrator
 
 from ..constants.status import ProcessStatus
@@ -14,6 +19,7 @@ from .config.formatting import (
     print_confirmation_message_prompt,
     print_hash_info,
     print_header,
+    print_progress,
     print_status,
 )
 from .config.utils import async_command
@@ -38,11 +44,11 @@ logger = logging.getLogger(__name__)
 async def node_collect(config: Path, output: Path | None) -> None:
     """Node Operator Withdrawal Transaction: Individual Rewards Collection"""
     try:
-        print_header("Node Collect")
+        print_progress("Loading Node Collect Configuration")
         (
             management_config,
             _,
-            payment_sk,
+            loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
@@ -60,29 +66,43 @@ async def node_collect(config: Path, output: Path | None) -> None:
             oracle_policy=management_config.tokens.oracle_policy,
             user_address=oracle_addresses.admin_address,
             tokens=management_config.tokens,
-            signing_key=payment_sk,
+            loaded_key=loaded_key,
             network=management_config.network.network,
         )
-        if result.status == ProcessStatus.CANCELLED_BY_USER:
+        if isinstance(result.error, NodeNotRegisteredError):
+            user_message = (
+                f"The payment verification key hash (VKH) derived from the configuration "
+                f"is not associated with any node in the oracle contract.\n"
+                f"Payment Verification Key Hash (VKH): {result.error}\n"
+                f"Oracle contract address: {oracle_addresses.script_address}\n"
+                "Please ensure the mnemonic in the configuration file is correct and "
+                "corresponds to a registered node."
+            )
+            print_status(result.status, user_message, False)
+            return
+
+        if isinstance(result.error, NoRewardsAvailableError):
+            user_message = (
+                f"No rewards available for payment VKH {result.error} under contract"
+                f" {oracle_addresses.script_address}. "
+                "Please verify your account balance and try again later."
+            )
+            print_status(result.status, user_message, True)
+            return
+
+        if isinstance(result.error, NodeCollectCancelled):
             print_status(
                 "Collect Node Status", "Operation cancelled by user", success=True
-            )
-            return
-        if result.status == ProcessStatus.VERIFICATION_FAILURE:
-            print_status(
-                "Collect Node Status",
-                "On-chain validation does not meet the requirements.",
-                success=False,
             )
             return
         if result.status != ProcessStatus.TRANSACTION_BUILT:
             raise click.ClickException(f"Collect Node failed: {result.error}")
 
-        if print_confirmation_message_prompt(
+        if result.transaction and print_confirmation_message_prompt(
             "Proceed signing and submitting Node-Collect tx?"
         ):
             status, _ = await tx_manager.sign_and_submit(
-                result.transaction, [payment_sk], wait_confirmation=True
+                result.transaction, [loaded_key.payment_sk], wait_confirmation=True
             )
             if status != ProcessStatus.TRANSACTION_CONFIRMED:
                 raise click.ClickException(f"Collect nodes failed: {status}")
@@ -113,7 +133,7 @@ async def platform_collect(config: Path, output: Path | None) -> None:
         (
             management_config,
             _,
-            payment_sk,
+            loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
@@ -147,7 +167,7 @@ async def platform_collect(config: Path, output: Path | None) -> None:
             platform_script=platform_script,
             user_address=oracle_addresses.admin_address,
             tokens=management_config.tokens,
-            signing_key=payment_sk,
+            signing_key=loaded_key.payment_sk,
             network=management_config.network.network,
         )
         if result.status == ProcessStatus.CANCELLED_BY_USER:
@@ -168,7 +188,7 @@ async def platform_collect(config: Path, output: Path | None) -> None:
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt("Proceed with Platform Collect?"):
                 status, _ = await tx_manager.sign_and_submit(
-                    result.transaction, [payment_sk], wait_confirmation=True
+                    result.transaction, [loaded_key.payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
                     raise click.ClickException(f"Platfrom Collect failed: {status}")
