@@ -16,7 +16,6 @@ from pycardano import (
     UTxO,
     Value,
     VerificationKeyHash,
-    min_lovelace_post_alonzo,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -66,7 +65,6 @@ class NodeCollectBuilder(BaseBuilder):
         self,
         policy_hash: ScriptHash,
         contract_utxos: list[UTxO],
-        user_address: Address,
         reward_token: NoDatum | SomeAsset,
         loaded_key: LoadedKeys,
         network: Network,
@@ -87,7 +85,7 @@ class NodeCollectBuilder(BaseBuilder):
             # Contract Script
             script_utxo = get_reference_script_utxo(contract_utxos)
 
-            # Get withdrawal address
+            # Modified Reward Account
             out_reward_account_utxo, node_reward = self.modified_reward_utxo(
                 in_reward_account_utxo,
                 in_reward_account_datum,
@@ -125,7 +123,7 @@ class NodeCollectBuilder(BaseBuilder):
                 script_outputs=[out_reward_account_utxo.output, out_operator_reward],
                 reference_inputs={in_core_utxo},
                 required_signers=required_signers,
-                change_address=user_address,
+                change_address=loaded_key.address,
                 signing_key=loaded_key.payment_sk,
                 external_collateral=self.EXTRA_COLLATERAL,
             )
@@ -179,7 +177,10 @@ class NodeCollectBuilder(BaseBuilder):
 
         if isinstance(reward_token, NoDatum):
             return self.ada_payment_token_withdrawal(
-                in_reward_utxo, registered_reward, modified_datum
+                in_reward_utxo,
+                registered_reward,
+                modified_datum,
+                settings.utxo_size_safety_buffer,
             )
 
         return self.custom_payment_token_withdrawal(
@@ -194,23 +195,19 @@ class NodeCollectBuilder(BaseBuilder):
         in_reward_utxo: UTxO,
         registered_reward: int,
         modified_datum: RewardAccountDatum,
+        safety_buffer: int,
     ) -> tuple[UTxO, int]:
 
         modified_utxo = deepcopy(in_reward_utxo)
 
-        lovelace_balance = modified_utxo.output.amount.coin
-        minimum_lovelace_required = min_lovelace_post_alonzo(
-            modified_utxo.output, self.chain_query.context
-        )
-        # TODO change to safety buffer value
+        lovelace_amount = modified_utxo.output.amount.coin
 
-        if lovelace_balance < minimum_lovelace_required + registered_reward:
-            raise CollectingNodesError(
-                f"ADA payment amount ({registered_reward})\n"
-                f"exceeds the quantity in the Reward Account UTxO ({lovelace_balance}),\n"
-                "which must also satisfy a minimum lovelace requirement"
-                f"of {minimum_lovelace_required}."
-            )
+        logger.info(f"Reward balance: {lovelace_amount:_}")
+        logger.info(f"Node reward amount: {registered_reward:_}")
+        logger.info(f"Safety buffer: {safety_buffer:_}")
+
+        if lovelace_amount < registered_reward + safety_buffer:
+            raise CollectingNodesError("Insufficient rewards available for withdrawal.")
 
         modified_utxo.output.amount.coin -= registered_reward
         modified_utxo = replace(
@@ -244,11 +241,12 @@ class NodeCollectBuilder(BaseBuilder):
             policy_hash, {}
         ).get(asset_name, 0)
 
+        logger.info(f"Reward balance: {token_balance:_}")
+        logger.info(f"Node reward amount: {registered_reward:_}")
+
         if token_balance < registered_reward:
-            raise CollectingNodesError(
-                f"Insufficient rewards to withdraw.\n"
-                f"You have {token_balance}, but need {registered_reward}."
-            )
+            raise CollectingNodesError("Insufficient rewards available for withdrawal.")
+
         modified_utxo.output.amount.multi_asset[policy_hash][
             asset_name
         ] -= registered_reward
@@ -273,9 +271,8 @@ class NodeCollectBuilder(BaseBuilder):
         """Creates a transaction output for a node operator.
 
         Args:
-            node_vkh: The verification key hash of the node operator.
+            address: The address of the node operator.
             reward_token: The reward token (SomeAsset) or NoDatum if ADA.
-            network: The network the transaction is for.
             node_reward: The amount of the reward.
 
         Returns:
@@ -284,7 +281,11 @@ class NodeCollectBuilder(BaseBuilder):
         """
 
         if isinstance(reward_token, NoDatum):
-            value = Value(coin=max(node_reward, self.MIN_UTXO_VALUE))
+            if node_reward < self.MIN_UTXO_VALUE:
+                raise NoRewardsAvailableError(
+                    f"The ADA amount is too small {node_reward}"
+                )
+            value = Value(coin=node_reward)
         elif isinstance(reward_token, SomeAsset):
             payment_asset = MultiAsset.from_primitive(
                 {reward_token.asset.policy_id: {reward_token.asset.name: node_reward}}
@@ -303,7 +304,7 @@ async def confirm_withdrawal_amount_and_address(
     network: Network,
 ) -> Address:
     """
-    Prompts the user to confirm or change a address.
+    Prompts the user to confirm or change an address.
     """
     print_progress("Loading wallet configuration...")
 

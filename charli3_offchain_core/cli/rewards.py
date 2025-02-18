@@ -11,9 +11,11 @@ from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
     CollectingNodesError,
+    CollectingPlatformError,
     NodeCollectCancelled,
     NodeNotRegisteredError,
     NoRewardsAvailableError,
+    PlatformCollectCancelled,
 )
 from charli3_offchain_core.oracle.rewards.orchestrator import RewardOrchestrator
 
@@ -67,7 +69,6 @@ async def node_collect(config: Path, output: Path | None) -> None:
 
         result = await orchestrator.collect_node_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
-            user_address=oracle_addresses.admin_address,
             tokens=management_config.tokens,
             loaded_key=loaded_key,
             network=management_config.network.network,
@@ -87,7 +88,7 @@ async def node_collect(config: Path, output: Path | None) -> None:
         if isinstance(result.error, NoRewardsAvailableError):
             user_message = (
                 f"No rewards available\n"
-                f"VKH: {result.error} \n"
+                f"{result.error} \n"
                 f"Contract: {oracle_addresses.script_address}\n"
                 "Try again later"
             )
@@ -184,35 +185,58 @@ async def platform_collect(config: Path, output: Path | None) -> None:
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
-            user_address=oracle_addresses.admin_address,
             tokens=management_config.tokens,
-            signing_key=loaded_key.payment_sk,
+            loaded_key=loaded_key,
             network=management_config.network.network,
         )
-        if result.status == ProcessStatus.CANCELLED_BY_USER:
+
+        if isinstance(result.error, NoRewardsAvailableError):
+            user_message = (
+                f"No rewards available\n"
+                f"{result.error} \n"
+                f"Contract: {oracle_addresses.script_address}\n"
+                "Try again later"
+            )
+            print_status(result.status, user_message, True)
+            return
+        if isinstance(result.error, PlatformCollectCancelled):
             print_status(
                 "Collect Platform Status", "Operation cancelled by user", success=True
             )
             return
-        if result.status == ProcessStatus.VERIFICATION_FAILURE:
-            print_status(
-                "Collect Platform Status",
-                "On-chain validation does not meet the requirements.",
-                success=False,
+        if isinstance(result.error, CollectingPlatformError):
+            user_message = (
+                "Insufficient rewards balance\n"
+                "Please verify settings or contact Charli3 support for assistance"
             )
+            print_status(result.status, user_message, success=True)
             return
-        if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Platform Collect failed: {result.error}")
 
-        if platform_config.threshold == 1:
-            if print_confirmation_message_prompt("Proceed with Platform Collect?"):
-                status, _ = await tx_manager.sign_and_submit(
-                    result.transaction, [loaded_key.payment_sk], wait_confirmation=True
-                )
-                if status != ProcessStatus.TRANSACTION_CONFIRMED:
-                    raise click.ClickException(f"Platfrom Collect failed: {status}")
-                print_status("Platform Collect", "completed successfully", success=True)
-        elif print_confirmation_message_prompt("Store multisig update transaction?"):
+        if isinstance(result.error, CollateralError):
+            user_message = (
+                "Your wallet appears to be empty.\n"
+                "ADA is required for transaction fees.\n"
+                f"Wallet address: {loaded_key.address}"
+            )
+
+            print_status(result.status, user_message, success=False)
+            return
+
+        if (
+            platform_config.threshold == 1
+            and result.transaction
+            and print_confirmation_message_prompt("Proceed with Platform Collect tx?")
+        ):
+            status, _ = await tx_manager.sign_and_submit(
+                result.transaction, [loaded_key.payment_sk], wait_confirmation=True
+            )
+            if status != ProcessStatus.TRANSACTION_CONFIRMED:
+                raise click.ClickException(f"Platfrom Collect failed: {status}")
+            print_status("Platform Collect", "completed successfully", success=True)
+        elif (
+            print_confirmation_message_prompt("Store multisig update transaction?")
+            and result.transaction
+        ):
             output_path = output or Path("tx_oracle_platform_collect.json")
             with output_path.open("w") as f:
                 json.dump(

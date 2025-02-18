@@ -1,7 +1,6 @@
 """Platform transaction builder. """
 
 import logging
-import sys
 from copy import deepcopy
 from dataclasses import replace
 
@@ -9,11 +8,9 @@ import click
 from pycardano import (
     Address,
     AssetName,
-    ExtendedSigningKey,
     MultiAsset,
     NativeScript,
     Network,
-    PaymentSigningKey,
     Redeemer,
     ScriptHash,
     TransactionOutput,
@@ -22,8 +19,12 @@ from pycardano import (
     VerificationKeyHash,
 )
 
+from charli3_offchain_core.blockchain.exceptions import CollateralError
+from charli3_offchain_core.cli.base import LoadedKeys
 from charli3_offchain_core.cli.config.formatting import (
     print_information,
+    print_progress,
+    print_status,
     print_title,
 )
 from charli3_offchain_core.models.oracle_datums import (
@@ -37,8 +38,8 @@ from charli3_offchain_core.models.oracle_redeemers import (
 )
 from charli3_offchain_core.oracle.exceptions import (
     CollectingPlatformError,
+    NoRewardsAvailableError,
     PlatformCollectCancelled,
-    PlatformCollectValidationError,
 )
 from charli3_offchain_core.oracle.rewards.base import BaseBuilder, RewardTxResult
 from charli3_offchain_core.oracle.utils.common import (
@@ -61,10 +62,9 @@ class PlatformCollectBuilder(BaseBuilder):
         platform_script: NativeScript,
         policy_hash: ScriptHash,
         contract_utxos: list[UTxO],
-        user_address: Address,
         reward_token: NoDatum | SomeAsset,
+        loaded_key: LoadedKeys,
         network: Network,
-        signing_key: PaymentSigningKey | ExtendedSigningKey,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> RewardTxResult:
         try:
@@ -92,9 +92,10 @@ class PlatformCollectBuilder(BaseBuilder):
 
             # Get withdrawal address
             requested_address = await confirm_withdrawal_amount_and_address(
-                user_address,
-                platform_reward,
+                loaded_key,
                 reward_token,
+                platform_reward,
+                network,
             )
 
             # Create withdrawal output UTxO
@@ -121,28 +122,28 @@ class PlatformCollectBuilder(BaseBuilder):
                 ],
                 reference_inputs={in_core_utxo},
                 required_signers=required_signers,
-                change_address=user_address,
-                signing_key=signing_key,
+                change_address=loaded_key.address,
+                signing_key=loaded_key.payment_sk,
             )
             return RewardTxResult(
                 transaction=tx, reward_utxo=out_reward_account_utxo.output
             )
 
-        except PlatformCollectValidationError as e:
-            error_msg = f"Failed to validate Delete Nodes rules: {e}"
-            logger.error(error_msg)
-            return RewardTxResult(reason=error_msg)
-
         except CollectingPlatformError as e:
-            error_msg = (
-                f"Provided inputs do not account for payment rewards processing: {e}"
-            )
-            logger.info(error_msg)
-            return RewardTxResult(reason=error_msg)
+            logging.error("No rewards available error")
+            return RewardTxResult(exception_type=e)
 
-        except (PlatformCollectCancelled, click.Abort):
-            logger.info("Operation cancelled")
-            return RewardTxResult()
+        except NoRewardsAvailableError as e:
+            logging.error("No rewards available error")
+            return RewardTxResult(exception_type=e)
+
+        except PlatformCollectCancelled as e:
+            logger.info("Platform collect cancelled")
+            return RewardTxResult(exception_type=e)
+
+        except CollateralError as e:
+            logging.error("ADA balance not found error")
+            return RewardTxResult(exception_type=e)
 
     def modified_reward_utxo(
         self,
@@ -152,11 +153,9 @@ class PlatformCollectBuilder(BaseBuilder):
         reward_token: NoDatum | SomeAsset,
     ) -> tuple[UTxO, int]:
 
-        safety_buffer = settings.utxo_size_safety_buffer
-
         if isinstance(reward_token, NoDatum):
             return self.ada_payment_token_withdrawal(
-                in_reward_utxo, in_reward_datum, safety_buffer
+                in_reward_utxo, in_reward_datum, settings.utxo_size_safety_buffer
             )
 
         return self.custom_payment_token_withdrawal(
@@ -173,25 +172,24 @@ class PlatformCollectBuilder(BaseBuilder):
     ) -> tuple[UTxO, int]:
 
         modified_utxo = deepcopy(in_reward_utxo)
-        lovelace_balance = modified_utxo.output.amount.coin
 
-        nodes_to_rewards = sum(in_reward_datum.nodes_to_rewards)
-        fixed_amount = nodes_to_rewards + safety_buffer
+        lovelace_amount = modified_utxo.output.amount.coin
+        node_rewards = sum(in_reward_datum.nodes_to_rewards)
 
-        withdrawal_amount = lovelace_balance - fixed_amount
+        allocated_amount = node_rewards + safety_buffer
+        platform_amount = lovelace_amount - allocated_amount
 
-        logger.info(f"Total ADA balance: {lovelace_balance:_}")
-        logger.info(f"Total Node Rewards amount: {nodes_to_rewards:_}")
-        logger.info(f"Safety Buffer: {safety_buffer:_}")
+        logger.info(f"Lovelace amount: {lovelace_amount:_}")
+        logger.info(f"Node rewards amount: {node_rewards}")
+        logger.info(f"Platform reward amount: {platform_amount:_} ")
+        logger.info(f"Safety buffer: {safety_buffer:_}")
 
-        logger.info(f"Platform Reward amount: {withdrawal_amount:_} ")
-        if withdrawal_amount <= 0:
+        if platform_amount <= 0:
             raise CollectingPlatformError(
-                "There are no rewards available for withdrawal.\n"
-                "Consider lowering the safety_buffer value to potentially access more funds"
+                "Insufficient rewards available for withdrawal."
             )
 
-        modified_utxo.output.amount.coin -= withdrawal_amount
+        modified_utxo.output.amount.coin -= platform_amount
         modified_utxo = replace(
             modified_utxo,
             output=replace(
@@ -200,7 +198,7 @@ class PlatformCollectBuilder(BaseBuilder):
             ),
         )
 
-        return modified_utxo, withdrawal_amount
+        return modified_utxo, platform_amount
 
     def custom_payment_token_withdrawal(
         self,
@@ -221,22 +219,21 @@ class PlatformCollectBuilder(BaseBuilder):
             policy_hash, {}
         ).get(asset_name, 0)
 
-        total_rewards = sum(in_reward_datum.nodes_to_rewards)
-        withdrawal_amount = token_balance - total_rewards
+        node_rewards = sum(in_reward_datum.nodes_to_rewards)
+        platform_amount = token_balance - node_rewards
 
-        logger.info(f"Total token balance: {token_balance}")
-        logger.info(f"Total Node Rewards amount: {total_rewards}")
+        logger.info(f"Reward balance: {token_balance:_}")
+        logger.info(f"Node rewards amount: {node_rewards:_}")
+        logger.info(f"Platform reward amount: {platform_amount:_}")
 
-        logger.info(f"Platform Reward amount: {withdrawal_amount:_} ")
-        if withdrawal_amount <= 0:
+        if platform_amount <= 0:
             raise CollectingPlatformError(
-                f"Insufficient rewards available for withdrawal. "
-                f"Available: {token_balance}, Required: {total_rewards}"
+                "Insufficient rewards available for withdrawal."
             )
 
         modified_utxo.output.amount.multi_asset[policy_hash][
             asset_name
-        ] -= withdrawal_amount
+        ] -= platform_amount
 
         modified_utxo = replace(
             modified_utxo,
@@ -246,20 +243,20 @@ class PlatformCollectBuilder(BaseBuilder):
             ),
         )
 
-        return modified_utxo, withdrawal_amount
+        return modified_utxo, platform_amount
 
     def platform_operator_output(
         self,
         address: Address,
         reward_token: SomeAsset | NoDatum,
-        node_reward: int,
+        platform_reward: int,
     ) -> TransactionOutput:
         """Creates a transaction output for a node operator.
 
         Args:
-            address: The output address
+            address: The address of the platform operator
             reward_token: The reward token (SomeAsset) or NoDatum if ADA.
-            node_reward: The amount of the reward.
+            platform_reward: The amount of the reward.
 
         Returns:
             A TransactionOutput object.
@@ -267,10 +264,18 @@ class PlatformCollectBuilder(BaseBuilder):
         """
 
         if isinstance(reward_token, NoDatum):
-            value = Value(coin=node_reward)
+            if platform_reward < self.MIN_UTXO_VALUE:
+                raise NoRewardsAvailableError(
+                    f"The ADA amount is too small {platform_reward}"
+                )
+            value = Value(coin=platform_reward)
         elif isinstance(reward_token, SomeAsset):
             payment_asset = MultiAsset.from_primitive(
-                {reward_token.asset.policy_id: {reward_token.asset.name: node_reward}}
+                {
+                    reward_token.asset.policy_id: {
+                        reward_token.asset.name: platform_reward
+                    }
+                }
             )
             value = Value(coin=self.MIN_UTXO_VALUE, multi_asset=payment_asset)
 
@@ -278,22 +283,38 @@ class PlatformCollectBuilder(BaseBuilder):
 
 
 async def confirm_withdrawal_amount_and_address(
-    base_address: Address,
-    platform_reward: int,
+    loaded_key: LoadedKeys,
     reward_token: SomeAsset | NoDatum,
+    platform_reward: int,
+    network: Network,
 ) -> Address:
     """
-    Prompts the user to confirm or change a Cardano address.
+    Prompts the user to confirm or change an address.
     """
+    print_progress("Loading wallet configuration...")
 
     symbol = "₳ (lovelace)" if isinstance(reward_token, NoDatum) else "C3 (Charli3)"
 
+    print_status(
+        "Verififcaion Key Hash associated with user's wallet",
+        message=f"{loaded_key.payment_vk.hash()}",
+    )
+
     print_information(f"Total Accumulated Rewards: {platform_reward:_} {symbol}")
 
-    print_title("Select an option:")
+    print_title(
+        "Select a withdrawal address (derived from your mnemonic configuration):"
+    )
+
+    enterprise_addr = Address(
+        payment_part=loaded_key.payment_vk.hash(), network=network
+    )
+
     click.secho("1. Base Address:", fg="blue")
-    print(base_address)
-    click.secho("2. Enter a new address", fg="blue")
+    print(loaded_key.address)
+    click.secho("2. Enterprise Address", fg="blue")
+    print(enterprise_addr)
+    click.secho("3. Enter a new address", fg="blue")
     click.secho("q. Quit", fg="blue")
 
     while True:  # Loop until valid choice is made
@@ -305,12 +326,19 @@ async def confirm_withdrawal_amount_and_address(
 
         if choice == "q":
             click.echo("Exiting.")
-            sys.exit()
+            raise PlatformCollectCancelled()
         elif choice == "1":
-            return base_address
-        else:  # choice == "2"
+            return loaded_key.address
+        elif choice == "2":
+            return enterprise_addr
+        else:  # choice == "3"
             while True:  # Keep prompting until a valid address is entered
-                new_address_str = click.prompt("Please enter a new address")
+                new_address_str = click.prompt(
+                    "Please enter a new address (or 'q' to quit)"
+                )
+                if new_address_str.lower() == "q":
+                    click.echo("Exiting.")
+                    raise PlatformCollectCancelled()
                 try:
                     new_address = Address.from_primitive(new_address_str)
                     return new_address

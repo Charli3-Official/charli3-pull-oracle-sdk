@@ -6,10 +6,8 @@ from dataclasses import dataclass
 
 from pycardano import (
     Address,
-    ExtendedSigningKey,
     NativeScript,
     Network,
-    PaymentSigningKey,
     ScriptHash,
     Transaction,
     UTxO,
@@ -26,9 +24,11 @@ from charli3_offchain_core.constants.status import ProcessStatus
 from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
     CollectingNodesError,
+    CollectingPlatformError,
     NodeCollectCancelled,
     NodeNotRegisteredError,
     NoRewardsAvailableError,
+    PlatformCollectCancelled,
     RewardsError,
 )
 from charli3_offchain_core.oracle.rewards.node_collect_builder import (
@@ -79,7 +79,6 @@ class RewardOrchestrator:
     async def collect_node_oracle(
         self,
         oracle_policy: str | None,
-        user_address: Address | str,
         tokens: TokenConfig,
         loaded_key: LoadedKeys,
         network: Network,
@@ -87,12 +86,6 @@ class RewardOrchestrator:
     ) -> RewardOrchestratorResult:
         if not oracle_policy:
             raise ValueError("oracle_policy cannot be None or empty")
-
-        validated_user_address = (
-            Address.from_primitive(user_address)
-            if isinstance(user_address, str)
-            else user_address
-        )
 
         # Contract UTxOs
         contract_utxos = await get_script_utxos(self.script_address, self.tx_manager)
@@ -105,7 +98,6 @@ class RewardOrchestrator:
         result = await builder.build_tx(
             policy_hash=oracle_policy_hash,
             contract_utxos=contract_utxos,
-            user_address=validated_user_address,
             reward_token=reward_token,
             loaded_key=loaded_key,
             network=network,
@@ -147,58 +139,52 @@ class RewardOrchestrator:
         oracle_policy: str | None,
         platform_utxo: UTxO,
         platform_script: NativeScript,
-        user_address: Address | str,
         tokens: TokenConfig,
-        signing_key: PaymentSigningKey | ExtendedSigningKey,
+        loaded_key: LoadedKeys,
         network: Network,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> RewardOrchestratorResult:
-        try:
-            if not oracle_policy:
-                raise ValueError("oracle_policy cannot be None or empty")
+        if not oracle_policy:
+            raise ValueError("oracle_policy cannot be None or empty")
 
-            validated_user_address = (
-                Address.from_primitive(user_address)
-                if isinstance(user_address, str)
-                else user_address
-            )
+        # Contract UTxOs
+        contract_utxos = await get_script_utxos(self.script_address, self.tx_manager)
 
-            # Contract UTxOs
-            contract_utxos = await get_script_utxos(
-                self.script_address, self.tx_manager
-            )
+        oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
+        reward_token = setup_token(tokens.reward_token_policy, tokens.reward_token_name)
 
-            oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
-            reward_token = setup_token(
-                tokens.reward_token_policy, tokens.reward_token_name
-            )
+        builder = PlatformCollectBuilder(self.chain_query, self.tx_manager)
 
-            builder = PlatformCollectBuilder(self.chain_query, self.tx_manager)
+        result = await builder.build_tx(
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            policy_hash=oracle_policy_hash,
+            contract_utxos=contract_utxos,
+            reward_token=reward_token,
+            loaded_key=loaded_key,
+            network=network,
+            required_signers=required_signers,
+        )
 
-            result = await builder.build_tx(
-                platform_utxo=platform_utxo,
-                platform_script=platform_script,
-                policy_hash=oracle_policy_hash,
-                contract_utxos=contract_utxos,
-                user_address=validated_user_address,
-                reward_token=reward_token,
-                network=network,
-                signing_key=signing_key,
-                required_signers=required_signers,
-            )
-
-            if result.transaction is None and result.reward_utxo is None:
-                return RewardOrchestratorResult(ProcessStatus.CANCELLED_BY_USER)
-
-            # if isinstance(result.exception_type, NodeNotRegisteredError):
-            #     return RewardOrchestratorResult(
-            #         status="a",
-            # )
-
+        if isinstance(result.exception_type, CollectingPlatformError):
             return RewardOrchestratorResult(
-                status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
+                status=ProcessStatus.FAILED, error=result.exception_type
             )
 
-        except Exception as e:
-            logger.error("Collect Platform failed: %s", str(e))
-            return RewardOrchestratorResult(status=ProcessStatus.FAILED, error=e)
+        if isinstance(result.exception_type, NoRewardsAvailableError):
+            return RewardOrchestratorResult(
+                status=ProcessStatus.COMPLETED, error=result.exception_type
+            )
+
+        if isinstance(result.exception_type, PlatformCollectCancelled):
+            return RewardOrchestratorResult(
+                status=ProcessStatus.CANCELLED_BY_USER, error=result.exception_type
+            )
+
+        if isinstance(result.exception_type, CollateralError):
+            return RewardOrchestratorResult(
+                status=ProcessStatus.FAILED, error=result.exception_type
+            )
+        return RewardOrchestratorResult(
+            status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
+        )
