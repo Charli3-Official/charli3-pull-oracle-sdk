@@ -332,12 +332,6 @@ class RewardsError(OracleError):
     pass
 
 
-class NodeCollectValidationError(RewardsError):
-    """Raised when remove nodes validation fails."""
-
-    pass
-
-
 class NodeCollectCancelled(RewardsError):  # noqa
     """Exception raised when user intentionally cancels the delete nodes tx."""
 

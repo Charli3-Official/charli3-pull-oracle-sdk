@@ -43,7 +43,6 @@ from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
     CollectingNodesError,
     NodeCollectCancelled,
-    NodeCollectValidationError,
     NodeNotRegisteredError,
     NoRewardsAvailableError,
 )
@@ -63,7 +62,7 @@ class NodeCollectBuilder(BaseBuilder):
     FEE_BUFFER = 10_000
     EXTRA_COLLATERAL = 5_000_000
 
-    async def build_tx(  # noqa
+    async def build_tx(
         self,
         policy_hash: ScriptHash,
         contract_utxos: list[UTxO],
@@ -134,17 +133,9 @@ class NodeCollectBuilder(BaseBuilder):
                 transaction=tx, reward_utxo=out_reward_account_utxo.output
             )
 
-        except NodeCollectValidationError as e:
-            error_msg = f"Failed to validate Collect rules: {e}"
-            logger.error(error_msg)
-            return RewardTxResult(reason=error_msg)
-
         except CollectingNodesError as e:
-            error_msg = (
-                f"Provided inputs do not account for payment rewards processing: {e}"
-            )
-            logger.info(error_msg)
-            return RewardTxResult(reason=error_msg)
+            logger.info("Collecting nodes error")
+            return RewardTxResult(exception_type=e)
 
         except NodeCollectCancelled as e:
             logger.info("Node collect cancelled")
@@ -211,14 +202,12 @@ class NodeCollectBuilder(BaseBuilder):
         minimum_lovelace_required = min_lovelace_post_alonzo(
             modified_utxo.output, self.chain_query.context
         )
-        logger.info(
-            f"Minimum lovelace required for Reward Account UTxO {minimum_lovelace_required}"
-        )
+        # TODO change to safety buffer value
 
         if lovelace_balance < minimum_lovelace_required + registered_reward:
             raise CollectingNodesError(
-                f"The ADA payment amount ({registered_reward})"
-                f"exceeds the quantity in the Reward Account UTxO ({lovelace_balance}), "
+                f"ADA payment amount ({registered_reward})\n"
+                f"exceeds the quantity in the Reward Account UTxO ({lovelace_balance}),\n"
                 "which must also satisfy a minimum lovelace requirement"
                 f"of {minimum_lovelace_required}."
             )
@@ -257,8 +246,8 @@ class NodeCollectBuilder(BaseBuilder):
 
         if token_balance < registered_reward:
             raise CollectingNodesError(
-                f"Insufficient rewards available for withdrawal. "
-                f"Available: {token_balance}, Required: {registered_reward}"
+                f"Insufficient rewards to withdraw.\n"
+                f"You have {token_balance}, but need {registered_reward}."
             )
         modified_utxo.output.amount.multi_asset[policy_hash][
             asset_name
@@ -361,7 +350,7 @@ async def confirm_withdrawal_amount_and_address(
         choice = click.prompt(
             "Enter your choice (1-3, q):",
             type=click.Choice(["1", "2", "3", "q"]),  # Add 'q' to choices
-            default="1",  # Default to the enterprise address
+            default="1",  # Default to the base address
         )
 
         if choice == "q":

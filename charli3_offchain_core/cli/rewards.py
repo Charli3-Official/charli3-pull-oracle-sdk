@@ -10,6 +10,7 @@ from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
+    CollectingNodesError,
     NodeCollectCancelled,
     NodeNotRegisteredError,
     NoRewardsAvailableError,
@@ -85,11 +86,20 @@ async def node_collect(config: Path, output: Path | None) -> None:
 
         if isinstance(result.error, NoRewardsAvailableError):
             user_message = (
-                f"No rewards available for payment VKH {result.error} under contract"
-                f" {oracle_addresses.script_address}. "
-                "Please verify your account balance and try again later."
+                f"No rewards available\n"
+                f"VKH: {result.error} \n"
+                f"Contract: {oracle_addresses.script_address}\n"
+                "Try again later"
             )
             print_status(result.status, user_message, True)
+            return
+
+        if isinstance(result.error, CollectingNodesError):
+            user_message = (
+                "Insufficient rewards balance\n"
+                "Please verify settings or contact Charli3 support for assistance"
+            )
+            print_status(result.status, user_message, success=True)
             return
 
         if isinstance(result.error, NodeCollectCancelled):
@@ -105,11 +115,7 @@ async def node_collect(config: Path, output: Path | None) -> None:
             )
 
             print_status(result.status, user_message, success=False)
-
             return
-
-        if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Collect Node failed: {result.error}")
 
         if result.transaction and print_confirmation_message_prompt(
             "Proceed signing and submitting Node-Collect tx?"
