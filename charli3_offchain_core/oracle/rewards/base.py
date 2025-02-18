@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pycardano import Transaction, TransactionOutput
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
+from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.oracle.exceptions import RewardsError
 
@@ -16,7 +17,7 @@ class RewardTxResult:
     transaction: Transaction | None = None
     reward_utxo: TransactionOutput | None = None
     reason: str | None = None
-    exception_type: RewardsError | None = None
+    exception_type: RewardsError | CollateralError | None = None
 
 
 class BaseBuilder:

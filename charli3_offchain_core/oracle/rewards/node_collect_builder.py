@@ -20,6 +20,7 @@ from pycardano import (
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
+from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.cli.base import LoadedKeys
 from charli3_offchain_core.cli.config.formatting import (
     CliColor,
@@ -157,9 +158,9 @@ class NodeCollectBuilder(BaseBuilder):
             logging.error("No rewards available error")
             return RewardTxResult(exception_type=e)
 
-        except ADABalanceNotFoundError:
+        except (ADABalanceNotFoundError, CollateralError) as e:
             logging.error("ADA balance not found error")
-            return RewardTxResult()
+            return RewardTxResult(exception_type=e)
 
     def modified_reward_utxo(
         self,
@@ -317,10 +318,27 @@ async def confirm_withdrawal_amount_and_address(
     """
     print_progress("Loading wallet configuration...")
 
+    user_message = (
+        "You need 5 ADA in a UTxO to claim rewards.\n"
+        "If you lack it, we'll create a 5 ADA collateral UTxO\n"
+        "from your existing funds. This is automatic.\n"
+        "This collateral is used to cover the transaction fees\n"
+        "when you withdraw your rewards.\n"
+    )
+    if not click.confirm(click.style(user_message, fg=CliColor.WARNING, bold=True)):
+        raise NodeCollectCancelled()
+
+    collateral_utxo = await chain_query.get_or_create_collateral(
+        loaded_key.address, loaded_key.payment_sk, extra_collateral
+    )
+
+    if collateral_utxo is None:
+        raise ADABalanceNotFoundError("No collateral UTXO found")
+
     symbol = "₳ (lovelace)" if isinstance(reward_token, NoDatum) else "C3 (Charli3)"
 
     print_status(
-        "Verififcaion Key Hash assciated with user's wallet",
+        "Verififcaion Key Hash associated with user's wallet",
         message=f"{loaded_key.payment_vk.hash()}",
     )
     print_information(f"Total Accumulated Rewards: {node_reward:_} {symbol}")
@@ -328,29 +346,17 @@ async def confirm_withdrawal_amount_and_address(
     print_title(
         "Select a withdrawal address (derived from your mnemonic configuration):"
     )
+
+    enterprise_addr = Address(
+        payment_part=loaded_key.payment_vk.hash(), network=network
+    )
     click.secho("1. Base Address:", fg="blue")
     print(loaded_key.address)
     click.secho("2. Enterprise Address:", fg="blue")
-    print(Address(payment_part=loaded_key.payment_vk.hash(), network=network))
+    print(enterprise_addr)
     click.secho("3. Enter a new address", fg="blue")
     click.secho("q. Quit", fg="blue")
 
-    # try:
-    #     collateral_utxo = await chain_query.find_collateral(
-    #         loaded_key.address, extra_collateral
-    #     )
-    #     amount = collateral_utxo.output.amount.coin // 1_000_000
-    # except Exception as err:
-    #     raise ADABalanceNotFoundError() from err
-
-    click.secho(
-        "To withdraw rewards, your base address needs to have enough ADA to cover transaction fees.\n"
-        "The minimum required is 5 ADA in one UTxO. I didn't found ADA in your wallet address.\n"
-        "If not found, the system will automatically create a new UTxO with 5 ADA from a larger UTxO.\n"
-        "This will involve two transactions to ensure your withdrawal is successful\n",
-        fg=CliColor.WARNING,
-        bold=True,
-    )
     while True:  # Loop until valid choice is made
         choice = click.prompt(
             "Enter your choice (1-3, q):",
@@ -361,13 +367,18 @@ async def confirm_withdrawal_amount_and_address(
         if choice == "q":
             click.echo("Exiting.")
             raise NodeCollectCancelled()
-        # elif choice == "1":
-        #     return enterprise_address
-        # elif choice == "2":
-        #     return base_address
+        elif choice == "1":
+            return loaded_key.address
+        elif choice == "2":
+            return enterprise_addr
         else:  # choice == "3"
             while True:  # Keep prompting until a valid address is entered
-                new_address_str = click.prompt("Please enter a new address")
+                new_address_str = click.prompt(
+                    "Please enter a new address (or 'q' to quit)"
+                )
+                if new_address_str.lower() == "q":
+                    click.echo("Exiting.")
+                    raise NodeCollectCancelled()
                 try:
                     new_address = Address.from_primitive(new_address_str)
                     return new_address

@@ -6,8 +6,10 @@ from pathlib import Path
 
 import click
 
+from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.oracle.exceptions import (
+    ADABalanceNotFoundError,
     NodeCollectCancelled,
     NodeNotRegisteredError,
     NoRewardsAvailableError,
@@ -95,6 +97,17 @@ async def node_collect(config: Path, output: Path | None) -> None:
                 "Collect Node Status", "Operation cancelled by user", success=True
             )
             return
+        if isinstance(result.error, ADABalanceNotFoundError | CollateralError):
+            user_message = (
+                "Your wallet appears to be empty.\n"
+                "ADA is required for transaction fees.\n"
+                f"Wallet address: {loaded_key.address}"
+            )
+
+            print_status(result.status, user_message, success=False)
+
+            return
+
         if result.status != ProcessStatus.TRANSACTION_BUILT:
             raise click.ClickException(f"Collect Node failed: {result.error}")
 

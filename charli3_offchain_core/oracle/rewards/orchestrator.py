@@ -17,12 +17,14 @@ from pycardano import (
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
+from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.base import LoadedKeys
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
 from charli3_offchain_core.oracle.exceptions import (
+    ADABalanceNotFoundError,
     NodeCollectCancelled,
     NodeNotRegisteredError,
     NoRewardsAvailableError,
@@ -47,7 +49,7 @@ class RewardOrchestratorResult:
 
     status: ProcessStatus
     transaction: Transaction | None = None
-    error: RewardsError | None = None
+    error: RewardsError | CollateralError | None = None
 
 
 class RewardOrchestrator:
@@ -124,13 +126,18 @@ class RewardOrchestrator:
                 return RewardOrchestratorResult(
                     status=ProcessStatus.COMPLETED, error=result.exception_type
                 )
+
             if isinstance(result.exception_type, NodeCollectCancelled):
                 return RewardOrchestratorResult(
                     status=ProcessStatus.CANCELLED_BY_USER, error=result.exception_type
                 )
-            # if isinstance():
-            #     # TODO
-            #     pass
+
+            if isinstance(
+                result.exception_type, ADABalanceNotFoundError | CollateralError
+            ):
+                return RewardOrchestratorResult(
+                    status=ProcessStatus.FAILED, error=result.exception_type
+                )
 
             return RewardOrchestratorResult(
                 status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
