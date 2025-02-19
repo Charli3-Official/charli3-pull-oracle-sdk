@@ -1567,9 +1567,9 @@ websockets = "^13.0"
 
 [package.source]
 type = "git"
-url = "https://github.com/stanislav-az/pycardano.git"
-reference = "odv-multisig-extension"
-resolved_reference = "34255f05267e7c8710c7193f3487ae79e2f15999"
+url = "https://github.com/Charli3-Official/pycardano.git"
+reference = "odv-multisig"
+resolved_reference = "f81de6477aae3d5e79ae3a4838e45ce18c2893cb"
 
 [[package]]
 name = "pycparser"
@@ -2326,4 +2326,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "cd59698bb7f1e410c9c45e39a26fa165e44a27162432df78247595e2d496a939"
+content-hash = "f9cdfa2d7fd33ef90c15e0079162b19efa7597b7b8432563d10def9623675a7c"
