@@ -37,6 +37,7 @@ from ..platform.auth.orchestrator import (
     PlatformAuthOrchestrator,
 )
 from .base import (
+    LoadedKeys,
     create_chain_query,
     derive_deployment_addresses,
     load_keys_with_validation,
@@ -215,7 +216,7 @@ def setup_oracle_from_config(
 def setup_management_from_config(config: Path) -> tuple[
     ManagementConfig,
     OracleConfiguration,
-    PaymentSigningKey,
+    LoadedKeys,
     OracleAddresses,
     ChainQuery,
     TransactionManager,
@@ -265,7 +266,7 @@ def setup_management_from_config(config: Path) -> tuple[
     return (
         management_config,
         oracle_config,
-        keys.payment_sk,
+        keys,
         oracle_addresses,
         chain_query,
         tx_manager,

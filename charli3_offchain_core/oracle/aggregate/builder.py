@@ -356,9 +356,15 @@ class OracleTransactionBuilder:
                 utxos, self.policy_id
             )
 
+            # Calculate the minimum ADA required for Transport UTxOs,
+            # using the CoreSettings UTxO as a reference.
+            # This approach aligns with the deployment strategy where
+            # the CoreSettings UTxO determines the minimum ADA.
+            min_core_settings_ada = settings_utxo.output.amount.coin
+
             # Create new transport outputs
             new_transports = [
-                self._create_empty_transport(transport)
+                self._create_empty_transport(transport, min_core_settings_ada)
                 for transport in pending_transports
             ]
 
@@ -511,18 +517,25 @@ class OracleTransactionBuilder:
             ),
         )
 
-    def _create_empty_transport(self, transport: UTxO) -> TransactionOutput:
+    def _create_empty_transport(
+        self, transport: UTxO, min_ada: int
+    ) -> TransactionOutput:
         """Create empty reward transport output."""
         output_amount = deepcopy(transport.output.amount)
 
         # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
-        if (
-            output_amount.multi_asset
-            and self.reward_token_hash in output_amount.multi_asset
-        ):
-            output_amount.multi_asset[self.reward_token_hash][
-                self.reward_token_name
-            ] = 0
+        if self.reward_token_hash and self.reward_token_name:
+            if (
+                output_amount.multi_asset
+                and self.reward_token_hash in output_amount.multi_asset
+                and self.reward_token_name
+                in output_amount.multi_asset[self.reward_token_hash]
+            ):
+                output_amount.multi_asset[self.reward_token_hash][
+                    self.reward_token_name
+                ] = 0
+        else:
+            output_amount.coin = min_ada
 
         return TransactionOutput(
             address=self.script_address,

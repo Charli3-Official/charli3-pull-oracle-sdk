@@ -43,7 +43,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:
         (
             management_config,
             _,
-            payment_sk,
+            loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
@@ -76,7 +76,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
-            signing_key=payment_sk,
+            signing_key=loaded_key.payment_sk,
         )
         if result.status == ProcessStatus.CANCELLED_BY_USER:
             print_status(
@@ -98,7 +98,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:
                 "Proceed signing and submitting add-nodes tx?"
             ):
                 status, _ = await tx_manager.sign_and_submit(
-                    result.transaction, [payment_sk], wait_confirmation=True
+                    result.transaction, [loaded_key.payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
                     raise click.ClickException(f"Add nodes failed: {status}")
@@ -142,7 +142,7 @@ async def del_nodes(config: Path, output: Path | None) -> None:
         (
             management_config,
             oracle_configuration,
-            payment_sk,
+            loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
@@ -181,7 +181,7 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             network=management_config.network.network,
             reward_issuer_addr=escrow_config.reward_issuer_addr,
             escrow_address=escrow_config.reference_script_addr,
-            signing_key=payment_sk,
+            signing_key=loaded_key.payment_sk,
         )
         if result.status == ProcessStatus.CANCELLED_BY_USER:
             print_status(
@@ -206,7 +206,7 @@ async def del_nodes(config: Path, output: Path | None) -> None:
                 "Proceed signing and submitting delete-nodes tx?"
             ):
                 status, _ = await tx_manager.sign_and_submit(
-                    result.transaction, [payment_sk], wait_confirmation=True
+                    result.transaction, [loaded_key.payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
                     raise click.ClickException(
@@ -252,7 +252,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
         (
             management_config,
             oracle_config,
-            payment_sk,
+            loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
@@ -285,7 +285,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
-            signing_key=payment_sk,
+            signing_key=loaded_key.payment_sk,
         )
         if result.status == ProcessStatus.CANCELLED_BY_USER:
             print_status("Update Status", "Operation cancelled by user", success=True)
@@ -298,7 +298,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt("Proceed with oracle update?"):
                 status, _ = await tx_manager.sign_and_submit(
-                    result.transaction, [payment_sk], wait_confirmation=True
+                    result.transaction, [loaded_key.payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
                     raise click.ClickException(f"Update failed: {status}")

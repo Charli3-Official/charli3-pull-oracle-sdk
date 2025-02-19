@@ -76,6 +76,7 @@ class TransactionManager:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         metadata: dict | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
+        external_collateral: int = 0,
     ) -> None:
         """Prepare transaction builder with inputs, collateral, and metadata."""
         # Add required signers
@@ -95,6 +96,18 @@ class TransactionManager:
             if not collateral_utxo:
                 raise CollateralError("Failed to get collateral")
             builder.collaterals.append(collateral_utxo)
+
+        # Add collateral from an external address if no script is specified.
+        if external_collateral > 0:
+            logger.info(
+                f"Creating collateral UTxO with {external_collateral // 1_000_000} ADA amount"
+            )
+            external_collateral_utxo = await self.chain_query.get_or_create_collateral(
+                change_address, signing_key, external_collateral
+            )
+            if not external_collateral_utxo:
+                raise CollateralError("Failed to get collateral")
+            builder.collaterals.append(external_collateral_utxo)
 
         # Add input address for fees/balancing after collateral is handled
         # This ensures we have the latest UTxO state
@@ -136,6 +149,7 @@ class TransactionManager:
         validity_end: int | None = None,
         fee_buffer: int | None = None,
         metadata: dict | None = None,
+        external_collateral: int = 0,
     ) -> Transaction:
         """Build script interaction transaction."""
         try:
@@ -168,6 +182,7 @@ class TransactionManager:
                 required_signers=required_signers,
                 validity_start=validity_start,
                 validity_end=validity_end,
+                external_collateral=external_collateral,
             )
 
         except Exception as e:
@@ -212,6 +227,7 @@ class TransactionManager:
         required_signers: list[VerificationKeyHash] | None = None,
         validity_start: int | None = None,
         validity_end: int | None = None,
+        external_collateral: int = 0,
     ) -> Transaction:
         """Build transaction with proper inputs and collateral."""
         try:
@@ -222,6 +238,7 @@ class TransactionManager:
                 signing_key=signing_key,
                 metadata=metadata,
                 required_signers=required_signers,
+                external_collateral=external_collateral,
             )
 
             # Set manual validity period if provided
