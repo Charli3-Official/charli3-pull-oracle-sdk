@@ -283,7 +283,7 @@ class NodeCollectBuilder(BaseBuilder):
         if isinstance(reward_token, NoDatum):
             if node_reward < self.MIN_UTXO_VALUE:
                 raise NoRewardsAvailableError(
-                    f"The ADA amount is too small {node_reward}"
+                    f"The ADA amount is too small {node_reward:_}"
                 )
             value = Value(coin=node_reward)
         elif isinstance(reward_token, SomeAsset):

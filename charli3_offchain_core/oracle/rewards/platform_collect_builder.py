@@ -266,7 +266,7 @@ class PlatformCollectBuilder(BaseBuilder):
         if isinstance(reward_token, NoDatum):
             if platform_reward < self.MIN_UTXO_VALUE:
                 raise NoRewardsAvailableError(
-                    f"The ADA amount is too small {platform_reward}"
+                    f"The ADA amount is too small {platform_reward:_}"
                 )
             value = Value(coin=platform_reward)
         elif isinstance(reward_token, SomeAsset):
@@ -319,8 +319,8 @@ async def confirm_withdrawal_amount_and_address(
 
     while True:  # Loop until valid choice is made
         choice = click.prompt(
-            "Enter your choice (1-2, q):",
-            type=click.Choice(["1", "2", "q"]),  # Add 'q' to choices
+            "Enter your choice (1-3, q):",
+            type=click.Choice(["1", "2", "3", "q"]),  # Add 'q' to choices
             default="1",  # Default to the base address
         )
 
