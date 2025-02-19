@@ -27,6 +27,7 @@ from charli3_offchain_core.models.oracle_datums import (
     Aggregation,
     AggStateDatum,
     AggStateVariant,
+    NoDatum,
     NoRewards,
     OracleSettingsDatum,
     RewardAccountDatum,
@@ -213,7 +214,7 @@ class OracleTransactionBuilder:
             )
             script_utxo = common.get_reference_script_utxo(utxos)
 
-            # Update calculators with current settings
+            reference_inputs = {settings_utxo}
 
             # Calculate the transaction time window and current time ONCE
             if validity_window is None:
@@ -261,9 +262,20 @@ class OracleTransactionBuilder:
                 node_count,
             )
 
+            # Update fees according to the rate feed
+            reward_prices = deepcopy(settings_datum.fee_info.reward_prices)
+            if settings_datum.fee_info.rate_nft != NoDatum():
+                oracle_fee_rate_utxo = common.get_fee_rate_reference_utxo(
+                    self.tx_manager.chain_query, settings_datum.fee_info.rate_nft
+                )
+                reference_inputs.add(oracle_fee_rate_utxo)
+                rewards.scale_rewards_by_rate(
+                    reward_prices, oracle_fee_rate_utxo.output.datum.datum.aggstate
+                )
+
             # Calculate minimum fee
             minimum_fee = rewards.calculate_min_fee_amount(
-                settings_datum.fee_info, len(current_message.node_feeds_sorted_by_feed)
+                reward_prices, len(current_message.node_feeds_sorted_by_feed)
             )
 
             # Create outputs using helper methods
@@ -271,7 +283,7 @@ class OracleTransactionBuilder:
                 transport=transport,
                 current_message=current_message,
                 median_value=median_value,
-                node_reward_price=settings_datum.fee_info.reward_prices.node_fee,
+                node_reward_price=reward_prices.node_fee,
                 minimum_fee=minimum_fee,
             )
 
@@ -289,7 +301,7 @@ class OracleTransactionBuilder:
                     (agg_state, Redeemer(OdvAggregate()), script_utxo),
                 ],
                 script_outputs=[transport_output, agg_state_output],
-                reference_inputs=[settings_utxo],
+                reference_inputs=reference_inputs,
                 required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
                 change_address=change_address,
                 signing_key=signing_key,
