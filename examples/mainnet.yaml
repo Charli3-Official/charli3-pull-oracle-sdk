@@ -35,7 +35,7 @@ tokens:
   reward_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   reward_token_name: "43485249" # "CHRI" in hex
 
-  # External rate for payment conversion
+  # External rate for oracle fee payment conversion
   rate_token_policy:
   rate_token_name:
 

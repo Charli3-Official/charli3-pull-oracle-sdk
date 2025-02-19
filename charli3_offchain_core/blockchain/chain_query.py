@@ -13,6 +13,7 @@ import requests
 from blockfrost import ApiError
 from pycardano import (
     Address,
+    AssetName,
     BlockFrostChainContext,
     ExtendedSigningKey,
     GenesisParameters,
@@ -206,6 +207,35 @@ class ChainQuery:
             if isinstance(address, str):
                 address = Address.from_primitive(address)
             return self.context.utxos(str(address))
+
+        except ApiError as e:
+            raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e
+        except Exception as e:
+            raise UTxOQueryError(f"Unexpected error querying UTxOs: {e}") from e
+
+    def get_utxos_with_asset_from_kupo(
+        self, asset_policy_id: ScriptHash, asset_name: AssetName
+    ) -> list[UTxO]:
+        """Get UTxOs containing some asset using kupo.
+
+        Args:
+            asset_policy_id (ScriptHash): Policy ID - asset minting script hash.
+            asset_name (AssetName): asset name.
+
+        Returns:
+            List of UTxOs
+
+        Raises:
+            ChainContextError: Kupo context was not set up
+            UTxOQueryError: If UTxO query fails
+        """
+        if not self.context:
+            raise ChainContextError("No chain context available")
+        if not isinstance(self.context, KupoChainContextExtension):
+            raise ChainContextError("Kupo context was not set up")
+
+        try:
+            return self.context._utxos_with_asset_kupo(asset_policy_id, asset_name)
 
         except ApiError as e:
             raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e

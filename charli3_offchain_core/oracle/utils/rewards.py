@@ -1,24 +1,44 @@
 """Reward calculation utilities for oracle operations."""
 
+import math
+from fractions import Fraction
+
 from pycardano import Asset, AssetName, ScriptHash, UTxO, Value, VerificationKeyHash
 
 from charli3_offchain_core.models.oracle_datums import (
-    FeeConfig,
+    AggStateDatum,
     FeedVkh,
     NodeFeed,
     RewardAccountDatum,
+    RewardPrices,
 )
 from charli3_offchain_core.oracle.exceptions import DistributionError
 
+# Typical coin precision, such as lovelace for ada
+COIN_PRECISION: int = 1_000_000
 
-def calculate_min_fee_amount(fee_config: FeeConfig, node_count: int) -> int:
+
+def calculate_min_fee_amount(reward_prices: RewardPrices, node_count: int) -> int:
     """Calculate minimum fee amount."""
     try:
-        min_fee = fee_config.reward_prices.platform_fee
-        min_fee += fee_config.reward_prices.node_fee * node_count
+        min_fee = reward_prices.platform_fee
+        min_fee += reward_prices.node_fee * node_count
         return min_fee
     except Exception as e:
         raise DistributionError(f"Failed to calculate minimum fee: {e}") from e
+
+
+def scale_rewards_by_rate(
+    reward_prices: RewardPrices, rate_datum: AggStateDatum
+) -> None:
+    """Calculate new reward prices based on the fee rate."""
+    rate = Fraction(rate_datum.oracle_feed, COIN_PRECISION)
+
+    def convert_reward(reward: int) -> int:
+        return math.ceil(rate * Fraction(reward))
+
+    reward_prices.node_fee = convert_reward(reward_prices.node_fee)
+    reward_prices.platform_fee = convert_reward(reward_prices.platform_fee)
 
 
 def calculate_node_rewards_from_transports(
