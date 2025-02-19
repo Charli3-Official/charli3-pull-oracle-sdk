@@ -3,7 +3,6 @@
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from fractions import Fraction
 
 from pycardano import (
     Address,
@@ -19,13 +18,16 @@ from pycardano import (
     UTxO,
 )
 
-from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.blockchain.transactions import (
+    TransactionManager,
+    ValidityWindow,
+)
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     Aggregation,
     AggStateDatum,
     AggStateVariant,
-    NodeFeed,
+    NoDatum,
     NoRewards,
     OracleSettingsDatum,
     RewardAccountDatum,
@@ -44,6 +46,7 @@ from charli3_offchain_core.oracle.exceptions import (
 )
 from charli3_offchain_core.oracle.utils import (
     asset_checks,
+    calc_methods,
     common,
     rewards,
     state_checks,
@@ -68,6 +71,7 @@ class RewardsResult:
     transaction: Transaction
     pending_transports: list[UTxO]
     new_reward_account: TransactionOutput
+    in_settings: OracleSettingsDatum | None = None
 
     @property
     def reward_distribution(self) -> dict[int, int]:
@@ -97,9 +101,12 @@ class RewardsResult:
 
         # Build distribution mapping
         distribution = {}
-        for idx, node_id in enumerate(
-            transport_datum.aggregation.message.node_feeds_sorted_by_feed
-        ):
+        node_map_keys = list(self.in_settings.nodes.node_map.keys())
+        for node_id in transport_datum.aggregation.message.node_feeds_sorted_by_feed:
+            if node_id not in node_map_keys:
+                continue
+
+            idx = node_map_keys.index(node_id)
             distribution[node_id] = reward_list[idx]
 
         return distribution
@@ -159,9 +166,9 @@ class OracleTransactionBuilder:
         self,
         tx_manager: TransactionManager,
         script_address: Address,
-        policy_id: bytes,
-        fee_token_hash: ScriptHash,
-        fee_token_name: AssetName,
+        policy_id: ScriptHash,
+        reward_token_hash: ScriptHash | None = None,
+        reward_token_name: AssetName | None = None,
     ) -> None:
         """Initialize transaction builder.
 
@@ -173,8 +180,8 @@ class OracleTransactionBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
-        self.fee_token_hash = fee_token_hash
-        self.fee_token_name = fee_token_name
+        self.reward_token_hash = reward_token_hash
+        self.reward_token_name = reward_token_name
         self.network_config = self.tx_manager.chain_query.config.network_config
 
     async def build_odv_tx(
@@ -182,6 +189,7 @@ class OracleTransactionBuilder:
         message: AggregateMessage,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         change_address: Address | None = None,
+        validity_window: ValidityWindow | None = None,
     ) -> OdvResult:
         """Build ODV aggregation transaction with comprehensive validation.
 
@@ -206,14 +214,30 @@ class OracleTransactionBuilder:
             )
             script_utxo = common.get_reference_script_utxo(utxos)
 
-            # Update calculators with current settings
+            reference_inputs = {settings_utxo}
 
             # Calculate the transaction time window and current time ONCE
-            validity_start, validity_end, current_time = (
-                self._calculate_validity_window(
+            if validity_window is None:
+                validity_window = self.tx_manager.calculate_validity_window(
                     settings_datum.time_uncertainty_aggregation
                 )
-            )
+            else:
+                window_length = (
+                    validity_window.validity_end - validity_window.validity_start
+                )
+                if window_length > settings_datum.time_uncertainty_aggregation:
+                    raise ValueError(
+                        f"Incorrect validity window length: {window_length} > {settings_datum.time_uncertainty_aggregation}"
+                    )
+                if window_length <= 0:
+                    raise ValueError(
+                        f"Incorrect validity window length: {window_length}"
+                    )
+            validity_start, validity_end, current_time = [
+                validity_window.validity_start,
+                validity_window.validity_end,
+                validity_window.current_time,
+            ]
 
             validity_start_slot, validity_end_slot = self._validity_window_to_slot(
                 validity_start, validity_end
@@ -233,14 +257,25 @@ class OracleTransactionBuilder:
             # Calculate median using the current message
             feeds = list(current_message.node_feeds_sorted_by_feed.values())
             node_count = current_message.node_feeds_count
-            median_value = self.median(
+            median_value = calc_methods.median(
                 feeds,
                 node_count,
             )
 
+            # Update fees according to the rate feed
+            reward_prices = deepcopy(settings_datum.fee_info.reward_prices)
+            if settings_datum.fee_info.rate_nft != NoDatum():
+                oracle_fee_rate_utxo = common.get_fee_rate_reference_utxo(
+                    self.tx_manager.chain_query, settings_datum.fee_info.rate_nft
+                )
+                reference_inputs.add(oracle_fee_rate_utxo)
+                rewards.scale_rewards_by_rate(
+                    reward_prices, oracle_fee_rate_utxo.output.datum.datum.aggstate
+                )
+
             # Calculate minimum fee
             minimum_fee = rewards.calculate_min_fee_amount(
-                settings_datum.fee_info, len(current_message.node_feeds_sorted_by_feed)
+                reward_prices, len(current_message.node_feeds_sorted_by_feed)
             )
 
             # Create outputs using helper methods
@@ -248,7 +283,7 @@ class OracleTransactionBuilder:
                 transport=transport,
                 current_message=current_message,
                 median_value=median_value,
-                node_reward_price=settings_datum.fee_info.reward_prices.node_fee,
+                node_reward_price=reward_prices.node_fee,
                 minimum_fee=minimum_fee,
             )
 
@@ -266,7 +301,7 @@ class OracleTransactionBuilder:
                     (agg_state, Redeemer(OdvAggregate()), script_utxo),
                 ],
                 script_outputs=[transport_output, agg_state_output],
-                reference_inputs=[settings_utxo],
+                reference_inputs=reference_inputs,
                 required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
                 change_address=change_address,
                 signing_key=signing_key,
@@ -353,6 +388,7 @@ class OracleTransactionBuilder:
                 transaction=tx,
                 pending_transports=pending_transports,
                 new_reward_account=reward_account_output,
+                in_settings=settings_datum,
             )
 
         except Exception as e:
@@ -369,21 +405,75 @@ class OracleTransactionBuilder:
         """Helper method to create transport output with consistent data."""
         transport_output = deepcopy(transport.output)
 
-        # Add fees to output
+        self._add_reward_to_output(transport_output, minimum_fee)
+
+        return self._create_final_output(
+            transport_output,
+            current_message,
+            median_value,
+            node_reward_price,
+            minimum_fee,
+        )
+
+    def _add_reward_to_output(
+        self, transport_output: TransactionOutput, minimum_fee: int
+    ) -> None:
+        """
+        Add fees to the transport output based on reward token configuration.
+
+        Args:
+            transport_output: The output to add fees to
+            minimum_fee: The fee amount to add
+        """
+        if not (self.reward_token_hash or self.reward_token_name):
+            transport_output.amount.coin += minimum_fee
+            return
+
+        self._add_token_fees(transport_output, minimum_fee)
+
+    def _add_token_fees(
+        self, transport_output: TransactionOutput, minimum_fee: int
+    ) -> None:
+        """
+        Add token-based fees to the output.
+
+        Args:
+            transport_output: The output to add token fees to
+            minimum_fee: The fee amount to add
+        """
+        token_hash = self.reward_token_hash
+        token_name = self.reward_token_name
+
         if (
-            self.fee_token_hash in transport_output.amount.multi_asset
-            and self.fee_token_name
-            in transport_output.amount.multi_asset[self.fee_token_hash]
+            token_hash in transport_output.amount.multi_asset
+            and token_name in transport_output.amount.multi_asset[token_hash]
         ):
-            transport_output.amount.multi_asset[self.fee_token_hash][
-                self.fee_token_name
-            ] += minimum_fee
+            transport_output.amount.multi_asset[token_hash][token_name] += minimum_fee
         else:
-            fee_asset = MultiAsset(
-                {self.fee_token_hash: Asset({self.fee_token_name: minimum_fee})}
-            )
+            fee_asset = MultiAsset({token_hash: Asset({token_name: minimum_fee})})
             transport_output.amount.multi_asset += fee_asset
 
+    def _create_final_output(
+        self,
+        transport_output: TransactionOutput,
+        current_message: AggregateMessage,
+        median_value: int,
+        node_reward_price: int,
+        minimum_fee: int,
+    ) -> TransactionOutput:
+        """
+        Create the final transaction output with all necessary data.
+
+        Args:
+            transport_output: The processed transport output
+            current_message: Current aggregate message
+            median_value: The calculated median value
+            node_reward_price: Price for node reward
+            minimum_fee: Minimum fee added
+
+        Returns:
+            TransactionOutput: The final transaction output
+        """
         return TransactionOutput(
             address=self.script_address,
             amount=transport_output.amount,
@@ -428,9 +518,11 @@ class OracleTransactionBuilder:
         # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
         if (
             output_amount.multi_asset
-            and self.fee_token_hash in output_amount.multi_asset
+            and self.reward_token_hash in output_amount.multi_asset
         ):
-            output_amount.multi_asset[self.fee_token_hash][self.fee_token_name] = 0
+            output_amount.multi_asset[self.reward_token_hash][
+                self.reward_token_name
+            ] = 0
 
         return TransactionOutput(
             address=self.script_address,
@@ -455,8 +547,11 @@ class OracleTransactionBuilder:
         nodes = list(settings.nodes.node_map.keys())
 
         # Calculate total fees and rewards
-        total_fee_tokens = rewards.calculate_total_fees(
-            transports, self.fee_token_hash, self.fee_token_name
+        total_payment_tokens = rewards.calculate_total_fees(
+            transports,
+            self.reward_token_hash,
+            self.reward_token_name,
+            self.tx_manager.config.min_utxo_value,
         )
         node_rewards = rewards.calculate_node_rewards_from_transports(
             transports, nodes, settings.iqr_fence_multiplier
@@ -468,26 +563,20 @@ class OracleTransactionBuilder:
         )
 
         # Update fee tokens
-        rewards.update_fee_tokens(
-            output_amount, self.fee_token_hash, self.fee_token_name, total_fee_tokens
+        new_value = rewards.update_fee_tokens(
+            output_amount,
+            self.reward_token_hash,
+            self.reward_token_name,
+            total_payment_tokens,
         )
 
         return TransactionOutput(
             address=self.script_address,
-            amount=output_amount,
+            amount=new_value,
             datum=RewardAccountVariant(
                 datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
             ),
         )
-
-    def _calculate_validity_window(
-        self, time_absolute_uncertainty: int
-    ) -> tuple[int, int, int]:
-        """Calculate transaction validity window and current time."""
-        validity_start = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-        validity_end = validity_start + time_absolute_uncertainty
-        current_time = (validity_end + validity_start) // 2
-        return validity_start, validity_end, current_time
 
     def _validity_window_to_slot(
         self, validity_start: int, validity_end: int
@@ -496,62 +585,3 @@ class OracleTransactionBuilder:
         validity_start_slot = self.network_config.posix_to_slot(validity_start)
         validity_end_slot = self.network_config.posix_to_slot(validity_end)
         return validity_start_slot, validity_end_slot
-
-    def median(self, node_feeds_sorted: list[NodeFeed], node_feeds_count: int) -> int:
-        """
-        Calculate the median of the node feeds
-        Args:
-            node_feeds_sorted: Sorted list of NodeFeed objects
-            node_feeds_count: Number of node feeds
-        Returns:
-            Median value as an integer
-        """
-        if len(node_feeds_sorted) == 1:
-            return node_feeds_sorted[0]
-
-        midpoint = Fraction(1, 2)
-        result = self.quantile(node_feeds_sorted, node_feeds_count, midpoint)
-        return self.round_even(result)
-
-    def quantile(self, xs: list[int], n: int, q: Fraction) -> Fraction:
-        """
-        Calculate the q-th quantile of the sorted list xs
-        Args:
-            xs: Sorted list of values
-            n: Length of the list
-            q: Desired quantile (between 0 and 1) as a Fraction
-        Returns:
-            Quantile value as a Fraction
-        """
-        n_sub_one = Fraction(n - 1)
-        quantile_index = q * n_sub_one
-
-        # Integral part of q * (n - 1)
-        j = int(quantile_index // 1)
-
-        # Fractional part of q * (n - 1)
-        g = quantile_index - Fraction(j)
-
-        # Get the j-th and (j+1)-th elements
-        x_j = xs[j]
-        x_j_1 = xs[j + 1] if j + 1 < len(xs) else xs[j]
-
-        # Linear interpolation
-        fst = (Fraction(1) - g) * Fraction(x_j)
-        snd = g * Fraction(x_j_1)
-
-        return fst + snd
-
-    def round_even(self, num: Fraction) -> int:
-        """
-        Round to nearest even using Fraction
-        """
-        floor = int(num // 1)
-        decimal = num - floor
-
-        if decimal < Fraction(1, 2):
-            return floor
-        elif decimal > Fraction(1, 2):
-            return floor + 1
-        else:
-            return floor if floor % 2 == 0 else floor + 1

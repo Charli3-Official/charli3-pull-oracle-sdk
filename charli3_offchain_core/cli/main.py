@@ -8,6 +8,7 @@ from charli3_offchain_core.cli.escrow import escrow
 from charli3_offchain_core.cli.node_keys.generate_node_keys_command import (
     generate_node_keys_command,
 )
+from charli3_offchain_core.cli.odv_client.commands import client
 from charli3_offchain_core.cli.odv_simulator.commands import simulator
 from charli3_offchain_core.cli.oracle import oracle
 from charli3_offchain_core.cli.platform import platform
@@ -22,6 +23,7 @@ def cli(verbose: bool) -> None:
 
 # Add command groups
 cli.add_command(oracle)
+cli.add_command(client)
 cli.add_command(escrow)
 cli.add_command(aggregate_tx)
 cli.add_command(platform)

@@ -10,6 +10,7 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.governance import (
     add_nodes,
+    del_nodes,
     scale_down,
     scale_up,
     update_settings,
@@ -69,6 +70,7 @@ oracle.add_command(update_settings)
 oracle.add_command(scale_up)
 oracle.add_command(scale_down)
 oracle.add_command(add_nodes)
+oracle.add_command(del_nodes)
 
 
 @oracle.command()
@@ -165,7 +167,7 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
             time_uncertainty_platform=deployment_config.timing.time_uncertainty_platform,
             iqr_fence_multiplier=deployment_config.timing.iqr_multiplier,
             deployment_config=configs["deployment"],
-            fee_config=configs["fee"],
+            rate_config=configs["rate_token"],
             nodes_config=deployment_config.nodes,
             signing_key=payment_sk,
             platform_utxo=platform_utxo,

@@ -47,8 +47,8 @@ class OracleSimulator:
             tx_manager=self.ctx.tx_manager,
             script_address=self.ctx.script_address,
             policy_id=self.ctx.policy_id,
-            fee_token_hash=self.ctx.fee_token_policy_id,
-            fee_token_name=self.ctx.fee_token_name,
+            reward_token_hash=self.ctx.reward_token_hash,
+            reward_token_name=self.ctx.reward_token_name,
         )
 
     async def generate_feeds(self) -> tuple[AggregateMessage, dict]:

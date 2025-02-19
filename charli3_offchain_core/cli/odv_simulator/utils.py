@@ -11,9 +11,12 @@ from charli3_offchain_core.cli.odv_simulator.models import (
     SimulationSettings,
 )
 from charli3_offchain_core.models.oracle_datums import AggregateMessage
+from charli3_offchain_core.oracle.utils.common import make_aggregate_message
 
 
-def create_aggregate_message(feed_data: dict) -> AggregateMessage:
+def create_aggregate_message(
+    feed_data: dict, timestamp: int | None = None
+) -> AggregateMessage:
     """Create aggregate message from node feeds.
 
     Args:
@@ -22,8 +25,9 @@ def create_aggregate_message(feed_data: dict) -> AggregateMessage:
     Returns:
         AggregateMessage for ODV submission
     """
-    # Extract timestamp from first feed (they should all be the same)
-    timestamp = next(iter(feed_data.values()))["timestamp"]
+    if timestamp is None:
+        # Extract timestamp from first feed (they should all be the same)
+        timestamp = next(iter(feed_data.values()))["timestamp"]
 
     # Create and sort feeds dictionary by feed value
     feeds = {
@@ -33,11 +37,7 @@ def create_aggregate_message(feed_data: dict) -> AggregateMessage:
 
     feeds = dict(sorted(feeds.items(), key=lambda x: x[1]))
 
-    return AggregateMessage(
-        node_feeds_sorted_by_feed=feeds,
-        node_feeds_count=len(feeds),
-        timestamp=timestamp,
-    )
+    return make_aggregate_message(feed_data=feeds, timestamp=timestamp)
 
 
 def print_simulation_config(config: "SimulationSettings") -> None:

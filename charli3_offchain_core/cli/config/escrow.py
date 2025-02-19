@@ -16,6 +16,7 @@ class EscrowConfig:
     network: NetworkConfig
     blueprint_path: Path = Path("artifacts/plutus.json")
     reference_script_addr: Address | None = None
+    reward_issuer_addr: Address | None = None
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "EscrowConfig":
@@ -27,9 +28,15 @@ class EscrowConfig:
             ref_addr = Address.from_primitive(ref_addr)
         else:
             ref_addr = None
+        issuer_addr = data.get("reward_issuer_address", None)
+        if issuer_addr:
+            issuer_addr = Address.from_primitive(issuer_addr)
+        else:
+            issuer_addr = None
 
         return cls(
             network=NetworkConfig.from_dict(data.get("network", {})),
             blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),
             reference_script_addr=ref_addr,
+            reward_issuer_addr=issuer_addr,
         )
