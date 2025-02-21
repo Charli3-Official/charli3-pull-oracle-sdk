@@ -193,11 +193,17 @@ class OracleScaleBuilder:
     ) -> ScaleDownResult:
         """Build transaction to decrease ODV capacity by removing UTxO pairs."""
         try:
+            # Log initial parameters
+            logger.info(
+                "Starting scale down transaction build for %d pairs", scale_amount
+            )
+
             script_utxo = get_reference_script_utxo(utxos)
             if not script_utxo:
+                logger.error("Reference script UTxO not found")
                 raise ValueError("Reference script UTxO not found")
 
-            # Calculate validity window
+            # Calculate validity window with logging
             settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
                 utxos, self.policy_id
             )
@@ -205,28 +211,90 @@ class OracleScaleBuilder:
                 self._get_current_time_and_validity_window(settings_datum)
             )
 
-            # Find UTxOs to remove
+            logger.info(
+                "Time window - Current: %d, Start: %d, End: %d",
+                current_time,
+                validity_start,
+                validity_end,
+            )
+
+            # Find and log UTxOs to remove
             transport_utxos = filter_utxos_by_token_name(
                 utxos, self.policy_id, "RewardTransport"
             )
             aggstate_utxos = filter_utxos_by_token_name(
                 utxos, self.policy_id, "AggregationState"
             )
-            empty_transports = filter_empty_transports(transport_utxos)[:scale_amount]
 
+            logger.info(
+                "Found UTxOs - Total Transports: %d, Total AggStates: %d",
+                len(transport_utxos),
+                len(aggstate_utxos),
+            )
+
+            # Get empty transports with detailed logging
+            empty_transports = filter_empty_transports(transport_utxos)
+            logger.info(
+                "Empty transport UTxOs found: %d/%d",
+                len(empty_transports),
+                scale_amount,
+            )
+
+            # Get expired/empty agg states with detailed logging
             expired_and_empty_agg_states = filter_valid_agg_states(
                 aggstate_utxos, current_time
-            )[:scale_amount]
+            )
+            logger.info(
+                "Valid AggState UTxOs found: %d/%d",
+                len(expired_and_empty_agg_states),
+                scale_amount,
+            )
 
             if (
                 len(empty_transports) < scale_amount
                 or len(expired_and_empty_agg_states) < scale_amount
             ):
-                raise StateValidationError(
+                error_msg = (
                     f"Insufficient empty UTxOs for scaling down. "
                     f"Found {len(empty_transports)} empty transports and "
-                    f"{len(expired_and_empty_agg_states)} expired agg states"
+                    f"{len(expired_and_empty_agg_states)} expired agg states, "
+                    f"need {scale_amount} of each"
                 )
+                logger.error(error_msg)
+                raise StateValidationError(error_msg)
+
+            # Select the specific UTxOs to use
+            selected_transports = empty_transports[:scale_amount]
+            selected_agg_states = expired_and_empty_agg_states[:scale_amount]
+
+            # Log transport UTxO details
+            for i, utxo in enumerate(selected_transports):
+                logger.info(
+                    "Transport UTxO %d: TxId=%s#%d",
+                    i + 1,
+                    utxo.input.transaction_id,
+                    utxo.input.index,
+                )
+
+            # Log AggState UTxO details
+            for i, utxo in enumerate(selected_agg_states):
+                datum = utxo.output.datum
+                if isinstance(datum, AggStateVariant):
+                    if isinstance(datum.datum, NoDatum):
+                        state_type = "Empty"
+                        expiry = None
+                    else:
+                        state_type = "Expired"
+                        expiry = datum.datum.aggstate.expiry_timestamp
+
+                    logger.info(
+                        "AggState UTxO %d: TxId=%s#%d, Type=%s, Expiry=%s",
+                        i + 1,
+                        utxo.input.transaction_id,
+                        utxo.input.index,
+                        state_type,
+                        expiry,
+                    )
 
             # Get minting script for burning
             nft_minting_script = await self.tx_manager.chain_query.get_plutus_script(
@@ -243,7 +311,7 @@ class OracleScaleBuilder:
             # Prepare script inputs
             script_inputs = [
                 (utxo, Redeemer(ScaleDown()), script_utxo)
-                for utxo in empty_transports + expired_and_empty_agg_states
+                for utxo in (selected_transports + selected_agg_states)
             ]
 
             # Build transaction using TransactionManager
@@ -263,8 +331,8 @@ class OracleScaleBuilder:
 
             return ScaleDownResult(
                 transaction=tx,
-                removed_transport_utxos=empty_transports,
-                removed_agg_state_utxos=expired_and_empty_agg_states,
+                removed_transport_utxos=selected_transports,
+                removed_agg_state_utxos=selected_agg_states,
             )
 
         except Exception as e:
@@ -273,11 +341,32 @@ class OracleScaleBuilder:
     def _get_current_time_and_validity_window(
         self, settings_datum: OracleSettingsDatum
     ) -> tuple[int, int, int]:
-        """Get closing time and slot ranges."""
+        """Get closing time and slot ranges with enhanced logging."""
         validity_start = self.tx_manager.chain_query.last_block_slot
-        validity_end = validity_start + (
-            settings_datum.time_absolute_uncertainty // 1000
+
+        # Log time uncertainty configuration
+        logger.info(
+            "Time uncertainty configuration: %d ms",
+            settings_datum.time_uncertainty_platform,
         )
+
+        validity_end = validity_start + (
+            settings_datum.time_uncertainty_platform // 1000
+        )
+
         conversion = self.tx_manager.chain_query.config.network_config.slot_to_posix
         curr_time_ms = (conversion(validity_start) + conversion(validity_end)) // 2
+
+        # Log detailed time calculations
+        logger.info(
+            "Time calculations - Last block slot: %d, "
+            "Validity start (POSIX): %d, "
+            "Validity end (POSIX): %d, "
+            "Current time (ms): %d",
+            validity_start,
+            conversion(validity_start),
+            conversion(validity_end),
+            curr_time_ms,
+        )
+
         return curr_time_ms, validity_start, validity_end

@@ -27,14 +27,14 @@ from charli3_offchain_core.models.oracle_datums import OracleConfiguration
 from charli3_offchain_core.oracle.exceptions import (
     AddingNodesError,
     AddNodesValidationError,
-    ScalingError,
-    StateValidationError,
     RemoveNodesValidationError,
     RemovingNodesError,
+    ScalingError,
+    StateValidationError,
 )
 from charli3_offchain_core.oracle.governance.add_nodes_builder import AddNodesBuilder
-from charli3_offchain_core.oracle.governance.scale_builder import OracleScaleBuilder
 from charli3_offchain_core.oracle.governance.del_nodes_builder import DelNodesBuilder
+from charli3_offchain_core.oracle.governance.scale_builder import OracleScaleBuilder
 from charli3_offchain_core.oracle.governance.update_builder import UpdateBuilder
 from charli3_offchain_core.oracle.utils.common import get_script_utxos
 
@@ -298,7 +298,11 @@ class GovernanceOrchestrator:
     ) -> GovernanceResult:
         """Scale down oracle ODV capacity."""
         try:
+            logger.info("Starting scale down operation for %d UTxO pairs", scale_amount)
+
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
+            logger.info("Found %d total UTxOs at script address", len(utxos))
+
             policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
 
             builder = OracleScaleBuilder(
@@ -317,8 +321,15 @@ class GovernanceOrchestrator:
                     scale_amount=scale_amount,
                     required_signers=required_signers,
                 )
+                logger.info(
+                    "Successfully built scale down transaction. "
+                    "Removed %d transport UTxOs and %d AggState UTxOs",
+                    len(result.removed_transport_utxos),
+                    len(result.removed_agg_state_utxos),
+                )
 
-            except (ScalingError, StateValidationError):
+            except (ScalingError, StateValidationError) as e:
+                logger.error("Scale down validation failed: %s", str(e))
                 return GovernanceResult(status=ProcessStatus.FAILED)
 
             if result.transaction is None:
