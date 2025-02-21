@@ -1,4 +1,4 @@
-"""Oracle governance orchself.estrato"""
+"""Oracle governance orchestrator"""
 
 import logging
 from collections.abc import Callable

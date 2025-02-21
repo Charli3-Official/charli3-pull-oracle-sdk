@@ -64,7 +64,7 @@ class Nodes(PlutusData):
             }
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> Dict[bytes, bytes]:
         """Convert to primitive map representation."""
         return {
             k.to_primitive(): v.to_primitive()
