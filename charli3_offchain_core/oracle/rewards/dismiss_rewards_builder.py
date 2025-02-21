@@ -6,22 +6,21 @@ from dataclasses import dataclass, replace
 
 import click
 from pycardano import (
+    Address,
     AssetName,
-    NativeScript,
-    Redeemer,
     MultiAsset,
-    Value,
+    NativeScript,
+    Network,
+    Redeemer,
     ScriptHash,
     TransactionOutput,
     UTxO,
-    Network,
+    Value,
     VerificationKeyHash,
-    Address,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.network import NetworkConfig
-from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.cli.base import LoadedKeys
 from charli3_offchain_core.cli.config.formatting import (
     print_information,
@@ -29,31 +28,31 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
     print_title,
 )
+from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
-    SomeAsset,
-    RewardTransportVariant,
     NoRewards,
+    RewardTransportVariant,
+    SomeAsset,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     DismissRewards,
 )
 from charli3_offchain_core.oracle.exceptions import (
     DismissRewardCancelledError,
-    NoPendingTransportsFoundError,
     NoExpiredTransportsYetError,
+    NoPendingTransportsFoundError,
     NoRewardsAvailableError,
 )
 from charli3_offchain_core.oracle.rewards.base import BaseBuilder, RewardTxResult
+from charli3_offchain_core.oracle.utils import asset_checks
 from charli3_offchain_core.oracle.utils.common import (
     get_reference_script_utxo,
 )
 from charli3_offchain_core.oracle.utils.state_checks import (
-    get_oracle_settings_by_policy_id,
     filter_pending_transports,
+    get_oracle_settings_by_policy_id,
 )
-
-from charli3_offchain_core.oracle.utils import asset_checks
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +119,7 @@ class DismissRewardsBuilder(BaseBuilder):
                 reward_token,
                 platform_reward,
                 network,
+                len(empty_transports),
             )
 
             # Create withdrawal output UTxO
@@ -142,6 +142,7 @@ class DismissRewardsBuilder(BaseBuilder):
                 script_outputs=[
                     *empty_transports,
                     platform_utxo.output,
+                    out_platform_reward,
                 ],
                 change_address=loaded_key.address,
                 signing_key=loaded_key.payment_sk,
@@ -192,7 +193,7 @@ class DismissRewardsBuilder(BaseBuilder):
         self,
         pending_transports: list[UTxO],
         validty_window: ValidityWindow,
-        reward_dismission_period_length,
+        reward_dismission_period_length: int,
     ) -> list[UTxO]:
         end_slot = validty_window.end_slot
         return [
@@ -275,7 +276,9 @@ class DismissRewardsBuilder(BaseBuilder):
 
 
 def create_empty_transports(
-    pending_transports: list[UTxO], safety_buffer, reward_token: NoDatum | SomeAsset
+    pending_transports: list[UTxO],
+    safety_buffer: int,
+    reward_token: NoDatum | SomeAsset,
 ) -> list[TransactionOutput]:
     new_transports = [
         create_empty_transport(transport, safety_buffer, reward_token)
@@ -303,10 +306,11 @@ def create_empty_transport(
     elif isinstance(reward_token, NoDatum):
         modified_utxo.output.amount.coin = safety_buffer
 
-    new_reward_transport_utxo = replace(
-        modified_utxo, datum=RewardTransportVariant(datum=NoRewards())
+    return replace(
+        modified_utxo.output,
+        datum=RewardTransportVariant(datum=NoRewards()),
+        datum_hash=None,
     )
-    return new_reward_transport_utxo.output
 
 
 def calculate_validity_window(
@@ -333,6 +337,7 @@ async def confirm_withdrawal_amount_and_address(
     reward_token: SomeAsset | NoDatum,
     platform_reward: int,
     network: Network,
+    total_transports: int,
 ) -> Address:
     """
     Prompts the user to confirm or change an address.
@@ -347,6 +352,7 @@ async def confirm_withdrawal_amount_and_address(
     )
 
     print_information(f"Total Accumulated Rewards: {platform_reward:_} {symbol}")
+    print_information(f"Total Rewards transport to proccess: {total_transports}")
 
     print_title(
         "Select a withdrawal address (derived from your mnemonic configuration):"
