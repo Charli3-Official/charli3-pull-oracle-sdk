@@ -193,17 +193,13 @@ class OracleSettingsDatum(PlutusData):
         if self.iqr_fence_multiplier <= 100:
             raise ValueError("Oracle Settings Validator: Must be fair about outliers")
 
-    def validate_based_on_config(self, oracle_conf: OracleConfiguration) -> None:
-        """Validate contents and throw ValueError if this instance will not satisfy on-chain checks"""
-        if oracle_conf.fee_token == NoDatum() and self.utxo_size_safety_buffer <= 0:
+        if self.utxo_size_safety_buffer <= 0:
             raise ValueError(
                 "Oracle Settings Validator: Must have positive utxo_size_safety_buffer"
             )
-        if oracle_conf.fee_token != NoDatum() and self.utxo_size_safety_buffer != 0:
-            raise ValueError(
-                "Oracle Settings Validator: Must have zero utxo_size_safety_buffer"
-            )
 
+    def validate_based_on_config(self, oracle_conf: OracleConfiguration) -> None:
+        """Validate contents and throw ValueError if this instance will not satisfy on-chain checks"""
         if (
             oracle_conf.pause_period_length <= self.time_uncertainty_platform
             or oracle_conf.reward_dismissing_period_length
