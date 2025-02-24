@@ -164,6 +164,7 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
             nodes_config=deployment_config.nodes,
             signing_key=payment_sk,
             platform_utxo=platform_utxo,
+            utxo_size_safety_buffer=deployment_config.timing.utxo_size_safety_buffer,
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:
