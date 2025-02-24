@@ -328,10 +328,10 @@ class OracleStartBuilder:
             # Calculate exact minimum and store rounded up value for other UTxOs
             if utxo_size_safety_buffer is None:
                 min_ada = min_lovelace_post_alonzo(output, self.chain_query.context)
+                self._standard_min_ada = math.ceil(min_ada / 1_000_000) * 1_000_000
             else:
-                min_ada = utxo_size_safety_buffer
+                self._standard_min_ada = utxo_size_safety_buffer
             # Round up to nearest ADA (lovelace to ADA, ceiling, back to lovelace)
-            self._standard_min_ada = math.ceil(min_ada / 1_000_000) * 1_000_000
             output.amount.coin = self._standard_min_ada
             output.datum.datum.utxo_size_safety_buffer = self._standard_min_ada
         else:
