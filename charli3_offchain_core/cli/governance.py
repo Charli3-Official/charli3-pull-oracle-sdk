@@ -349,7 +349,7 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
         (
             management_config,
             _,
-            payment_sk,
+            loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
@@ -382,7 +382,7 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
-            signing_key=payment_sk,
+            signing_key=loaded_key.payment_sk,
         )
 
         if result.status == ProcessStatus.FAILED:
@@ -401,7 +401,7 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
                 "Proceed signing and submitting scale-up tx?"
             ):
                 status, _ = await tx_manager.sign_and_submit(
-                    result.transaction, [payment_sk], wait_confirmation=True
+                    result.transaction, [loaded_key.payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
                     raise click.ClickException(f"Scale up failed: {status}")
@@ -452,7 +452,7 @@ async def scale_down(config: Path, amount: int, output: Path | None) -> None:
         (
             management_config,
             _,
-            payment_sk,
+            loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
@@ -485,7 +485,7 @@ async def scale_down(config: Path, amount: int, output: Path | None) -> None:
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
-            signing_key=payment_sk,
+            signing_key=loaded_key.payment_sk,
         )
 
         if result.status == ProcessStatus.FAILED:
@@ -504,7 +504,7 @@ async def scale_down(config: Path, amount: int, output: Path | None) -> None:
                 "Proceed signing and submitting scale-down tx?"
             ):
                 status, _ = await tx_manager.sign_and_submit(
-                    result.transaction, [payment_sk], wait_confirmation=True
+                    result.transaction, [loaded_key.payment_sk], wait_confirmation=True
                 )
                 if status != ProcessStatus.TRANSACTION_CONFIRMED:
                     raise click.ClickException(f"Scale down failed: {status}")
