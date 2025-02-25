@@ -322,6 +322,11 @@ To withdraw accumulated rewards, platform operators must use this command to spe
 
 Command: `charli3 oracle platform-collect --config testnet.yaml`
 
+### Dismiss Rewards (Platform)
+This command collects all rewards from reward transport UTxOs once the dismissal period for rewards has been completed. This behavior maintains a healthy workflow, as end-users require empty reward transport UTxOs to request new oracle feeds. If no empty reward transport UTxOs are available, the oracle halts execution. Batching of multiple reward transport UTxOs is possible
+
+Command: `charli3 oracle dismiss-rewards --batch-size N --config testnet.yaml`
+
 ### Oracle Pause
 
 #### Option 1: Single Signature Flow (threshold = 1)
@@ -497,44 +502,44 @@ odv-multisig-charli3-offchain-core/
 ├── charli3_offchain_core/
 │   ├── __init__.py
 │   │
-│   ├── api/                    # External API integrations
+│   ├── api/                                # External API integrations
 │   │   ├── __init__.py
-│   │   ├── base.py            # Base API client
-│   │   ├── kupo.py            # Kupo API integration
-│   │   └── blockfrost.py      # Blockfrost API integration
+│   │   ├── base.py                         # Base API client
+│   │   ├── kupo.py                         # Kupo API integration
+│   │   └── blockfrost.py                   # Blockfrost API integration
 │   │
-│   ├── blockchain/            # Blockchain operations
+│   ├── blockchain/                         # Blockchain operations
 │   │   ├── __init__.py
-│   │   ├── chain_query.py     # Unified chain query interface
-│   │   ├── transactions.py    # Transaction management
-│   │   ├── network.py         # Network configuration & timing
-│   │   └── exceptions.py      # Chain operation exceptions
+│   │   ├── chain_query.py                  # Unified chain query interface
+│   │   ├── transactions.py                 # Transaction management
+│   │   ├── network.py                      # Network configuration & timing
+│   │   └── exceptions.py                   # Chain operation exceptions
 │   │
-│   ├── constants/             # Application constants
+│   ├── constants/                          # Application constants
 │   │   ├── __init__.py
-│   │   ├── colors.py         # CLI color scheme
-│   │   └── status.py         # Process status enums
+│   │   ├── colors.py                       # CLI color scheme
+│   │   └── status.py                       # Process status enums
 │   │
-│   ├── contracts/            # Contract interaction layer
+│   ├── contracts/                          # Contract interaction layer
 │   │   ├── __init__.py
-│   │   └── aiken_loader.py   # Aiken blueprint loader & handler
+│   │   └── aiken_loader.py                 # Aiken blueprint loader & handler
 │   │
-│   ├── models/               # Data models
+│   ├── models/                             # Data models
 │   │   ├── __init__.py
-│   │   ├── oracle_datums.py  # Oracle datum types
-│   │   └── oracle_redeemers.py # Oracle redeemer types
+│   │   ├── oracle_datums.py                # Oracle datum types
+│   │   └── oracle_redeemers.py             # Oracle redeemer types
 │   │
-│   ├── oracle/               # Oracle operations
+│   ├── oracle/                             # Oracle operations
 │   │   ├── __init__.py
-│   │   ├── config.py         # Oracle configuration
-│   │   ├── exceptions.py     # Oracle-specific exceptions
+│   │   ├── config.py                       # Oracle configuration
+│   │   ├── exceptions.py                   # Oracle-specific exceptions
 │   │   │
-│   │   ├── deployment/       # Deployment operations
+│   │   ├── deployment/                     # Deployment operations
 │   │   │   ├── __init__.py
-│   │   │   ├── orchestrator.py # Deployment coordination
-│   │   │   ├── oracle_start_builder.py  # Start transaction
-│   │   │   ├── reference_script_builder.py  # Script creation
-│   │   │   └── reference_script_finder.py   # Script lookup
+│   │   │   ├── orchestrator.py             # Deployment coordination
+│   │   │   ├── oracle_start_builder.py     # Start transaction
+│   │   │   ├── reference_script_builder.py # Script creation
+│   │   │   └── reference_script_finder.py  # Script lookup
 │   │   ├── governance/                     # Governance operations
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py                     # Base Governance classes
@@ -547,66 +552,67 @@ odv-multisig-charli3-offchain-core/
 │   │   │   ├── base.py                     # Base Rewards classes
 │   │   │   ├── orchestrator.py             # Rewards coordination
 │   │   │   ├── node_collect_builder.py     # Node Reward Withdrawal
-│   │   │   └─ platform_collect_builder.py # Platform Reward Withdrawal
-│   │   ├── lifecycle/            # Lifecycle operations
+│   │   │   ├── platform_collect_builder.py # Platform Reward Withdrawal
+│   │   │   └── dismiss_rewards_builder.py  # Dismiss Reward Withdrawal (take all)
+│   │   ├── lifecycle/                      # Lifecycle operations
 │   │   │   ├── __init__.py
-│   │   │   ├── base.py           # Base lifecycle classes
-│   │   │   ├── orchestrator.py   # Lifecycle coordination
-│   │   │   └── pause_builder.py  # Pause transaction builder
-│   │   │   └── resume_builder.py # Resume transaction builder
+│   │   │   ├── base.py                     # Base lifecycle classes
+│   │   │   ├── orchestrator.py             # Lifecycle coordination
+│   │   │   └── pause_builder.py            # Pause transaction builder
+│   │   │   └── resume_builder.py           # Resume transaction builder
 │   │   │
-│   │   └── utils/           # Oracle utilities
+│   │   └── utils/                          # Oracle utilities
 │   │       ├── __init__.py
-│   │       ├── asset_checks.py # Asset validation
-│   │       ├── common.py      # Common utilities
-│   │       ├── rewards.py     # Reward calculations
-│   │       ├── signature_checks.py # Signature validation
-│   │       └── state_checks.py # State validation
+│   │       ├── asset_checks.py             # Asset validation
+│   │       ├── common.py                   # Common utilities
+│   │       ├── rewards.py                  # Reward calculations
+│   │       ├── signature_checks.py         # Signature validation
+│   │       └── state_checks.py             # State validation
 │   │
-│   ├── platform/             # Platform operations
+│   ├── platform/                           # Platform operations
 │   │   ├── __init__.py
-│   │   └── auth/            # Platform authorization
+│   │   └── auth/                           # Platform authorization
 │   │       ├── __init__.py
-│   │       ├── orchestrator.py        # Auth orchestration
-│   │       ├── token_builder.py       # Token building
-│   │       ├── token_finder.py        # Token lookup
-│   │       └── token_script_builder.py # Script building
+│   │       ├── orchestrator.py             # Auth orchestration
+│   │       ├── token_builder.py            # Token building
+│   │       ├── token_finder.py             # Token lookup
+│   │       └── token_script_builder.py     # Script building
 │   │
-│   └── cli/                  # Command line interface
+│   └── cli/                                # Command line interface
 │       ├── __init__.py
-│       ├── base.py           # CLI utilities
-│       ├── oracle.py         # Oracle commands
-│       ├── platform.py       # Platform commands
-│       ├── transaction.py    # Transaction processing
-│       ├── governance.py     # Governance utilities
-│       ├── rewards.py        # Reward utilities
-│       ├── setup.py          # Setup utilities
-│       └── config/           # CLI configuration
+│       ├── base.py                         # CLI utilities
+│       ├── oracle.py                       # Oracle commands
+│       ├── platform.py                     # Platform commands
+│       ├── transaction.py                  # Transaction processing
+│       ├── governance.py                   # Governance utilities
+│       ├── rewards.py                      # Reward utilities
+│       ├── setup.py                        # Setup utilities
+│       └── config/                         # CLI configuration
 │           ├── __init__.py
-│           ├── deployment.py  # Deployment config
-│           ├── platform.py    # Platform config
-│           ├── network.py     # Network config
-│           ├── token.py       # Token config
-│           ├── settings.py    # Settings config
-│           ├── formatting.py  # Output formatting
-│           ├── utils.py      # Config utilities
-│           ├── keys.py      # Key management
-│           ├── multisig.py  # Multisig config
-│           └── management.py # Lifecycle management config
+│           ├── deployment.py               # Deployment config
+│           ├── platform.py                 # Platform config
+│           ├── network.py                  # Network config
+│           ├── token.py                    # Token config
+│           ├── settings.py                 # Settings config
+│           ├── formatting.py               # Output formatting
+│           ├── utils.py                    # Config utilities
+│           ├── keys.py                     # Key management
+│           ├── multisig.py                 # Multisig config
+│           └── management.py               # Lifecycle management config
 │
-├── docs/                   # Documentation
-│   ├── configuration.md    # Configuration guide
-│   └── deployment.md       # Deployment guide
+├── docs/                                   # Documentation
+│   ├── configuration.md                    # Configuration guide
+│   └── deployment.md                       # Deployment guide
 │
-├── examples/               # Example configurations
-│   ├── mainnet.yaml        # Mainnet deployment config
-│   └── testnet.yaml        # Testnet deployment config
+├── examples/                               # Example configurations
+│   ├── mainnet.yaml                        # Mainnet deployment config
+│   └── testnet.yaml                        # Testnet deployment config
 │
-├── .gitignore              # Git ignore rules
-├── .pre-commit-config.yaml # Pre-commit hooks
-├── pyproject.toml          # Project configuration
-├── poetry.lock             # Dependency lock file
-└── README.md               # Project readme
+├── .gitignore                              # Git ignore rules
+├── .pre-commit-config.yaml                 # Pre-commit hooks
+├── pyproject.toml                          # Project configuration
+├── poetry.lock                             # Dependency lock file
+└── README.md                               # Project readme
 ```
 
 ### Running Tests
