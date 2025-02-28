@@ -23,7 +23,6 @@ from charli3_offchain_core.models.oracle_datums import (
     AggStateVariant,
     NoDatum,
     NoRewards,
-    OracleSettingsDatum,
     RewardTransportVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
@@ -203,21 +202,6 @@ class OracleScaleBuilder:
                 logger.error("Reference script UTxO not found")
                 raise ValueError("Reference script UTxO not found")
 
-            # Calculate validity window with logging
-            settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
-                utxos, self.policy_id
-            )
-            current_time, validity_start, validity_end = (
-                self._get_current_time_and_validity_window(settings_datum)
-            )
-
-            logger.info(
-                "Time window - Current: %d, Start: %d, End: %d",
-                current_time,
-                validity_start,
-                validity_end,
-            )
-
             # Find and log UTxOs to remove
             transport_utxos = filter_utxos_by_token_name(
                 utxos, self.policy_id, "RewardTransport"
@@ -239,6 +223,9 @@ class OracleScaleBuilder:
                 len(empty_transports),
                 scale_amount,
             )
+
+            # Get current time for filtering expired agg states
+            current_time = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
 
             # Get expired/empty agg states with detailed logging
             expired_and_empty_agg_states = filter_valid_agg_states(
@@ -318,15 +305,12 @@ class OracleScaleBuilder:
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[(platform_utxo, None, platform_script), *script_inputs],
                 script_outputs=[platform_utxo.output],
-                reference_inputs={settings_utxo},
                 mint=mint,
                 mint_redeemer=Redeemer(Scale()),
                 mint_script=nft_minting_script,
                 required_signers=required_signers,
                 change_address=change_address,
                 signing_key=signing_key,
-                validity_start=validity_start,
-                validity_end=validity_end,
             )
 
             return ScaleDownResult(
@@ -337,36 +321,3 @@ class OracleScaleBuilder:
 
         except Exception as e:
             raise ScalingError(f"Failed to build scale down transaction: {e}") from e
-
-    def _get_current_time_and_validity_window(
-        self, settings_datum: OracleSettingsDatum
-    ) -> tuple[int, int, int]:
-        """Get closing time and slot ranges with enhanced logging."""
-        validity_start = self.tx_manager.chain_query.last_block_slot
-
-        # Log time uncertainty configuration
-        logger.info(
-            "Time uncertainty configuration: %d ms",
-            settings_datum.time_uncertainty_platform,
-        )
-
-        validity_end = validity_start + (
-            settings_datum.time_uncertainty_platform // 1000
-        )
-
-        conversion = self.tx_manager.chain_query.config.network_config.slot_to_posix
-        curr_time_ms = (conversion(validity_start) + conversion(validity_end)) // 2
-
-        # Log detailed time calculations
-        logger.info(
-            "Time calculations - Last block slot: %d, "
-            "Validity start (POSIX): %d, "
-            "Validity end (POSIX): %d, "
-            "Current time (ms): %d",
-            validity_start,
-            conversion(validity_start),
-            conversion(validity_end),
-            curr_time_ms,
-        )
-
-        return curr_time_ms, validity_start, validity_end
