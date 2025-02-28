@@ -323,7 +323,7 @@ To withdraw accumulated rewards, platform operators must use this command to spe
 Command: `charli3 oracle platform-collect --config testnet.yaml`
 
 ### Dismiss Rewards (Platform)
-This command collects all rewards from reward transport UTxOs once the dismissal period for rewards has been completed. This behavior maintains a healthy workflow, as end-users require empty reward transport UTxOs to request new oracle feeds. If no empty reward transport UTxOs are available, the oracle halts execution. Batching of multiple reward transport UTxOs is possible
+  This command collects all rewards from reward transport UTxOs once the dismissal period for rewards has been completed. Batching of multiple reward transport UTxOs is possible
 
 Command: `charli3 oracle dismiss-rewards --batch-size N --config testnet.yaml`
 

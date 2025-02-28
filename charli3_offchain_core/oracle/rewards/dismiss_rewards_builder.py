@@ -32,6 +32,7 @@ from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     NoRewards,
+    RewardConsensusPending,
     RewardTransportVariant,
     SomeAsset,
 )
@@ -61,9 +62,9 @@ logger = logging.getLogger(__name__)
 class ValidityWindow:
     """Represents the validity window for a transaction."""
 
-    start_slot: int | None = None
-    end_slot: int | None = None
-    current_time: int | None = None
+    start: int
+    end: int
+    current_time: int
 
 
 class DismissRewardsBuilder(BaseBuilder):
@@ -97,6 +98,12 @@ class DismissRewardsBuilder(BaseBuilder):
                 in_core_datum.time_uncertainty_platform
             )
 
+            # Conversion
+            start_slot, end_slot = validity_window_to_slot(
+                self.tx_manager.chain_query.config.network_config,
+                validity_window.start,
+                validity_window.end,
+            )
             # Find pending transports and the accumulated reward
             unprocessed_transports, platform_reward = self.find_pending_transports(
                 max_inputs,
@@ -146,8 +153,8 @@ class DismissRewardsBuilder(BaseBuilder):
                 ],
                 change_address=loaded_key.address,
                 signing_key=loaded_key.payment_sk,
-                validity_start=validity_window.start_slot,
-                validity_end=validity_window.end_slot,
+                validity_start=start_slot,
+                validity_end=end_slot,
                 required_signers=required_signers,
             )
 
@@ -179,30 +186,54 @@ class DismissRewardsBuilder(BaseBuilder):
             time_uncertainty_platform,
         )
 
-        start_slot, end_slot = validity_window_to_slot(
-            self.tx_manager.chain_query.config.network_config,
-            start,
-            end,
-        )
-
-        return ValidityWindow(
-            start_slot=start_slot, end_slot=end_slot, current_time=current
-        )
+        return ValidityWindow(start=start, end=end, current_time=current)
 
     def _must_be_after_dismissing_period(
         self,
         pending_transports: list[UTxO],
-        validty_window: ValidityWindow,
-        reward_dismission_period_length: int,
+        validity_window: ValidityWindow,
+        reward_dismissal_period_length: int,
     ) -> list[UTxO]:
-        end_slot = validty_window.end_slot
-        return [
-            transport
-            for transport in pending_transports
-            if transport.output.datum.datum.aggregation.message.timestamp
-            + reward_dismission_period_length
-            > end_slot
-        ]
+        """
+        Filter transports that have exceeded the reward dismissal period.
+
+        Args:
+            pending_transports: List of UTxO objects to filter
+            validity_window: Transaction validation information
+            reward_dismissal_period_length: Length of the dismissal period
+
+        Returns:
+            List of UTxO objects that have exceeded the dismissal period
+        """
+        eligible_transports = []
+        start_slot = validity_window.start
+
+        if start_slot is None:
+            raise ValueError("start_slot is None")
+
+        for transport in pending_transports:
+            transport_datum = transport.output.datum
+
+            if not isinstance(transport_datum, RewardTransportVariant):
+                continue
+
+            if not isinstance(transport_datum.datum, RewardConsensusPending):
+                continue
+
+            # Message creation time
+            creation_time = transport_datum.datum.aggregation.message.timestamp
+
+            # Dismissal start
+            expiration_time = creation_time + reward_dismissal_period_length
+
+            logger.info(f"Creation Message time: {creation_time}")
+            logger.info(f"Expiration Message time: {expiration_time}")
+            logger.info(f"Start tx validation: {start_slot}")
+            # Check if the dismissal period has passed and the validity start transaction can begin.
+            if expiration_time <= start_slot:
+                eligible_transports.append(transport)
+
+        return eligible_transports
 
     def find_pending_transports(
         self,
