@@ -208,10 +208,13 @@ def get_oracle_settings_by_policy_id(
         settings_utxo = filter_oracle_settings_utxo(utxos, policy_id)
         settings_utxo_datum = None
 
-        if settings_utxo.output.datum:
-            settings_utxo_datum = settings_utxo.output.datum = (
-                OracleSettingsVariant.from_cbor(settings_utxo.output.datum.cbor)
+        if settings_utxo.output.datum and not isinstance(
+            settings_utxo.output.datum, OracleSettingsVariant
+        ):
+            settings_utxo.output.datum = OracleSettingsVariant.from_cbor(
+                settings_utxo.output.datum.cbor
             )
+        settings_utxo_datum = settings_utxo.output.datum
 
         return settings_utxo_datum.datum, settings_utxo
 
@@ -239,10 +242,13 @@ def get_reward_account_by_policy_id(
         reward_account_utxo = filter_reward_account_utxo(utxos, policy_id)
         reward_account_datum = None
 
-        if reward_account_utxo.output.datum:
-            reward_account_datum = reward_account_utxo.output.datum = (
-                RewardAccountVariant.from_cbor(reward_account_utxo.output.datum.cbor)
+        if reward_account_utxo.output.datum and not isinstance(
+            reward_account_utxo.output.datum, RewardAccountVariant
+        ):
+            reward_account_utxo.output.datum = RewardAccountVariant.from_cbor(
+                reward_account_utxo.output.datum.cbor
             )
+        reward_account_datum = reward_account_utxo.output.datum
 
         return reward_account_datum.datum, reward_account_utxo
 
