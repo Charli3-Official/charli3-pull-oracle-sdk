@@ -311,6 +311,29 @@ Payment handling differs based on the reward type:
 
 Command: `charli3 oracle del-nodes --config testnet.yaml`
 
+### Oracle Scaling Operations
+
+You can adjust the Oracle Data Verification (ODV) capacity by scaling up (adding new UTxO pairs) or scaling down (removing unused UTxO pairs).
+
+#### Scale Up
+
+Increase ODV capacity by creating new pairs of RewardTransport and AggregationState UTxOs.
+
+Command:
+```bash
+charli3 oracle scale-up --config deploy-testnet.yaml --amount 2
+```
+
+#### Scale Down
+
+Decrease ODV capacity by removing empty UTxO pairs and burning tokens.
+
+Command:
+```bash
+charli3 oracle scale-down --config deploy-testnet.yaml --amount 2
+```
+**Note:** When scaling down, only empty transport UTxOs and empty/expired aggregation state UTxOs will be removed. The system will validate that there are enough eligible UTxOs before building the transaction.
+
 ## Rewards Operations
 ### Node Collect
 This command provides a guided process for Node Operators to withdraw their accumulated rewards.  Node Operators must provide their payment verification key hash (VKH) to authenticate and initiate the withdrawal. The tool then allows the selection of a  withdrawal address, either a derived enterprise address or a user-specified address. Finally, it constructs the necessary transaction to withdraw the rewards, supporting both ADA and any token as reward currencies.
