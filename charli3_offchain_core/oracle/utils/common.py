@@ -18,7 +18,6 @@ from charli3_offchain_core.models.base import PosixTime
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
-    NoDatum,
     SomeAsset,
     StandardOracleDatum,
 )

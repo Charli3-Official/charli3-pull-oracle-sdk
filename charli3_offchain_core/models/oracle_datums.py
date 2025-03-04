@@ -1,7 +1,7 @@
 """Oracle datums for the oracle core contract"""
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Union, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List, Union
 
 from pycardano import PlutusData, VerificationKeyHash
 
@@ -309,7 +309,7 @@ class PriceData(PlutusData):
         return len(self.price_map) == 0
 
     @classmethod
-    def set_price_map(cls, price: int, timestamp: int, expiry: int):
+    def set_price_map(cls, price: int, timestamp: int, expiry: int) -> "PriceData":
         """set price_map"""
         price_map = {0: price, 1: timestamp, 2: expiry}
         return cls(price_map)

@@ -25,15 +25,15 @@ from charli3_offchain_core.blockchain.transactions import (
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     Aggregation,
-    StandardOracleDatum,
-    PriceData,
     NoDatum,
     NoRewards,
     OracleSettingsDatum,
+    PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
+    StandardOracleDatum,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     CalculateRewards,

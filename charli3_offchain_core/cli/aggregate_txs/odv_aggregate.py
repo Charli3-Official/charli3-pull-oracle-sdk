@@ -11,7 +11,6 @@ from pycardano import PaymentExtendedSigningKey, UTxO, VerificationKeyHash
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     StandardOracleDatum,
-    NoDatum,
 )
 from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,
@@ -216,13 +215,13 @@ async def status(config: Path) -> None:
         raise click.ClickException(str(e)) from e
 
 
-def is_expired_agg_state(utxo, current_time) -> bool:
+def is_expired_agg_state(utxo: UTxO, current_time: int) -> bool:
     """Check if a UTxO is an expired aggregator state."""
     datum = utxo.output.datum
     return (
         datum is not None
         and isinstance(datum, StandardOracleDatum)
-        and not datum.price_data is None
+        and datum.price_data is not None
         and datum.price_data.is_expired(current_time)
     )
 

@@ -7,7 +7,6 @@ from pycardano import ScriptHash, UTxO
 
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
-    StandardOracleDatum,
     NoRewards,
     OracleDatum,
     OracleSettingsDatum,
@@ -16,6 +15,7 @@ from charli3_offchain_core.models.oracle_datums import (
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
+    StandardOracleDatum,
 )
 from charli3_offchain_core.oracle.exceptions import StateValidationError
 from charli3_offchain_core.oracle.utils import asset_checks
