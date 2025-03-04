@@ -20,10 +20,10 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateVariant,
-    NoDatum,
     NoRewards,
+    PriceData,
     RewardTransportVariant,
+    StandardOracleDatum,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     Scale,
@@ -137,7 +137,7 @@ class OracleScaleBuilder:
                             {self.policy_id.payload: {aggstate_name.encode(): 1}}
                         ),
                     ),
-                    datum=AggStateVariant(datum=NoDatum()),
+                    datum=StandardOracleDatum(price_data=PriceData.empty()),
                 )
                 for _ in range(scale_amount)
             ]
@@ -266,13 +266,13 @@ class OracleScaleBuilder:
             # Log AggState UTxO details
             for i, utxo in enumerate(selected_agg_states):
                 datum = utxo.output.datum
-                if isinstance(datum, AggStateVariant):
-                    if isinstance(datum.datum, NoDatum):
+                if isinstance(datum, StandardOracleDatum):
+                    if datum.price_data.is_empty:
                         state_type = "Empty"
                         expiry = None
                     else:
                         state_type = "Expired"
-                        expiry = datum.datum.aggstate.expiry_timestamp
+                        expiry = datum.price_data.get_expirity_time
 
                     logger.info(
                         "AggState UTxO %d: TxId=%s#%d, Type=%s, Expiry=%s",
