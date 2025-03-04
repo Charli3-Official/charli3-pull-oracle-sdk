@@ -270,6 +270,10 @@ class ChainQuery:
 
         # Create new
         try:
+            logger.info(
+                "Creating collateral for address: %s, amount: %d", address, amount
+            )
+
             await self.create_collateral(address, signing_key, amount)
             # Refresh cache and try find again
             await self._refresh_utxos([address])
