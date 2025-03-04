@@ -1,0 +1,55 @@
+local_script: false
+mnemonic: test test test test test test test test test test test test test test test test test test test test test test test sauce
+
+# Oracle addresses
+oracle_script_address: addr_test1wq4zmn7d93dw0wsz05nmdcdkn3mjff98flxhzqne33896xq2464cv
+multisig_oracle_script_address: addr_test1wruvcdqgenkl6lsrqthwm5ez2ecvz24az6upwxqvf2hda7sgxf7dg
+
+# Test data for oracle deployment
+oracle_owner:
+  script_start_slot: 1
+  reward_token_name: "C3TESTRE"
+  reward_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+# Oracle settings
+oracle_settings:
+  # Basic timing parameters
+  pause_period: 3600000
+  reward_dismissing_period: 7200000
+  aggregation_liveness_period: 300000
+  time_uncertainty_aggregation: 120000
+  time_uncertainty_platform: 180000
+
+  # Oracle behavior parameters
+  iqr_fence_multiplier: 150
+  utxo_size_safety_buffer: 5500000
+
+  # Node and fee configuration
+  node_fee: 1000000
+  platform_fee: 500000
+
+  # Multisig configuration
+  multisig_threshold: 1
+  transport_count: 4
+
+# Updated settings for testing updates
+updated_oracle_settings:
+  pause_period: 1800000
+  reward_dismissing_period: 3600000
+  aggregation_liveness_period: 600000
+  time_uncertainty_aggregation: 180000
+  time_uncertainty_platform: 240000
+  iqr_fence_multiplier: 200
+  utxo_size_safety_buffer: 6000000
+  node_fee: 1500000
+  platform_fee: 750000
+  transport_count: 6
+
+# Simulation data
+nodes_values:
+  - 41150
+  - 41150
+  - 41200
+  - 41100
+  - 41175
