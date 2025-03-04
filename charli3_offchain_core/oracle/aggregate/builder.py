@@ -267,10 +267,17 @@ class OracleTransactionBuilder:
                 oracle_fee_rate_utxo = common.get_fee_rate_reference_utxo(
                     self.tx_manager.chain_query, settings_datum.fee_info.rate_nft
                 )
+                if oracle_fee_rate_utxo.output.datum is None:
+                    raise ValueError(
+                        "Oracle fee rate datum is None. "
+                        "A valid fee rate datum is required to scale rewards."
+                    )
+
+                standard_datum: StandardOracleDatum = oracle_fee_rate_utxo.output.datum
                 reference_inputs.add(oracle_fee_rate_utxo)
                 rewards.scale_rewards_by_rate(
                     reward_prices,
-                    oracle_fee_rate_utxo.output.datum.price_data.get_price,
+                    standard_datum,
                 )
 
             # Calculate minimum fee
