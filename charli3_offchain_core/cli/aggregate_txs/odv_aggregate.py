@@ -10,7 +10,7 @@ from pycardano import PaymentExtendedSigningKey, UTxO, VerificationKeyHash
 
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
-    AggStateVariant,
+    StandardOracleDatum,
     NoDatum,
 )
 from charli3_offchain_core.oracle.aggregate.builder import (
@@ -182,10 +182,7 @@ async def status(config: Path) -> None:
         expired_agg_states = [
             utxo
             for utxo in valid_agg_states
-            if utxo.output.datum
-            and isinstance(utxo.output.datum, AggStateVariant)
-            and not isinstance(utxo.output.datum.datum, NoDatum)
-            and utxo.output.datum.datum.aggstate.expiry_timestamp < current_time
+            if is_expired_agg_state(utxo, current_time)
         ]
 
         # Display status
@@ -219,19 +216,30 @@ async def status(config: Path) -> None:
         raise click.ClickException(str(e)) from e
 
 
+def is_expired_agg_state(utxo, current_time) -> bool:
+    """Check if a UTxO is an expired aggregator state."""
+    datum = utxo.output.datum
+    return (
+        datum is not None
+        and isinstance(datum, StandardOracleDatum)
+        and not datum.price_data is None
+        and datum.price_data.is_expired(current_time)
+    )
+
+
 def _print_expired_aggstate(utxo: UTxO) -> None:
-    """Print details of expired AggState UTxO."""
-    if not isinstance(utxo.output.datum, AggStateVariant):
+    """Print details of expired StandardOracleDatum UTxO."""
+    if not isinstance(utxo.output.datum, StandardOracleDatum):
         return
 
-    datum = utxo.output.datum.datum
-    if isinstance(datum, NoDatum):
+    price_data = utxo.output.datum.price_data
+    if not price_data.is_valid:
         return
 
     click.echo(f"\nUTxO: {utxo.input.transaction_id}#{utxo.input.index}")
-    click.echo(f"Created At: {datum.aggstate.created_at}")
-    click.echo(f"Expired At: {datum.aggstate.expiry_timestamp}")
-    click.echo(f"Oracle Feed: {datum.aggstate.oracle_feed}")
+    click.echo(f"Created At: {price_data.get_creation_time}")
+    click.echo(f"Expired At: {price_data.get_expirity_time}")
+    click.echo(f"Oracle Feed: {price_data.get_price}")
 
 
 def _print_odv_summary(result: OdvResult) -> None:
@@ -254,11 +262,11 @@ def _print_odv_summary(result: OdvResult) -> None:
     click.echo(f"  Total Rewards Amount: {total_fee}")
 
     # Print AggState UTxO details
-    agg_datum = result.agg_state_output.datum.datum
+    agg_datum = result.agg_state_output.datum.price_data
     click.echo("\nAggState Details:")
-    click.echo(f"  Oracle Feed: {agg_datum.aggstate.oracle_feed}")
-    click.echo(f"  Created At: {agg_datum.aggstate.created_at}")
-    click.echo(f"  Expires At: {agg_datum.aggstate.expiry_timestamp}")
+    click.echo(f"  Oracle Feed: {agg_datum.get_price}")
+    click.echo(f"  Created At: {agg_datum.get_creation_time}")
+    click.echo(f"  Expires At: {agg_datum.get_creation_time}")
 
     click.echo(f"\nTransaction Fee: {result.transaction.transaction_body.fee}")
 

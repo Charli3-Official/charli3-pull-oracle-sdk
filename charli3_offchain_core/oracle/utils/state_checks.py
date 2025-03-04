@@ -6,8 +6,8 @@ from collections.abc import Sequence
 from pycardano import ScriptHash, UTxO
 
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateVariant,
     NoDatum,
+    StandardOracleDatum,
     NoRewards,
     OracleDatum,
     OracleSettingsDatum,
@@ -66,11 +66,13 @@ def convert_cbor_to_agg_states(agg_state_utxos: Sequence[UTxO]) -> list[UTxO]:
     """
     result: list[UTxO] = []
     for utxo in agg_state_utxos:
-        if utxo.output.datum and not isinstance(utxo.output.datum, AggStateVariant):
+        if utxo.output.datum and not isinstance(utxo.output.datum, StandardOracleDatum):
             if utxo.output.datum.cbor:
-                utxo.output.datum = AggStateVariant.from_cbor(utxo.output.datum.cbor)
+                utxo.output.datum = StandardOracleDatum.from_cbor(
+                    utxo.output.datum.cbor
+                )
                 result.append(utxo)
-        elif utxo.output.datum and isinstance(utxo.output.datum, AggStateVariant):
+        elif utxo.output.datum and isinstance(utxo.output.datum, StandardOracleDatum):
             result.append(utxo)
     return result
 
@@ -133,8 +135,8 @@ def filter_empty_agg_states(utxos: Sequence[UTxO]) -> list[UTxO]:
         utxo
         for utxo in utxos_with_datum
         if utxo.output.datum
-        and isinstance(utxo.output.datum, AggStateVariant)
-        and isinstance(utxo.output.datum.datum, NoDatum)
+        and isinstance(utxo.output.datum, StandardOracleDatum)
+        and utxo.output.datum.price_data.is_valid
     ]
 
 
@@ -272,14 +274,10 @@ def filter_valid_agg_states(utxos: Sequence[UTxO], current_time: int) -> list[UT
         utxo
         for utxo in utxos_with_datum
         if utxo.output.datum
-        and isinstance(utxo.output.datum, AggStateVariant)
+        and isinstance(utxo.output.datum, StandardOracleDatum)
         and (
-            isinstance(utxo.output.datum.datum, NoDatum)  # Empty state
-            or (
-                not isinstance(utxo.output.datum.datum, NoDatum)
-                and utxo.output.datum.datum.aggstate.expiry_timestamp
-                < current_time  # Expired state
-            )
+            utxo.output.datum.price_data.is_empty  # Empty state
+            or (utxo.output.datum.price_data.is_expired(current_time))  # Expired state
         )
     ]
 
@@ -420,15 +418,15 @@ def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
 
         if not isinstance(transport_variant, RewardTransportVariant):
             return False
-        if not isinstance(agg_state_variant, AggStateVariant):
+        if not isinstance(agg_state_variant, StandardOracleDatum):
             return False
 
         # Check valid state combinations
         transport_empty = isinstance(transport_variant.datum, NoRewards)
-        agg_state_empty = isinstance(agg_state_variant.datum, NoDatum)
+        agg_state_empty = agg_state_variant.price_data.is_empty
 
         transport_pending = isinstance(transport_variant.datum, RewardConsensusPending)
-        agg_state_active = not isinstance(agg_state_variant.datum, NoDatum)
+        agg_state_active = not agg_state_variant.price_data.is_valid
 
         return (transport_empty and agg_state_empty) or (
             transport_pending and agg_state_active

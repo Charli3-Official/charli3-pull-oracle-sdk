@@ -6,7 +6,7 @@ from fractions import Fraction
 from pycardano import Asset, AssetName, ScriptHash, UTxO, Value, VerificationKeyHash
 
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateDatum,
+    StandardOracleDatum,
     FeedVkh,
     NodeFeed,
     RewardAccountDatum,
@@ -29,10 +29,10 @@ def calculate_min_fee_amount(reward_prices: RewardPrices, node_count: int) -> in
 
 
 def scale_rewards_by_rate(
-    reward_prices: RewardPrices, rate_datum: AggStateDatum
+    reward_prices: RewardPrices, rate_datum: StandardOracleDatum
 ) -> None:
     """Calculate new reward prices based on the fee rate."""
-    rate = Fraction(rate_datum.oracle_feed, COIN_PRECISION)
+    rate = Fraction(rate_datum.price_data.get_price, COIN_PRECISION)
 
     def convert_reward(reward: int) -> int:
         return math.ceil(rate * Fraction(reward))

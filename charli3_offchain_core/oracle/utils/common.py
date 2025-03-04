@@ -18,9 +18,9 @@ from charli3_offchain_core.models.base import PosixTime
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
-    AggStateVariant,
     NoDatum,
     SomeAsset,
+    StandardOracleDatum,
 )
 from charli3_offchain_core.oracle.utils.asset_checks import validate_token_quantities
 from charli3_offchain_core.oracle.utils.state_checks import (
@@ -58,16 +58,18 @@ def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) ->
 
         for utxo in utxos:
             if utxo.output.datum and utxo.output.datum.cbor:
-                utxo.output.datum = AggStateVariant.from_cbor(utxo.output.datum.cbor)
+                utxo.output.datum = StandardOracleDatum.from_cbor(
+                    utxo.output.datum.cbor
+                )
 
         current_time = int(time.time_ns() * 1e-6)
         non_expired_agg_states = [
             utxo
             for utxo in utxos
             if utxo.output.datum
-            and isinstance(utxo.output.datum, AggStateVariant)
-            and not isinstance(utxo.output.datum.datum, NoDatum)
-            and utxo.output.datum.datum.aggstate.expiry_timestamp > current_time
+            and isinstance(utxo.output.datum, StandardOracleDatum)
+            and utxo.output.datum.price_data.is_valid
+            and utxo.output.datum.price_data.is_active(current_time)
         ]
         if not non_expired_agg_states:
             raise ValidationError(
@@ -75,7 +77,7 @@ def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) ->
             )
 
         non_expired_agg_states.sort(
-            key=lambda utxo: utxo.output.datum.datum.aggstate.expiry_timestamp
+            key=lambda utxo: utxo.output.datum.price_data.get_expirity_time
         )
         return non_expired_agg_states.pop()
     except Exception as e:

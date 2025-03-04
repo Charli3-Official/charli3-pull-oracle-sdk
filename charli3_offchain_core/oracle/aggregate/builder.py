@@ -25,8 +25,8 @@ from charli3_offchain_core.blockchain.transactions import (
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     Aggregation,
-    AggStateDatum,
-    AggStateVariant,
+    StandardOracleDatum,
+    PriceData,
     NoDatum,
     NoRewards,
     OracleSettingsDatum,
@@ -34,7 +34,6 @@ from charli3_offchain_core.models.oracle_datums import (
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
-    SomeAggStateDatum,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     CalculateRewards,
@@ -270,7 +269,8 @@ class OracleTransactionBuilder:
                 )
                 reference_inputs.add(oracle_fee_rate_utxo)
                 rewards.scale_rewards_by_rate(
-                    reward_prices, oracle_fee_rate_utxo.output.datum.datum.aggstate
+                    reward_prices,
+                    oracle_fee_rate_utxo.output.datum.price_data.get_price,
                 )
 
             # Calculate minimum fee
@@ -506,13 +506,9 @@ class OracleTransactionBuilder:
         return TransactionOutput(
             address=self.script_address,
             amount=agg_state.output.amount,
-            datum=AggStateVariant(
-                datum=SomeAggStateDatum(
-                    aggstate=AggStateDatum(
-                        oracle_feed=median_value,
-                        expiry_timestamp=current_time + liveness_period,
-                        created_at=current_time,
-                    )
+            datum=StandardOracleDatum(
+                price_data=PriceData.set_price_map(
+                    median_value, current_time, current_time + liveness_period
                 )
             ),
         )
