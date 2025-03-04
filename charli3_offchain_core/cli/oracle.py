@@ -8,7 +8,13 @@ import click
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.formatting import format_status_update
-from charli3_offchain_core.cli.governance import add_nodes, del_nodes, update_settings
+from charli3_offchain_core.cli.governance import (
+    add_nodes,
+    del_nodes,
+    scale_down,
+    scale_up,
+    update_settings,
+)
 from charli3_offchain_core.cli.rewards import node_collect, platform_collect
 from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
@@ -62,6 +68,8 @@ oracle.add_command(
 )
 
 oracle.add_command(update_settings)
+oracle.add_command(scale_up)
+oracle.add_command(scale_down)
 oracle.add_command(add_nodes)
 oracle.add_command(del_nodes)
 oracle.add_command(node_collect)
@@ -129,7 +137,9 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
             platform_script
         )
         logger.info(
-            f"Using platform UTxO: {platform_utxo.input.transaction_id}#{platform_utxo.input.index}"
+            "Using platform UTxO: %s#%s",
+            platform_utxo.input.transaction_id,
+            platform_utxo.input.index,
         )
 
         # Handle reference scripts
