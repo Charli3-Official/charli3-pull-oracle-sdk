@@ -11,6 +11,7 @@ services:
       - "${HOST_OGMIOS_PORT}:1337"
       - "${HOST_KUPO_PORT}:1442"
     volumes:
+      - cluster-data:/clusters
       - ../config/node.properties:/app/config/node.properties
     env_file:
       - ../config/env
@@ -21,8 +22,10 @@ services:
 
   yaci-viewer:
     image: bloxbean/yaci-viewer:${tag}
-    profiles: ["viewer"]
     ports:
       - "${HOST_VIEWER_PORT}:5173"
     env_file:
       - ../config/env
+
+volumes:
+  cluster-data:
