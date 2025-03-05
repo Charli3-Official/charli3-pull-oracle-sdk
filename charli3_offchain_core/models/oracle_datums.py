@@ -321,7 +321,7 @@ class PriceData(PlutusData):
 
 
 @dataclass
-class StandardOracleDatum(PlutusData):
+class AggState(PlutusData):
     """Oracle Datum"""
 
     CONSTR_ID = 0
@@ -356,15 +356,12 @@ class RewardTransportVariant(PlutusData):
 class OracleDatum(PlutusData):
     """
     Main oracle datum with four possible variants:
-    1. StandardOracleDatum
+    1. AggState
     2. OracleSettingsVariant
     3. RewardAccountVariant
     4. RewardTransportVariant
     """
 
     variant: (
-        StandardOracleDatum
-        | RewardAccountVariant
-        | RewardTransportVariant
-        | OracleSettingsVariant
+        AggState | RewardAccountVariant | RewardTransportVariant | OracleSettingsVariant
     )

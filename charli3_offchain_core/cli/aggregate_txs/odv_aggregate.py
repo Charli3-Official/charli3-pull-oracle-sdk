@@ -10,7 +10,7 @@ from pycardano import PaymentExtendedSigningKey, UTxO, VerificationKeyHash
 
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
-    StandardOracleDatum,
+    AggState,
 )
 from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,
@@ -220,15 +220,15 @@ def is_expired_agg_state(utxo: UTxO, current_time: int) -> bool:
     datum = utxo.output.datum
     return (
         datum is not None
-        and isinstance(datum, StandardOracleDatum)
+        and isinstance(datum, AggState)
         and datum.price_data is not None
         and datum.price_data.is_expired(current_time)
     )
 
 
 def _print_expired_aggstate(utxo: UTxO) -> None:
-    """Print details of expired StandardOracleDatum UTxO."""
-    if not isinstance(utxo.output.datum, StandardOracleDatum):
+    """Print details of expired AggState UTxO."""
+    if not isinstance(utxo.output.datum, AggState):
         return
 
     price_data = utxo.output.datum.price_data

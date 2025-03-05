@@ -27,6 +27,7 @@ from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE,
+    AggState,
     FeeConfig,
     NoDatum,
     Nodes,
@@ -38,7 +39,6 @@ from charli3_offchain_core.models.oracle_datums import (
     RewardAccountDatum,
     RewardAccountVariant,
     RewardTransportVariant,
-    StandardOracleDatum,
 )
 from charli3_offchain_core.models.oracle_redeemers import Mint as MintRedeemer
 from charli3_offchain_core.oracle.config import OracleDeploymentConfig, OracleTokenNames
@@ -194,7 +194,7 @@ class OracleStartBuilder:
                     script_address,
                     deployment_config.token_names.aggstate,
                     mint_policy.policy_id,
-                    StandardOracleDatum(price_data=PriceData.empty()),
+                    AggState(price_data=PriceData.empty()),
                     "agg_state",
                 ),
             )

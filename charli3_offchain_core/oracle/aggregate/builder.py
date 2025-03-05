@@ -25,6 +25,7 @@ from charli3_offchain_core.blockchain.transactions import (
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     Aggregation,
+    AggState,
     NoDatum,
     NoRewards,
     OracleSettingsDatum,
@@ -33,7 +34,6 @@ from charli3_offchain_core.models.oracle_datums import (
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
-    StandardOracleDatum,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     CalculateRewards,
@@ -273,7 +273,7 @@ class OracleTransactionBuilder:
                         "A valid fee rate datum is required to scale rewards."
                     )
 
-                standard_datum: StandardOracleDatum = oracle_fee_rate_utxo.output.datum
+                standard_datum: AggState = oracle_fee_rate_utxo.output.datum
                 reference_inputs.add(oracle_fee_rate_utxo)
                 rewards.scale_rewards_by_rate(
                     reward_prices,
@@ -513,7 +513,7 @@ class OracleTransactionBuilder:
         return TransactionOutput(
             address=self.script_address,
             amount=agg_state.output.amount,
-            datum=StandardOracleDatum(
+            datum=AggState(
                 price_data=PriceData.set_price_map(
                     median_value, current_time, current_time + liveness_period
                 )

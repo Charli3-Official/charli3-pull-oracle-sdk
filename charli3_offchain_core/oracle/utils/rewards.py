@@ -6,11 +6,11 @@ from fractions import Fraction
 from pycardano import Asset, AssetName, ScriptHash, UTxO, Value, VerificationKeyHash
 
 from charli3_offchain_core.models.oracle_datums import (
+    AggState,
     FeedVkh,
     NodeFeed,
     RewardAccountDatum,
     RewardPrices,
-    StandardOracleDatum,
 )
 from charli3_offchain_core.oracle.exceptions import DistributionError
 
@@ -28,9 +28,7 @@ def calculate_min_fee_amount(reward_prices: RewardPrices, node_count: int) -> in
         raise DistributionError(f"Failed to calculate minimum fee: {e}") from e
 
 
-def scale_rewards_by_rate(
-    reward_prices: RewardPrices, rate_datum: StandardOracleDatum
-) -> None:
+def scale_rewards_by_rate(reward_prices: RewardPrices, rate_datum: AggState) -> None:
     """Calculate new reward prices based on the fee rate."""
     rate = Fraction(rate_datum.price_data.get_price, COIN_PRECISION)
 
