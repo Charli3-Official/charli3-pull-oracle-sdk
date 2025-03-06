@@ -375,7 +375,7 @@ class OracleTransactionBuilder:
             # using the CoreSettings UTxO as a reference.
             # This approach aligns with the deployment strategy where
             # the CoreSettings UTxO determines the minimum ADA.
-            min_core_settings_ada = settings_utxo.output.amount.coin
+            min_core_settings_ada = settings_datum.utxo_size_safety_buffer
 
             # Create new transport outputs
             new_transports = [
@@ -549,8 +549,7 @@ class OracleTransactionBuilder:
                 output_amount.multi_asset[self.reward_token_hash][
                     self.reward_token_name
                 ] = 0
-        else:
-            output_amount.coin = min_ada
+        output_amount.coin = min_ada
 
         return TransactionOutput(
             address=self.script_address,
