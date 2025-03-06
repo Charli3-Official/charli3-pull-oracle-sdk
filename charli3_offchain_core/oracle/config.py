@@ -21,19 +21,11 @@ class OracleTokenNames:
         """Create token names configuration based on network"""
         # For now use same token names for testnet and mainnet
         # due to validator is not able to handle testnet token names
-        if network == Network.MAINNET:
-            return cls(
-                core_settings="C3CS",
-                reward_account="C3RA",
-                reward_transport="C3RT",
-                aggstate="C3AS",
-            )
-        # TESTNET
         return cls(
-            core_settings="CoreSettings",
-            reward_account="RewardAccount",
-            reward_transport="RewardTransport",
-            aggstate="AggregationState",
+            core_settings="C3CS",
+            reward_account="C3RA",
+            reward_transport="C3RT",
+            aggstate="C3AS",
         )
 
 

@@ -351,9 +351,7 @@ class OracleTransactionBuilder:
 
             # Find pending transports
             pending_transports = state_checks.filter_pending_transports(
-                asset_checks.filter_utxos_by_token_name(
-                    utxos, self.policy_id, "RewardTransport"
-                )
+                asset_checks.filter_utxos_by_token_name(utxos, self.policy_id, "C3RT")
             )[:max_inputs]
             if not pending_transports:
                 raise StateValidationError("No pending transport UTxOs found")

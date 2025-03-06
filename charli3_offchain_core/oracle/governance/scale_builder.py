@@ -97,8 +97,8 @@ class OracleScaleBuilder:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         scale_amount: int,
         required_signers: list[VerificationKeyHash] | None = None,
-        transport_name: str = "RewardTransport",
-        aggstate_name: str = "AggregationState",
+        transport_name: str = "C3RT",
+        aggstate_name: str = "C3AS",
     ) -> ScaleUpResult:
         """Build transaction to increase ODV capacity by creating new UTxO pairs."""
         try:
@@ -203,12 +203,8 @@ class OracleScaleBuilder:
                 raise ValueError("Reference script UTxO not found")
 
             # Find and log UTxOs to remove
-            transport_utxos = filter_utxos_by_token_name(
-                utxos, self.policy_id, "RewardTransport"
-            )
-            aggstate_utxos = filter_utxos_by_token_name(
-                utxos, self.policy_id, "AggregationState"
-            )
+            transport_utxos = filter_utxos_by_token_name(utxos, self.policy_id, "C3RT")
+            aggstate_utxos = filter_utxos_by_token_name(utxos, self.policy_id, "C3AS")
 
             logger.info(
                 "Found UTxOs - Total Transports: %d, Total AggStates: %d",
@@ -290,8 +286,8 @@ class OracleScaleBuilder:
 
             # Add burning
             mint_map = {
-                b"RewardTransport": -scale_amount,
-                b"AggregationState": -scale_amount,
+                b"C3RT": -scale_amount,
+                b"C3AS": -scale_amount,
             }
             mint = MultiAsset.from_primitive({self.policy_id.payload: mint_map})
 

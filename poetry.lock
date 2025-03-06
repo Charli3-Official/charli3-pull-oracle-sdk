@@ -2,14 +2,14 @@
 
 [[package]]
 name = "aiohappyeyeballs"
-version = "2.4.8"
+version = "2.5.0"
 description = "Happy Eyeballs for asyncio"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "aiohappyeyeballs-2.4.8-py3-none-any.whl", hash = "sha256:6cac4f5dd6e34a9644e69cf9021ef679e4394f54e58a183056d12009e42ea9e3"},
-    {file = "aiohappyeyeballs-2.4.8.tar.gz", hash = "sha256:19728772cb12263077982d2f55453babd8bec6a052a926cd5c0c42796da8bf62"},
+    {file = "aiohappyeyeballs-2.5.0-py3-none-any.whl", hash = "sha256:0850b580748c7071db98bffff6d4c94028d0d3035acc20fd721a0ce7e8cac35d"},
+    {file = "aiohappyeyeballs-2.5.0.tar.gz", hash = "sha256:18fde6204a76deeabc97c48bdd01d5801cfda5d6b9c8bbeb1aaaee9d648ca191"},
 ]
 
 [[package]]
@@ -1182,14 +1182,14 @@ files = [
 
 [[package]]
 name = "ogmios"
-version = "1.2.1"
+version = "1.3.0"
 description = "Ogmios is a lightweight bridge interface for cardano-node. It offers a WebSockets API that enables local clients to speak Ouroboros' mini-protocols via JSON/RPC. ogmios-python is an Ogmios client written in Python designed for ease of use."
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "ogmios-1.2.1-py3-none-any.whl", hash = "sha256:a0e1d87f9fd7b224556b30349d8abce2fcff3ce1c9a92e292f9a5c13f1e140ce"},
-    {file = "ogmios-1.2.1.tar.gz", hash = "sha256:07d7086ca8ddb4ca38e9c61edda53ff4acc0d156d15ea056eac11cd05390d9ec"},
+    {file = "ogmios-1.3.0-py3-none-any.whl", hash = "sha256:c30aa88028a8cd7208f87002dc35262673425fbb2285845013d0162b9db7aec1"},
+    {file = "ogmios-1.3.0.tar.gz", hash = "sha256:6f92f527d96a1c4426970eda96fe479e95ccd20a44dba70691d744287e5c494d"},
 ]
 
 [package.dependencies]
@@ -1568,7 +1568,7 @@ files = [
 
 [[package]]
 name = "pycardano"
-version = "0.12.2"
+version = "0.12.3"
 description = "A Cardano library in Python"
 optional = false
 python-versions = "^3.8.1"
@@ -1579,14 +1579,14 @@ develop = false
 [package.dependencies]
 blockfrost-python = "0.6.0"
 cachetools = "^5.3.0"
-cbor2 = "^5.4.3"
+cbor2 = "^5.6.5"
 cose = "0.9.dev8"
 docker = "^7.1.0"
 ECPy = "^1.2.5"
 frozendict = "^2.3.8"
 frozenlist = "^1.3.3"
 mnemonic = "^0.21"
-ogmios = "1.2.1"
+ogmios = "1.3.0"
 pprintpp = "^0.4.0"
 PyNaCl = "^1.5.0"
 requests = "^2.32.3"
@@ -1598,7 +1598,7 @@ websockets = "^13.0"
 type = "git"
 url = "https://github.com/Charli3-Official/pycardano.git"
 reference = "odv-multisig"
-resolved_reference = "f81de6477aae3d5e79ae3a4838e45ce18c2893cb"
+resolved_reference = "2dac7fb5b56c50e64fb53dc78473d75d5b5a8761"
 
 [[package]]
 name = "pycparser"
@@ -2123,14 +2123,14 @@ zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
 name = "virtualenv"
-version = "20.29.2"
+version = "20.29.3"
 description = "Virtual Python Environment builder"
 optional = false
 python-versions = ">=3.8"
 groups = ["dev"]
 files = [
-    {file = "virtualenv-20.29.2-py3-none-any.whl", hash = "sha256:febddfc3d1ea571bdb1dc0f98d7b45d24def7428214d4fb73cc486c9568cce6a"},
-    {file = "virtualenv-20.29.2.tar.gz", hash = "sha256:fdaabebf6d03b5ba83ae0a02cfe96f48a716f4fae556461d180825866f75b728"},
+    {file = "virtualenv-20.29.3-py3-none-any.whl", hash = "sha256:3e3d00f5807e83b234dfb6122bf37cfadf4be216c53a49ac059d02414f819170"},
+    {file = "virtualenv-20.29.3.tar.gz", hash = "sha256:95e39403fcf3940ac45bc717597dba16110b74506131845d9b687d5e73d947ac"},
 ]
 
 [package.dependencies]

@@ -75,19 +75,12 @@ tokens:
 
 ### Oracle NFT Token Names
 
-Token names are automatically configured based on the network:
-
-**Mainnet:**
+**Mainnet and Testnet:**
 - Core Settings: "C3CS"
 - Reward Account: "C3RA"
 - Reward Transport: "C3RT"
 - Aggregation State: "C3AS"
 
-**Testnet:**
-- Core Settings: "CoreSettings"
-- Reward Account: "RewardAccount"
-- Reward Transport: "RewardTransport"
-- Aggregation State: "AggregationState"
 
 ## Fee Configuration
 

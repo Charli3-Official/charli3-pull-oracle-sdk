@@ -168,7 +168,7 @@ def filter_oracle_settings_utxo(utxos: Sequence[UTxO], policy_id: ScriptHash) ->
         Oracle settings UTxO
     """
     oracle_settings_utxos = asset_checks.filter_utxos_by_token_name(
-        utxos, policy_id, "CoreSettings"
+        utxos, policy_id, "C3CS"
     )
     return oracle_settings_utxos[0]
 
@@ -183,7 +183,7 @@ def filter_reward_account_utxo(utxos: Sequence[UTxO], policy_id: ScriptHash) -> 
         Reward account UTxO
     """
     reward_account_utxos = asset_checks.filter_utxos_by_token_name(
-        utxos, policy_id, "RewardAccount"
+        utxos, policy_id, "C3RA"
     )
     return reward_account_utxos[0]
 
@@ -299,16 +299,14 @@ def find_transport_pair(
     try:
         # Find empty transports
         transports = filter_empty_transports(
-            asset_checks.filter_utxos_by_token_name(utxos, policy_id, "RewardTransport")
+            asset_checks.filter_utxos_by_token_name(utxos, policy_id, "C3RT")
         )
         if not transports:
             raise StateValidationError("No empty transport UTxO found")
 
         # Find empty or expired agg states
         agg_states = filter_valid_agg_states(
-            asset_checks.filter_utxos_by_token_name(
-                utxos, policy_id, "AggregationState"
-            ),
+            asset_checks.filter_utxos_by_token_name(utxos, policy_id, "C3AS"),
             current_time,
         )
         if not agg_states:

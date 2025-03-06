@@ -161,14 +161,14 @@ async def status(config: Path) -> None:
 
         # Filter transport states using utility functions
         transport_utxos = asset_checks.filter_utxos_by_token_name(
-            script_utxos, ctx.policy_id, "RewardTransport"
+            script_utxos, ctx.policy_id, "C3RT"
         )
         empty_transports = state_checks.filter_empty_transports(transport_utxos)
         pending_transports = state_checks.filter_pending_transports(transport_utxos)
 
         # Filter agg states
         agg_state_utxos = asset_checks.filter_utxos_by_token_name(
-            script_utxos, ctx.policy_id, "AggregationState"
+            script_utxos, ctx.policy_id, "C3AS"
         )
         empty_agg_states = state_checks.filter_empty_agg_states(agg_state_utxos)
 
