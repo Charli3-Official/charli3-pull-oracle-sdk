@@ -25,11 +25,17 @@ from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
     CollectingNodesError,
     CollectingPlatformError,
+    DismissRewardCancelledError,
     NodeCollectCancelled,
     NodeNotRegisteredError,
+    NoExpiredTransportsYetError,
+    NoPendingTransportsFoundError,
     NoRewardsAvailableError,
     PlatformCollectCancelled,
     RewardsError,
+)
+from charli3_offchain_core.oracle.rewards.dismiss_rewards_builder import (
+    DismissRewardsBuilder,
 )
 from charli3_offchain_core.oracle.rewards.node_collect_builder import (
     NodeCollectBuilder,
@@ -185,6 +191,67 @@ class RewardOrchestrator:
             return RewardOrchestratorResult(
                 status=ProcessStatus.FAILED, error=result.exception_type
             )
+        return RewardOrchestratorResult(
+            status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
+        )
+
+    async def dismiss_rewards(
+        self,
+        oracle_policy: str | None,
+        platform_utxo: UTxO,
+        platform_script: NativeScript,
+        tokens: TokenConfig,
+        loaded_key: LoadedKeys,
+        network: Network,
+        reward_dismission_period_length: int,
+        max_inputs: int = 10,
+        required_signers: list[VerificationKeyHash] | None = None,
+    ) -> RewardOrchestratorResult:
+
+        if not oracle_policy:
+            raise ValueError("oracle_policy cannot be None or empty")
+
+        # Contract UTxOs
+        contract_utxos = await get_script_utxos(self.script_address, self.tx_manager)
+
+        oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
+        reward_token = setup_token(tokens.reward_token_policy, tokens.reward_token_name)
+
+        builder = DismissRewardsBuilder(self.chain_query, self.tx_manager)
+
+        result = await builder.build_tx(
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            policy_hash=oracle_policy_hash,
+            contract_utxos=contract_utxos,
+            reward_token=reward_token,
+            loaded_key=loaded_key,
+            network=network,
+            reward_dismission_period_length=reward_dismission_period_length,
+            max_inputs=max_inputs,
+            required_signers=required_signers,
+        )
+
+        if isinstance(result.exception_type, NoExpiredTransportsYetError):
+            return RewardOrchestratorResult(
+                status=ProcessStatus.COMPLETED, error=result.exception_type
+            )
+
+        if isinstance(result.exception_type, NoPendingTransportsFoundError):
+            return RewardOrchestratorResult(
+                status=ProcessStatus.COMPLETED, error=result.exception_type
+            )
+
+        if isinstance(result.exception_type, DismissRewardCancelledError):
+            return RewardOrchestratorResult(
+                status=ProcessStatus.CANCELLED_BY_USER, error=result.exception_type
+            )
+
+        if isinstance(result.exception_type, NoRewardsAvailableError):
+            return RewardOrchestratorResult(
+                status=ProcessStatus.COMPLETED, error=result.exception_type
+            )
+
         return RewardOrchestratorResult(
             status=ProcessStatus.TRANSACTION_BUILT, transaction=result.transaction
         )

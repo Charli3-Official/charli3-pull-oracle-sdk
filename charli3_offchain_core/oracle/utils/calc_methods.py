@@ -6,7 +6,7 @@ def median(values: list[int | float], count: int) -> int:
     Calculate the median of a list of values
 
     Args:
-        values: Sorted list of numerical values
+        values: list of numerical values
         count: Number of values
 
     Returns:
@@ -17,7 +17,7 @@ def median(values: list[int | float], count: int) -> int:
         return values[0]
 
     midpoint = Fraction(1, 2)
-    result = quantile(values, count, midpoint)
+    result = quantile(sorted(values), count, midpoint)
     return round_even(result)
 
 
