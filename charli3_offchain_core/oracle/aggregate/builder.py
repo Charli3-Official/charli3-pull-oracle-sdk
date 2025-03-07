@@ -578,7 +578,6 @@ class OracleTransactionBuilder:
             transports,
             self.reward_token_hash,
             self.reward_token_name,
-            self.tx_manager.config.min_utxo_value,
         )
         node_rewards = rewards.calculate_node_rewards_from_transports(
             transports, nodes, settings.iqr_fence_multiplier
