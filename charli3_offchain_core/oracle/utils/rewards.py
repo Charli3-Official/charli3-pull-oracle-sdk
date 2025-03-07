@@ -200,7 +200,8 @@ def calculate_total_fees(
             )
 
         return sum(
-            transport.output.datum.datum.aggregation.rewards_amount_paid for transport in transports
+            transport.output.datum.datum.aggregation.rewards_amount_paid
+            for transport in transports
         )
 
     except Exception as e:
