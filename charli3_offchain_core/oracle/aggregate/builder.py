@@ -27,6 +27,7 @@ from charli3_offchain_core.models.oracle_datums import (
     Aggregation,
     AggStateDatum,
     AggStateVariant,
+    NoDatum,
     NoRewards,
     OracleSettingsDatum,
     RewardAccountDatum,
@@ -213,7 +214,7 @@ class OracleTransactionBuilder:
             )
             script_utxo = common.get_reference_script_utxo(utxos)
 
-            # Update calculators with current settings
+            reference_inputs = {settings_utxo}
 
             # Calculate the transaction time window and current time ONCE
             if validity_window is None:
@@ -261,9 +262,20 @@ class OracleTransactionBuilder:
                 node_count,
             )
 
+            # Update fees according to the rate feed
+            reward_prices = deepcopy(settings_datum.fee_info.reward_prices)
+            if settings_datum.fee_info.rate_nft != NoDatum():
+                oracle_fee_rate_utxo = common.get_fee_rate_reference_utxo(
+                    self.tx_manager.chain_query, settings_datum.fee_info.rate_nft
+                )
+                reference_inputs.add(oracle_fee_rate_utxo)
+                rewards.scale_rewards_by_rate(
+                    reward_prices, oracle_fee_rate_utxo.output.datum.datum.aggstate
+                )
+
             # Calculate minimum fee
             minimum_fee = rewards.calculate_min_fee_amount(
-                settings_datum.fee_info, len(current_message.node_feeds_sorted_by_feed)
+                reward_prices, len(current_message.node_feeds_sorted_by_feed)
             )
 
             # Create outputs using helper methods
@@ -271,7 +283,7 @@ class OracleTransactionBuilder:
                 transport=transport,
                 current_message=current_message,
                 median_value=median_value,
-                node_reward_price=settings_datum.fee_info.reward_prices.node_fee,
+                node_reward_price=reward_prices.node_fee,
                 minimum_fee=minimum_fee,
             )
 
@@ -289,7 +301,7 @@ class OracleTransactionBuilder:
                     (agg_state, Redeemer(OdvAggregate()), script_utxo),
                 ],
                 script_outputs=[transport_output, agg_state_output],
-                reference_inputs=[settings_utxo],
+                reference_inputs=reference_inputs,
                 required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
                 change_address=change_address,
                 signing_key=signing_key,
@@ -344,9 +356,15 @@ class OracleTransactionBuilder:
                 utxos, self.policy_id
             )
 
+            # Calculate the minimum ADA required for Transport UTxOs,
+            # using the CoreSettings UTxO as a reference.
+            # This approach aligns with the deployment strategy where
+            # the CoreSettings UTxO determines the minimum ADA.
+            min_core_settings_ada = settings_utxo.output.amount.coin
+
             # Create new transport outputs
             new_transports = [
-                self._create_empty_transport(transport)
+                self._create_empty_transport(transport, min_core_settings_ada)
                 for transport in pending_transports
             ]
 
@@ -499,18 +517,25 @@ class OracleTransactionBuilder:
             ),
         )
 
-    def _create_empty_transport(self, transport: UTxO) -> TransactionOutput:
+    def _create_empty_transport(
+        self, transport: UTxO, min_ada: int
+    ) -> TransactionOutput:
         """Create empty reward transport output."""
         output_amount = deepcopy(transport.output.amount)
 
         # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
-        if (
-            output_amount.multi_asset
-            and self.reward_token_hash in output_amount.multi_asset
-        ):
-            output_amount.multi_asset[self.reward_token_hash][
-                self.reward_token_name
-            ] = 0
+        if self.reward_token_hash and self.reward_token_name:
+            if (
+                output_amount.multi_asset
+                and self.reward_token_hash in output_amount.multi_asset
+                and self.reward_token_name
+                in output_amount.multi_asset[self.reward_token_hash]
+            ):
+                output_amount.multi_asset[self.reward_token_hash][
+                    self.reward_token_name
+                ] = 0
+        else:
+            output_amount.coin = min_ada
 
         return TransactionOutput(
             address=self.script_address,

@@ -143,12 +143,12 @@ class SimulationConfig(TxConfig):
     ) -> None:
         """Initialize simulation config with base config and simulation settings."""
         super().__init__(
-            network=network,
-            script_address=script_address,
-            policy_id=policy_id,
-            wallet=wallet,
-            reward_token_policy=reward_token_policy,
-            reward_token_name=reward_token_name,
+            network,
+            script_address,
+            policy_id,
+            wallet,
+            reward_token_policy,
+            reward_token_name,
         )
         self.simulation = simulation
 

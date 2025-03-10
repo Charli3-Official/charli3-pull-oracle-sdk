@@ -324,3 +324,77 @@ class RemovingNodesError(GovernanceError):
     """Raised when oracle delete nodes operations fail."""
 
     pass
+
+
+class RewardsError(OracleError):
+    """Base exception for all governance-related errors."""
+
+    pass
+
+
+class NodeCollectCancelled(RewardsError):  # noqa
+    """Exception raised when user intentionally cancels the delete nodes tx."""
+
+    pass
+
+
+class CollectingNodesError(RewardsError):
+    """Raised when oracle delete nodes operations fail."""
+
+    pass
+
+
+class NodeNotRegisteredError(RewardsError):
+    pass
+
+
+class NoRewardsAvailableError(RewardsError):
+    pass
+
+
+class ADABalanceNotFoundError(RewardsError):
+    pass
+
+
+class PlatformCollectValidationError(RewardsError):
+    """Raised when remove nodes validation fails."""
+
+    pass
+
+
+class PlatformCollectCancelled(RewardsError):  # noqa
+    """Exception raised when user intentionally cancels the delete nodes tx."""
+
+    pass
+
+
+class CollectingPlatformError(RewardsError):
+    """Raised when oracle delete nodes operations fail."""
+
+    pass
+
+
+class NoPendingTransportsFoundError(RewardsError):
+    """
+    Raised when no UTxOs with pending rewards are found in the reward accounts.
+    This indicates that there are no rewards to be processed or transported.
+    """
+
+    pass
+
+
+class NoExpiredTransportsYetError(RewardsError):
+    """
+    Raised when there are pending rewards to be processed, but the dismissal
+    period has not yet expired. No expired transports were found.
+    """
+
+    pass
+
+
+class DismissRewardCancelledError(RewardsError):
+    """
+    Raised when the user cancels the dismissal of rewards during the transaction.
+    """
+
+    pass
