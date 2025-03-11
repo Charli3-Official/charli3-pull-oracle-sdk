@@ -2,15 +2,15 @@ local_script: false
 mnemonic: test test test test test test test test test test test test test test test test test test test test test test test sauce
 
 # Oracle addresses
-oracle_script_address: addr_test1wq4zmn7d93dw0wsz05nmdcdkn3mjff98flxhzqne33896xq2464cv
+oracle_script_address: addr_test1wzaxa37mfyvy5gv8nuzhsuhe9dtrk2c8dk469t9kua9s23gq04eus
 multisig_oracle_script_address: addr_test1wruvcdqgenkl6lsrqthwm5ez2ecvz24az6upwxqvf2hda7sgxf7dg
 
 # Test data for oracle deployment
 oracle_owner:
   script_start_slot: 1
-  reward_token_name: "C3TESTRE"
-  reward_token_policy: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
-  platform_auth_policy: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  reward_token_name: "546573744333"
+  reward_token_policy: "c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828"
+  platform_auth_policy: "5889f08b230ab163ec1ef01072d012419c279cc1c071e292cdc88808"
 
 # Oracle settings
 oracle_settings:

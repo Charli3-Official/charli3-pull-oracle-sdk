@@ -1,7 +1,7 @@
 name: ${node}
 services:
   yaci-cli:
-    image: bloxbean/yaci-cli:${tag}
+    image: deepbhatt007/yaci-cli:dev
     ports:
       - "${HOST_N2N_PORT}:3001"
       - "${HOST_N2C_SOCAT_PORT}:3333"

@@ -16,7 +16,7 @@ kill_processes() {
 trap 'kill_processes' SIGINT SIGTERM EXIT
 
 # Start the node in the background
-./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 4000 >/dev/null 2>&1 &
+./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 80 --era conway >/dev/null 2>&1 &
 # Wait for the node to start
 echo "Waiting for the node to start..."
 sleep 60
