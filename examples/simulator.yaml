@@ -31,5 +31,5 @@ simulation:
   node_keys_dir: "node_keys"
   base_feed: 100
   variance: 0.02
-  wait_time: 120000 # 2 minutes in ms
+  wait_time: 60 # time in ms
   required_signatures: 9

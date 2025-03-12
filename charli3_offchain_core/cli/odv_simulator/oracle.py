@@ -72,7 +72,7 @@ class OracleSimulator:
         """Collect feed updates from all nodes."""
         print_progress("Calculating validity window for feed updates")
         validity_window = self.ctx.tx_manager.calculate_validity_window(
-            self.config.simulation.wait_time
+            self.config.odv_validity_length
         )
 
         feed_request = OdvFeedRequest(
@@ -182,7 +182,7 @@ class OracleSimulator:
 
         print_progress("Building aggregate message from node responses")
         validity_window = self.ctx.tx_manager.calculate_validity_window(
-            self.config.simulation.wait_time
+            self.config.odv_validity_length
         )
         aggregate_message = build_aggregate_message(
             list(node_messages.values()), validity_window.current_time

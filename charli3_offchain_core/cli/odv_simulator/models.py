@@ -137,6 +137,7 @@ class SimulationConfig(TxConfig):
         script_address: str,
         policy_id: str,
         wallet: WalletConfig,
+        odv_validity_length: int,
         simulation: SimulationSettings,
         reward_token_policy: str | None = None,
         reward_token_name: str | None = None,
@@ -147,6 +148,7 @@ class SimulationConfig(TxConfig):
             script_address,
             policy_id,
             wallet,
+            odv_validity_length,
             reward_token_policy,
             reward_token_name,
         )
@@ -181,6 +183,7 @@ class SimulationConfig(TxConfig):
             policy_id=data["policy_id"],
             wallet=WalletConfig.from_dict(data["wallet"]),
             simulation=sim_settings,
+            odv_validity_length=data["odv_validity_length"],
             reward_token_policy=tokens.get("reward_token_policy"),
             reward_token_name=tokens.get("reward_token_name"),
         )
