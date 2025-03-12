@@ -17,7 +17,7 @@ from charli3_offchain_core.models.base import (
     ScriptHash,
 )
 
-MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE = 5_500_000
+MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE = 5_500_000
 
 
 @dataclass
@@ -193,17 +193,13 @@ class OracleSettingsDatum(PlutusData):
         if self.iqr_fence_multiplier <= 100:
             raise ValueError("Oracle Settings Validator: Must be fair about outliers")
 
-    def validate_based_on_config(self, oracle_conf: OracleConfiguration) -> None:
-        """Validate contents and throw ValueError if this instance will not satisfy on-chain checks"""
-        if oracle_conf.fee_token == NoDatum() and self.utxo_size_safety_buffer <= 0:
+        if self.utxo_size_safety_buffer <= 0:
             raise ValueError(
                 "Oracle Settings Validator: Must have positive utxo_size_safety_buffer"
             )
-        if oracle_conf.fee_token != NoDatum() and self.utxo_size_safety_buffer != 0:
-            raise ValueError(
-                "Oracle Settings Validator: Must have zero utxo_size_safety_buffer"
-            )
 
+    def validate_based_on_config(self, oracle_conf: OracleConfiguration) -> None:
+        """Validate contents and throw ValueError if this instance will not satisfy on-chain checks"""
         if (
             oracle_conf.pause_period_length <= self.time_uncertainty_platform
             or oracle_conf.reward_dismissing_period_length

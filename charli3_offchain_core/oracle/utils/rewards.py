@@ -186,7 +186,6 @@ def calculate_total_fees(
     transports: list[UTxO],
     reward_token_hash: ScriptHash | None,
     reward_token_name: AssetName | None,
-    min_utxo_value: int,
 ) -> int:
     """Calculate total fees from transport UTxOs."""
     try:
@@ -199,7 +198,8 @@ def calculate_total_fees(
             )
 
         return sum(
-            transport.output.amount.coin - min_utxo_value for transport in transports
+            transport.output.datum.datum.aggregation.rewards_amount_paid
+            for transport in transports
         )
 
     except Exception as e:

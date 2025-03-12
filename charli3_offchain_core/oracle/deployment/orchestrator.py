@@ -105,6 +105,7 @@ class OracleDeploymentOrchestrator:
         # Transaction signing
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         platform_utxo: UTxO,
+        utxo_size_safety_buffer: int | None = None,
     ) -> DeploymentResult:
         """Deploy new oracle with reference scripts and start transaction.
 
@@ -149,6 +150,7 @@ class OracleDeploymentOrchestrator:
                 time_uncertainty_aggregation=time_uncertainty_aggregation,
                 time_uncertainty_platform=time_uncertainty_platform,
                 iqr_fence_multiplier=iqr_fence_multiplier,
+                utxo_size_safety_buffer=utxo_size_safety_buffer,
             )
 
             self._update_status(
@@ -215,6 +217,7 @@ class OracleDeploymentOrchestrator:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        utxo_size_safety_buffer: int | None = None,
     ) -> StartTransactionResult:
         """Build and submit oracle start transaction."""
         self._update_status(
@@ -235,4 +238,5 @@ class OracleDeploymentOrchestrator:
             time_uncertainty_aggregation=time_uncertainty_aggregation,
             time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
+            utxo_size_safety_buffer=utxo_size_safety_buffer,
         )

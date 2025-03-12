@@ -301,6 +301,21 @@ class OracleTransactionBuilder:
                 liveness_period=settings_datum.aggregation_liveness_period,
             )
 
+            # Estimate tx fee
+            evaluated_tx = await self.tx_manager.build_script_tx(
+                script_inputs=[
+                    (transport, Redeemer(OdvAggregate()), script_utxo),
+                    (agg_state, Redeemer(OdvAggregate()), script_utxo),
+                ],
+                script_outputs=[transport_output, agg_state_output],
+                reference_inputs=reference_inputs,
+                required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
+                change_address=change_address,
+                signing_key=signing_key,
+                validity_start=validity_start_slot,
+                validity_end=validity_end_slot,
+            )
+            transport_output.amount.coin += evaluated_tx.transaction_body.fee
             # Build and return transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -365,7 +380,7 @@ class OracleTransactionBuilder:
             # using the CoreSettings UTxO as a reference.
             # This approach aligns with the deployment strategy where
             # the CoreSettings UTxO determines the minimum ADA.
-            min_core_settings_ada = settings_utxo.output.amount.coin
+            min_core_settings_ada = settings_datum.utxo_size_safety_buffer
 
             # Create new transport outputs
             new_transports = [
@@ -535,8 +550,7 @@ class OracleTransactionBuilder:
                 output_amount.multi_asset[self.reward_token_hash][
                     self.reward_token_name
                 ] = 0
-        else:
-            output_amount.coin = min_ada
+        output_amount.coin = min_ada
 
         return TransactionOutput(
             address=self.script_address,
@@ -565,7 +579,6 @@ class OracleTransactionBuilder:
             transports,
             self.reward_token_hash,
             self.reward_token_name,
-            self.tx_manager.config.min_utxo_value,
         )
         node_rewards = rewards.calculate_node_rewards_from_transports(
             transports, nodes, settings.iqr_fence_multiplier

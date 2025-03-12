@@ -26,7 +26,7 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
-    MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE,
+    MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE,
     AggState,
     FeeConfig,
     NoDatum,
@@ -90,6 +90,7 @@ class OracleStartBuilder:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        utxo_size_safety_buffer: int | None = None,
     ) -> StartTransactionResult:
         """
         Build oracle start transaction that mints NFTs and creates initial UTxOs.
@@ -168,6 +169,7 @@ class OracleStartBuilder:
                 iqr_fence_multiplier,
             ),
             "core_settings",
+            utxo_size_safety_buffer,
         )
 
         reward_account_utxo = self._create_utxo_with_nft(
@@ -270,15 +272,6 @@ class OracleStartBuilder:
         """Create settings datum with initial configuration."""
         node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
 
-        if config.fee_token == NoDatum():
-            # If fee token is ada then we need to set buffer to a minimum ada amount held at maximum expected reward account utxo size
-            utxo_size_safety_buffer = (
-                MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_REWARD_ACCOUNT_UTXO_SIZE
-            )
-        else:
-            # If fee token is some native token then there is no need to manage leftover fee token amount
-            utxo_size_safety_buffer = 0
-
         oracle_settings = OracleSettingsDatum(
             nodes=Nodes(node_map=node_map),
             required_node_signatures_count=nodes_config.required_signatures,
@@ -287,7 +280,7 @@ class OracleStartBuilder:
             time_uncertainty_aggregation=time_uncertainty_aggregation,
             time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
-            utxo_size_safety_buffer=utxo_size_safety_buffer,
+            utxo_size_safety_buffer=MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE,
             pause_period_started_at=NoDatum(),
         )
         oracle_settings.validate_based_on_config(config)
@@ -301,6 +294,7 @@ class OracleStartBuilder:
         policy_id: ScriptHash,
         datum: Any,
         utxo_type: str,
+        utxo_size_safety_buffer: int | None = None,
     ) -> TransactionOutput:
         """
         Create UTxO with NFT and datum, with specific ADA amounts based on UTxO type.
@@ -333,10 +327,14 @@ class OracleStartBuilder:
             output.amount.coin = self.MIN_UTXO_VALUE
         elif utxo_type == "core_settings":
             # Calculate exact minimum and store rounded up value for other UTxOs
-            min_ada = min_lovelace_post_alonzo(output, self.chain_query.context)
+            if utxo_size_safety_buffer is None:
+                min_ada = min_lovelace_post_alonzo(output, self.chain_query.context)
+                self._standard_min_ada = math.ceil(min_ada / 1_000_000) * 1_000_000
+            else:
+                self._standard_min_ada = utxo_size_safety_buffer
             # Round up to nearest ADA (lovelace to ADA, ceiling, back to lovelace)
-            self._standard_min_ada = math.ceil(min_ada / 1_000_000) * 1_000_000
             output.amount.coin = self._standard_min_ada
+            output.datum.datum.utxo_size_safety_buffer = self._standard_min_ada
         else:
             # Use the rounded up value from CoreSettings for all other UTxOs
             output.amount.coin = self._standard_min_ada
