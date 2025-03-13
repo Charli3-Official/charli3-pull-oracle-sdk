@@ -1,0 +1,35 @@
+# ODV Simulator configuration file
+
+network:
+  network: "testnet"
+  ogmios_kupo:
+    ogmios_url: "ws://ogmios-url:1337"
+    kupo_url: "http://kupo-url:1442"
+
+oracle_address: addr_test1wqahwmefp6aluaqkaw0zkyrx0rp7de56al9sexqvu7xxlac2gk0zx
+policy_id: 05d8c47062c132fa8bc3e4eda712b59443b1870c418c661c3d2c692a
+
+wallet:
+  mnemonic: "$WALLET_MNEMONIC"
+
+tokens:
+  oracle_policy: 05d8c47062c132fa8bc3e4eda712b59443b1870c418c661c3d2c692a
+  reward_token_policy: "c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828"
+  reward_token_name: "546573744333"  # "TESTCHRI#" in hex
+
+  # External rate for oracle fee payment conversion
+  # rate_token_policy: "5219072d6dd45f12272b3c8959ad6c37a3264abad1dac0c7fea4998d"
+  # rate_token_name: "4167677265676174696f6e5374617465"
+
+fee_token:
+  fee_token_policy: "c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828"
+  fee_token_name: "546573744333"
+
+odv_validity_length: 120000 # 2 minutes in ms
+
+simulation:
+  node_keys_dir: "node_keys"
+  base_feed: 100
+  variance: 0.02
+  wait_time: 60 # time in ms
+  required_signatures: 9

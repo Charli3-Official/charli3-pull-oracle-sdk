@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 
 from charli3_offchain_core.cli.aggregate_txs.base import tx_options
+from charli3_offchain_core.cli.config.formatting import print_header, print_progress
 from charli3_offchain_core.cli.config.utils import async_command
 from charli3_offchain_core.cli.odv_simulator.models import SimulationConfig
 from charli3_offchain_core.cli.odv_simulator.oracle import OracleSimulator
@@ -33,6 +34,9 @@ async def run(
     output: Path | None,
 ) -> None:
     """Run complete oracle simulation using configuration file."""
+
+    print_header("ODV Oracle Simulator")
+    print_progress("Loading configuration...")
     # Load simulation config
     sim_config = SimulationConfig.from_yaml(config)
 
@@ -41,10 +45,9 @@ async def run(
 
     try:
         # Run simulation
-        click.echo("\nStarting Simulation...")
         result = await oracle_simulator.run_simulation()
 
-        # Show configuration
+        # Show configuration and results
         print_simulation_config(sim_config.simulation)
 
         # Show results

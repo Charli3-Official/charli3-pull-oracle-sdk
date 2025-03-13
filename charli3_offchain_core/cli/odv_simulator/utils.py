@@ -4,40 +4,11 @@ import json
 import time
 
 import click
-from pycardano import VerificationKeyHash
 
 from charli3_offchain_core.cli.odv_simulator.models import (
     SimulationResult,
     SimulationSettings,
 )
-from charli3_offchain_core.models.oracle_datums import AggregateMessage
-from charli3_offchain_core.oracle.utils.common import make_aggregate_message
-
-
-def create_aggregate_message(
-    feed_data: dict, timestamp: int | None = None
-) -> AggregateMessage:
-    """Create aggregate message from node feeds.
-
-    Args:
-        feed_data: Dictionary of node feed data
-
-    Returns:
-        AggregateMessage for ODV submission
-    """
-    if timestamp is None:
-        # Extract timestamp from first feed (they should all be the same)
-        timestamp = next(iter(feed_data.values()))["timestamp"]
-
-    # Create and sort feeds dictionary by feed value
-    feeds = {
-        VerificationKeyHash(bytes.fromhex(data["verification_key"])): data["feed"]
-        for _, data in feed_data.items()
-    }
-
-    feeds = dict(sorted(feeds.items(), key=lambda x: x[1]))
-
-    return make_aggregate_message(feed_data=feeds, timestamp=timestamp)
 
 
 def print_simulation_config(config: "SimulationSettings") -> None:
@@ -51,7 +22,7 @@ def print_simulation_config(config: "SimulationSettings") -> None:
     click.echo(f"Nodes: {config.node_count}")
     click.echo(f"Base Feed: {config.base_feed}")
     click.echo(f"Variance: {config.variance*100}%")
-    click.echo(f"Wait Time: {config.wait_time} seconds")
+    click.echo(f"Wait Time: {config.wait_time} milliseconds")
 
 
 def print_simulation_results(result: "SimulationResult") -> None:
