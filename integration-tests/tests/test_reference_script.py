@@ -4,7 +4,6 @@ import asyncio
 from collections.abc import Callable
 
 import pytest
-from retry import retry
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.contracts.aiken_loader import (
@@ -20,10 +19,11 @@ from charli3_offchain_core.oracle.deployment.reference_script_finder import (
     ReferenceScriptFinder,
 )
 
+from .async_utils import async_retry
 from .base import TEST_RETRIES, TestBase
 
 
-@pytest.mark.order(2)
+@pytest.mark.run(order=2)
 class TestCreateReferenceScript(TestBase):
     """Test the creation of reference scripts for the ODV Oracle."""
 
@@ -33,9 +33,9 @@ class TestCreateReferenceScript(TestBase):
         self.tx_manager = TransactionManager(self.CHAIN_CONTEXT)
 
         # Load contracts
-        self.contracts = OracleContracts.from_blueprint("artifacts/plutus.json")
+        self.contracts = OracleContracts.from_blueprint("../artifacts/plutus.json")
         self.escrow_contract = RewardEscrowContract.from_blueprint(
-            "artifacts/plutus.json"
+            "../artifacts/plutus.json"
         )
 
         # Initialize builders and finders
@@ -56,8 +56,8 @@ class TestCreateReferenceScript(TestBase):
             reference_ada_amount=69528920,  # 69.52892 ADA for reference scripts
         )
 
-    @retry(tries=TEST_RETRIES, delay=5)
     @pytest.mark.asyncio
+    @async_retry(tries=TEST_RETRIES, delay=5)
     async def test_create_manager_reference_script(self) -> None:
         """Test creating the manager reference script."""
         # Check if reference script already exists
@@ -91,8 +91,8 @@ class TestCreateReferenceScript(TestBase):
             manager_utxo is not None
         ), "Manager reference script not found after creation"
 
-    @retry(tries=TEST_RETRIES, delay=5)
     @pytest.mark.asyncio
+    @async_retry(tries=TEST_RETRIES, delay=5)
     async def test_create_escrow_reference_script(self) -> None:
         """Test creating the escrow reference script."""
         # This is for reward token escrow if using non-ADA rewards

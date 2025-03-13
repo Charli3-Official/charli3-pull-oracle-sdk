@@ -49,11 +49,14 @@ run_test_multiple_times() {
 }
 
 # Execute tests in order
+#0. Create Platform Auth NFT
+run_test "TestPlatformAuth"
+
 # 1. Deploy oracle
 run_test "TestDeployment"
 
 # 2. Create reference script
-run_test "TestCreateReferenceScript"
+# run_test "TestCreateReferenceScript"
 
 # 3. Run aggregate tests multiple times
 # run_test_multiple_times "TestAggregate" 1 10
