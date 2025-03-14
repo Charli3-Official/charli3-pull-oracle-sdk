@@ -3,27 +3,26 @@
 import asyncio
 import logging
 import os
+import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, ClassVar
 
-import yaml
 from pycardano import (
-    Address,
-    ExtendedSigningKey,
     Network,
     OgmiosV6ChainContext,
 )
 from pycardano.backend.kupo import KupoChainContextExtension
-from pycardano.key import HDWallet
 from retry import retry
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
-from charli3_offchain_core.cli.config.token import TokenConfig
-from charli3_offchain_core.cli.setup import setup_token
-from charli3_offchain_core.models.oracle_datums import (
-    OracleConfiguration,
-)
+from charli3_offchain_core.cli.setup import setup_oracle_from_config
 
+# Increase recursion limit to avoid RecursionError
+sys.setrecursionlimit(2000)  # Default is usually 1000
+
+# Configure logging
+logger = logging.getLogger(__name__)
 TEST_RETRIES = 6
 
 
@@ -53,110 +52,69 @@ class TestBase:
 
     def setup_method(self, method: Any) -> None:
         """Set up test configuration."""
-        self.load_configuration()
-        self.initialize_wallet_keys()
-        self.initialize_oracle_configuration()
+        logger.info("Setting up test base environment")
+        self.config_path = Path(self.DIR_PATH).parent / "configuration.yml"
 
-    def load_configuration(self) -> None:
-        """Load test configuration from YAML file."""
-        config_path = os.path.join(self.DIR_PATH, "../configuration.yml")
-        with open(config_path) as stream:
-            self.config = yaml.safe_load(stream)
+        if not self.config_path.exists():
+            logger.error(f"Configuration file not found at {self.config_path}")
+            raise FileNotFoundError(
+                f"Configuration file not found at {self.config_path}"
+            )
 
-    def initialize_wallet_keys(self) -> None:
-        """Initialize wallet keys for testing."""
-        mnemonic = self.config["mnemonic"]
-        hdwallet = HDWallet.from_mnemonic(mnemonic=mnemonic)
-        key_variations = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        try:
+            # Use the CLI setup function to load configuration
+            logger.info(f"Loading configuration from {self.config_path}")
+            setup_result = setup_oracle_from_config(self.config_path)
 
-        for key in key_variations:
-            child_wallet = hdwallet.derive(key)
-            signing_key = ExtendedSigningKey.from_hdwallet(child_wallet)
-            verification_key = signing_key.to_verification_key()
-            self.wallet_keys.append((signing_key, verification_key))
+            # Unpack the result tuple
+            (
+                self.deployment_config,
+                self.oracle_config,
+                self.payment_sk,
+                self.payment_vk,
+                self.addresses,
+                self.chain_query,
+                self.tx_manager,
+                self.orchestrator,
+                self.platform_auth_finder,
+                self.configs,
+            ) = setup_result
 
-        # Admin/deployer credentials
-        self.admin_signing_key, self.admin_verification_key = self.wallet_keys[0]
-        self.admin_address = Address(
-            self.admin_verification_key.hash(), None, self.NETWORK
-        )
+            # Store important configuration details as instance attributes
+            self.admin_signing_key = self.payment_sk
+            self.admin_verification_key = self.payment_vk
+            self.admin_address = self.addresses.admin_address
+            self.oracle_script_address = self.addresses.script_address
+            self.platform_address = self.addresses.platform_address
 
-        # Node operator credentials
-        self.node_signing_keys = []
-        self.node_verification_keys = []
-        self.node_vkhs = []
+            # For easier access, store some specific configurations
+            self.nodes_config = self.deployment_config.nodes
+            self.token_config = self.deployment_config.tokens
+            self.timing_config = self.deployment_config.timing
+            self.fee_config = self.configs["rate_token"]
 
-        for i in range(1, 6):
-            signing_key, verification_key = self.wallet_keys[i]
-            self.node_signing_keys.append(signing_key)
-            self.node_verification_keys.append(verification_key)
-            self.node_vkhs.append(verification_key.hash())
+            logger.info(f"admin_address: {self.admin_address}")
+            logger.info(f"oracle_script_address: {self.oracle_script_address}")
+            logger.info(f"platform_address: {self.platform_address}")
+            logger.info(
+                f"admin_address pub_key_hash: {self.admin_address.payment_part}"
+            )
+            logger.info(
+                f"oracle_script_address script_hash: {self.oracle_script_address.payment_part}"
+            )
 
-        # Platform credentials
-        self.platform_signing_key, self.platform_verification_key = self.wallet_keys[6]
-        self.platform_vkh = self.platform_verification_key.hash()
+            logger.info("Test base environment setup complete")
 
-    def initialize_oracle_configuration(self) -> None:
-        """Initialize oracle configuration for testing."""
-        # Load oracle addresses
-        self.oracle_script_address = Address.from_primitive(
-            self.config["oracle_script_address"]
-        )
-        self.multisig_oracle_script_address = Address.from_primitive(
-            self.config["multisig_oracle_script_address"]
-        )
-
-        # Set up token configuration
-        self.token_config = TokenConfig(
-            platform_auth_policy=self.config["oracle_owner"]["platform_auth_policy"],
-            reward_token_policy=self.config["oracle_owner"]["reward_token_policy"],
-            reward_token_name=self.config["oracle_owner"]["reward_token_name"],
-            rate_token_policy=None,
-            rate_token_name=None,
-            oracle_policy=None,
-        )
-
-        # Set up reward token
-        self.reward_token = setup_token(
-            self.token_config.reward_token_policy,
-            self.token_config.reward_token_name,
-        )
-
-        # Oracle configuration
-        self.oracle_config = OracleConfiguration(
-            platform_auth_nft=bytes.fromhex(self.token_config.platform_auth_policy),
-            pause_period_length=self.config["oracle_settings"]["pause_period"],
-            reward_dismissing_period_length=self.config["oracle_settings"][
-                "reward_dismissing_period"
-            ],
-            fee_token=self.reward_token,
-            reward_escrow_script_hash=b"",
-        )
-
-        # Oracle settings
-        self.aggregation_liveness_period = self.config["oracle_settings"][
-            "aggregation_liveness_period"
-        ]
-        self.time_uncertainty_aggregation = self.config["oracle_settings"][
-            "time_uncertainty_aggregation"
-        ]
-        self.time_uncertainty_platform = self.config["oracle_settings"][
-            "time_uncertainty_platform"
-        ]
-        self.iqr_fence_multiplier = self.config["oracle_settings"][
-            "iqr_fence_multiplier"
-        ]
-        self.node_fee = self.config["oracle_settings"]["node_fee"]
-        self.platform_fee = self.config["oracle_settings"]["platform_fee"]
-        self.transport_count = self.config["oracle_settings"]["transport_count"]
-        self.multisig_threshold = self.config["oracle_settings"]["multisig_threshold"]
+        except Exception as e:
+            logger.error(f"Error setting up test environment: {e}")
+            raise
 
     @retry(tries=TEST_RETRIES, delay=3)
     async def assert_output(
         self, target_address: str, predicate_function: Callable
     ) -> None:
         """Check that at least one UTxO at the address satisfies the predicate function."""
-        utxos = await self.CHAIN_CONTEXT.get_utxos(target_address)
+        utxos = await self.chain_query.get_utxos(target_address)
         found = False
 
         for utxo in utxos:
@@ -173,12 +131,12 @@ class TestBase:
 
         while True:
             try:
-                tx = await self.CHAIN_CONTEXT.get_transaction(tx_id)
+                # Use transaction query from the chain query
+                tx = await self.chain_query.context.get_transaction(tx_id)
                 if tx:
                     return tx
-            # For S110: Add logging instead of silently passing
             except Exception as e:
-                logging.debug(f"Exception while waiting for transaction {tx_id}: {e}")
+                logger.debug(f"Exception while waiting for transaction {tx_id}: {e}")
 
             if asyncio.get_event_loop().time() - start_time > timeout:
                 return None
@@ -193,14 +151,7 @@ class MultisigTestBase(TestBase):
         """Setup for multisig tests."""
         super().setup_method(method)
 
-        # Use multisig addresses
-        self.oracle_address = self.multisig_oracle_script_address
-
-        # Override threshold for multisig tests
-        self.multisig_threshold = 2
-
-        # Add another platform signer for multisig
-        self.platform_signing_key_2, self.platform_verification_key_2 = (
-            self.wallet_keys[7]
-        )
-        self.platform_vkh_2 = self.platform_verification_key_2.hash()
+        # For multisig tests, we might need to use a different platform address
+        # This can be customized based on the multisig configuration
+        self.multisig_threshold = self.deployment_config.multi_sig.threshold
+        self.multisig_parties = self.deployment_config.multi_sig.parties

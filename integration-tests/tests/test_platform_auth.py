@@ -2,16 +2,13 @@
 
 import asyncio
 import logging
-from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 
-from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.formatting import format_status_update
-from charli3_offchain_core.platform.auth.orchestrator import PlatformAuthOrchestrator
-from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
+from charli3_offchain_core.cli.setup import setup_platform_from_config
 
 from .async_utils import async_retry
 from .base import TestBase
@@ -28,16 +25,33 @@ class TestPlatformAuth(TestBase):
         """Set up the test environment."""
         super().setup_method(method)
         logger.info("Setting up Platform Auth test environment")
-        self.tx_manager = TransactionManager(self.CHAIN_CONTEXT)
 
-        # Initialize platform auth finder and orchestrator
-        self.platform_auth_finder = PlatformAuthFinder(self.CHAIN_CONTEXT)
-        self.orchestrator = PlatformAuthOrchestrator(
-            chain_query=self.CHAIN_CONTEXT,
-            tx_manager=self.tx_manager,
-            status_callback=format_status_update,
-        )
-        logger.info("Platform Auth test environment setup complete")
+        # Use the CLI setup function for platform auth
+        try:
+            # We'll use the same config file but focus on platform auth settings
+            platform_setup = setup_platform_from_config(self.config_path, None)
+
+            # Unpack the result tuple
+            (
+                self.auth_config,
+                self.platform_signing_key,
+                self.platform_verification_key,
+                self.stake_vk,
+                self.platform_address,
+                self.platform_chain_query,
+                self.platform_tx_manager,
+                self.platform_orchestrator,
+                self.meta_data,
+            ) = platform_setup
+
+            # Set the status callback for better logging
+            self.platform_orchestrator.status_callback = format_status_update
+
+            logger.info("Platform Auth test environment setup complete")
+
+        except Exception as e:
+            logger.error(f"Error setting up Platform Auth test environment: {e}")
+            raise
 
     @pytest.mark.asyncio
     @async_retry(tries=1, delay=0)
@@ -47,29 +61,31 @@ class TestPlatformAuth(TestBase):
 
         # Check if Platform Auth NFT already exists
         logger.info(
-            f"Checking if Platform Auth NFT already exists at {self.admin_address}"
+            f"Checking if Platform Auth NFT already exists at {self.platform_address}"
         )
+
         platform_utxo = await self.platform_auth_finder.find_auth_utxo(
             policy_id=self.token_config.platform_auth_policy,
-            platform_address=str(self.admin_address),
+            platform_address=str(self.platform_address),
         )
 
         if platform_utxo:
             logger.info("Platform Auth NFT already exists, skipping test")
             pytest.skip("Platform Auth NFT already exists")
 
-        # Convert verification key hash to hex string for multisig parties
-        admin_vkh_hex = self.admin_verification_key.hash().to_primitive().hex()
-        multisig_parties = [admin_vkh_hex]
-        logger.info(f"Using admin verification key hash: {admin_vkh_hex}")
-        logger.info(f"Multisig threshold: 1, parties: {multisig_parties}")
+        # Get multisig config from the deployment config
+        multisig_threshold = self.auth_config.multisig.threshold
+        multisig_parties = self.auth_config.multisig.parties
 
-        # Build and submit the auth NFT transaction
+        logger.info(f"Using multisig threshold: {multisig_threshold}")
+        logger.info(f"Using multisig parties: {multisig_parties}")
+
+        # Build the auth NFT transaction
         logger.info("Building Platform Auth NFT transaction")
-        result = await self.orchestrator.build_tx(
-            sender_address=self.admin_address,
-            signing_key=self.admin_signing_key,
-            multisig_threshold=1,
+        result = await self.platform_orchestrator.build_tx(
+            sender_address=self.platform_address,
+            signing_key=self.platform_signing_key,
+            multisig_threshold=multisig_threshold,
             multisig_parties=multisig_parties,
             network=self.NETWORK,
         )
@@ -81,9 +97,10 @@ class TestPlatformAuth(TestBase):
         logger.info(f"Generated Policy ID: {result.policy_id}")
         logger.info(f"Platform address: {result.platform_address}")
 
+        # Sign and submit the transaction
         logger.info("Signing and submitting transaction")
-        status, _ = await self.tx_manager.sign_and_submit(
-            result.transaction, [self.admin_signing_key], wait_confirmation=True
+        status, _ = await self.platform_tx_manager.sign_and_submit(
+            result.transaction, [self.platform_signing_key], wait_confirmation=True
         )
 
         logger.info(f"Transaction submission status: {status}")
@@ -108,38 +125,34 @@ class TestPlatformAuth(TestBase):
 
         assert platform_utxo is not None, "Platform Auth NFT not found after minting"
 
-        # Update token config for subsequent tests
-        logger.info(f"Updating token config with new policy ID: {result.policy_id}")
-        self.token_config.platform_auth_policy = result.policy_id
+        # Update the configuration file with the new policy ID
+        logger.info(
+            f"Updating configuration file with new policy ID: {result.policy_id}"
+        )
+        config_path = self.config_path
 
-        if platform_utxo is not None:
-            logger.info("Platform Auth NFT minting test completed successfully")
+        try:
+            # Load existing configuration
+            with open(config_path) as f:
+                config_data = yaml.safe_load(f)
 
-            # Update configuration.yml file with the new policy ID
-            config_path = Path(__file__).parent.parent / "configuration.yml"
-            logger.info(f"Updating configuration file at: {config_path}")
+            # Update the platform auth policy ID
+            if "tokens" not in config_data:
+                config_data["tokens"] = {}
 
-            try:
-                # Load existing configuration
-                with open(config_path) as f:
-                    config_data = yaml.safe_load(f)
+            config_data["tokens"]["platform_auth_policy"] = result.policy_id
 
-                # Update the platform_auth_policy value
-                if "oracle_owner" not in config_data:
-                    config_data["oracle_owner"] = {}
+            # Write updated configuration back to file
+            with open(config_path, "w") as f:
+                yaml.dump(config_data, f, default_flow_style=False)
 
-                config_data["oracle_owner"]["platform_auth_policy"] = result.policy_id
+            logger.info(
+                f"Configuration file updated with policy ID: {result.policy_id}"
+            )
 
-                # Write updated configuration back to file
-                with open(config_path, "w") as f:
-                    yaml.dump(config_data, f, default_flow_style=False)
-
-                logger.info(
-                    f"Configuration file updated with policy ID: {result.policy_id}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to update configuration file: {e}")
-                # Don't fail the test if config update fails
+        except Exception as e:
+            logger.error(f"Failed to update configuration file: {e}")
+            # Don't fail the test if config update fails
 
             logger.info(
                 "Platform Auth NFT minting and configuration update completed successfully"
