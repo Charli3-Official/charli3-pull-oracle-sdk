@@ -9,7 +9,6 @@ from pycardano import (
     RawPlutusData,
     ScriptHash,
     UTxO,
-    VerificationKeyHash,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
