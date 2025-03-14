@@ -1,7 +1,6 @@
 """Base functionality for ODV integration tests."""
 
 import asyncio
-import logging
 import os
 import sys
 from collections.abc import Callable
@@ -10,18 +9,22 @@ from typing import Any, ClassVar
 
 from pycardano import (
     Network,
+    TransactionBuilder,
+    TransactionOutput,
 )
 
+from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.setup import setup_oracle_from_config
 
 from .async_utils import async_retry
+from .test_utils import logger, wait_for_indexing
 
 # Increase recursion limit to avoid RecursionError
 sys.setrecursionlimit(2000)  # Default is usually 1000
 
 # Configure logging
-logger = logging.getLogger(__name__)
-TEST_RETRIES = 6
+
+TEST_RETRIES = 3
 
 
 class TestBase:
@@ -59,6 +62,9 @@ class TestBase:
                 self.platform_auth_finder,
                 self.configs,
             ) = setup_result
+
+            # Set status callback once in base class
+            self.orchestrator.status_callback = format_status_update
 
             # Store important configuration details as instance attributes
             self.admin_signing_key = self.payment_sk
@@ -122,6 +128,67 @@ class TestBase:
                 return None
 
             await asyncio.sleep(3)
+
+    async def create_collateral_utxos(
+        self, count: int = 5, amount: int = 9_000_000
+    ) -> bool:
+        """
+        Create dedicated collateral UTxOs to ensure availability for deployment.
+
+        Args:
+            count: Number of collateral UTxOs to create
+            amount: Amount per UTxO in lovelace (9 ADA default)
+
+        Returns:
+            True if creation succeeded, False otherwise
+        """
+        logger.info(f"Creating {count} collateral UTxOs of {amount} lovelace each")
+
+        # Build transaction with multiple outputs
+        builder = TransactionBuilder(self.tx_manager.chain_query.context)
+        builder.add_input_address(self.admin_address)
+
+        # Create separate outputs for each collateral UTxO
+        for _ in range(count):
+            builder.add_output(
+                TransactionOutput(address=self.admin_address, amount=amount)
+            )
+
+        try:
+            # Build and sign transaction
+            tx = builder.build_and_sign(
+                [self.admin_signing_key], change_address=self.admin_address
+            )
+
+            # Submit transaction
+            logger.info(f"Submitting collateral creation transaction: {tx.id}")
+            status, _ = await self.tx_manager.chain_query.submit_tx(
+                tx, wait_confirmation=True
+            )
+
+            if status != "confirmed":
+                logger.error(f"Collateral creation failed with status: {status}")
+                return False
+
+            # Wait for indexing
+            await wait_for_indexing()
+
+            # Verify UTxOs were created
+            new_utxos = await self.tx_manager.chain_query.get_utxos(self.admin_address)
+            new_collateral = [
+                utxo
+                for utxo in new_utxos
+                if not utxo.output.amount.multi_asset
+                and utxo.output.amount.coin >= 5_000_000
+                and utxo.output.amount.coin <= 20_000_000
+            ]
+
+            logger.info(f"Found {len(new_collateral)} collateral UTxOs after creation")
+            return len(new_collateral) >= count
+
+        except Exception as e:
+            logger.error(f"Error creating collateral UTxOs: {e}")
+            return False
 
 
 class MultisigTestBase(TestBase):

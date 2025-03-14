@@ -1,20 +1,19 @@
 """Test the deployment of the Charli3 ODV Oracle."""
 
-import asyncio
-import logging
 from collections.abc import Callable
 
 import pytest
-import yaml
 
-from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.constants.status import ProcessStatus
 from charli3_offchain_core.oracle.utils.common import get_script_utxos
 
 from .base import TestBase
-
-# Set up logger
-logger = logging.getLogger(__name__)
+from .test_utils import (
+    find_platform_auth_nft,
+    logger,
+    update_config_file,
+    wait_for_indexing,
+)
 
 
 @pytest.mark.run(order=1)
@@ -25,9 +24,6 @@ class TestDeployment(TestBase):
         """Set up the test environment."""
         logger.info("Setting up TestDeployment environment")
         super().setup_method(method)
-
-        # Update the status callback for better logging
-        self.orchestrator.status_callback = format_status_update
         logger.info("TestDeployment setup complete")
 
     @pytest.mark.asyncio
@@ -43,32 +39,19 @@ class TestDeployment(TestBase):
             f"Using platform auth policy ID: {self.token_config.platform_auth_policy}"
         )
 
-        # Find platform auth NFT at the platform address
-        logger.info(
-            f"Looking for platform auth NFT at platform address: {self.platform_address}"
-        )
-        platform_utxo = await self.platform_auth_finder.find_auth_utxo(
-            policy_id=self.token_config.platform_auth_policy,
-            platform_address=str(self.platform_address),
-        )
+        # Create collateral UTxOs first to ensure they're available
+        await self.create_collateral_utxos(count=5, amount=9_000_000)
 
-        # If not found at platform address, try the admin address
-        if not platform_utxo and str(self.platform_address) != str(self.admin_address):
-            logger.info(
-                f"Platform auth NFT not found at platform address, trying admin address: {self.admin_address}"
-            )
-            platform_utxo = await self.platform_auth_finder.find_auth_utxo(
-                policy_id=self.token_config.platform_auth_policy,
-                platform_address=str(self.admin_address),
-            )
+        # Find platform auth NFT at the platform address
+        platform_utxo = await find_platform_auth_nft(
+            self.platform_auth_finder,
+            self.token_config.platform_auth_policy,
+            [self.platform_address, self.admin_address],
+        )
 
         # If still not found, skip the test
         if not platform_utxo:
             pytest.skip("Platform auth NFT not found - please create one first")
-
-        logger.info(
-            f"Found platform auth NFT in UTxO: {platform_utxo.input.transaction_id}#{platform_utxo.input.index}"
-        )
 
         # Get platform script
         logger.info(f"Getting platform script for address: {self.platform_address}")
@@ -122,8 +105,7 @@ class TestDeployment(TestBase):
         ), f"Deployment transaction failed with status: {status}"
 
         # Wait for UTxOs to be indexed
-        logger.info("Waiting for UTxOs to be indexed after deployment")
-        await asyncio.sleep(10)
+        await wait_for_indexing(5)
 
         # Check that UTxOs exist at the oracle script address
         logger.info(
@@ -139,26 +121,8 @@ class TestDeployment(TestBase):
         logger.info(
             f"Updating configuration file with new oracle script address: {self.oracle_script_address}"
         )
-
-        config_path = self.config_path
-
-        try:
-            # Load the configuration file
-            with open(config_path) as file:
-                config_data = yaml.safe_load(file)
-
-            # Update the oracle script address
-            config_data["oracle_address"] = str(self.oracle_script_address)
-
-            # Write the updated configuration back to the file
-            with open(config_path, "w") as file:
-                yaml.dump(config_data, file)
-
-            logger.info(
-                f"Configuration file updated with oracle script address: {self.oracle_script_address}"
-            )
-
-        except Exception as e:
-            logger.error(f"Error updating configuration file: {e}")
+        update_config_file(
+            self.config_path, {"oracle_address": str(self.oracle_script_address)}
+        )
 
         logger.info("Oracle deployment test completed successfully")

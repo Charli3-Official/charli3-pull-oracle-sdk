@@ -1,20 +1,20 @@
 """Test the creation of the Platform Auth NFT."""
 
-import asyncio
-import logging
 from typing import Any
 
 import pytest
-import yaml
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.setup import setup_platform_from_config
 
 from .async_utils import async_retry
 from .base import TestBase
-
-# Set up logger
-logger = logging.getLogger(__name__)
+from .test_utils import (
+    find_platform_auth_nft,
+    logger,
+    update_config_file,
+    wait_for_indexing,
+)
 
 
 @pytest.mark.run(order=0)  # Run before deployment tests
@@ -60,13 +60,10 @@ class TestPlatformAuth(TestBase):
         logger.info("Starting Platform Auth NFT minting test")
 
         # Check if Platform Auth NFT already exists
-        logger.info(
-            f"Checking if Platform Auth NFT already exists at {self.platform_address}"
-        )
-
-        platform_utxo = await self.platform_auth_finder.find_auth_utxo(
-            policy_id=self.token_config.platform_auth_policy,
-            platform_address=str(self.platform_address),
+        platform_utxo = await find_platform_auth_nft(
+            self.platform_auth_finder,
+            self.token_config.platform_auth_policy,
+            [self.platform_address, self.admin_address],
         )
 
         if platform_utxo:
@@ -106,22 +103,13 @@ class TestPlatformAuth(TestBase):
         logger.info(f"Transaction submission status: {status}")
         assert status == "confirmed", f"Platform Auth NFT transaction failed: {status}"
 
-        # Verify that NFT was created
-        logger.info("Waiting for UTxOs to be indexed...")
-        await asyncio.sleep(10)  # Wait for UTxOs to be indexed
+        # Wait for UTxOs to be indexed
+        await wait_for_indexing(5)
 
-        logger.info(f"Verifying NFT creation at address: {result.platform_address}")
-        platform_utxo = await self.platform_auth_finder.find_auth_utxo(
-            policy_id=result.policy_id,
-            platform_address=str(result.platform_address),
+        # Verify that NFT was created using the shared utility
+        platform_utxo = await find_platform_auth_nft(
+            self.platform_auth_finder, result.policy_id, [result.platform_address]
         )
-
-        if platform_utxo:
-            logger.info(
-                f"Platform Auth NFT found in UTxO: {platform_utxo.input.transaction_id}#{platform_utxo.input.index}"
-            )
-        else:
-            logger.error("Platform Auth NFT not found after minting")
 
         assert platform_utxo is not None, "Platform Auth NFT not found after minting"
 
@@ -129,31 +117,10 @@ class TestPlatformAuth(TestBase):
         logger.info(
             f"Updating configuration file with new policy ID: {result.policy_id}"
         )
-        config_path = self.config_path
+        update_config_file(
+            self.config_path, {"tokens.platform_auth_policy": result.policy_id}
+        )
 
-        try:
-            # Load existing configuration
-            with open(config_path) as f:
-                config_data = yaml.safe_load(f)
-
-            # Update the platform auth policy ID
-            if "tokens" not in config_data:
-                config_data["tokens"] = {}
-
-            config_data["tokens"]["platform_auth_policy"] = result.policy_id
-
-            # Write updated configuration back to file
-            with open(config_path, "w") as f:
-                yaml.dump(config_data, f, default_flow_style=False)
-
-            logger.info(
-                f"Configuration file updated with policy ID: {result.policy_id}"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to update configuration file: {e}")
-            # Don't fail the test if config update fails
-
-            logger.info(
-                "Platform Auth NFT minting and configuration update completed successfully"
-            )
+        logger.info(
+            "Platform Auth NFT minting and configuration update completed successfully"
+        )
