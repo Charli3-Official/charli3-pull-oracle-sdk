@@ -9,7 +9,6 @@ from pycardano import (
     RawPlutusData,
     ScriptHash,
     UTxO,
-    VerificationKeyHash,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -91,26 +90,6 @@ def get_reference_script_utxo(utxos: list[UTxO]) -> UTxO:
             return utxo
 
     raise ValidationError("No reference script UTxO found")
-
-
-def make_aggregate_message(
-    feed_data: dict[VerificationKeyHash, int], timestamp: int
-) -> AggregateMessage:
-    """Make aggregate message from node feeds.
-
-    Args:
-        feed_data: Dictionary of node feed data
-
-    Returns:
-        AggregateMessage for ODV submission
-    """
-    feeds = dict(sorted(feed_data.items(), key=lambda x: x[1]))
-
-    return AggregateMessage(
-        node_feeds_sorted_by_feed=feeds,
-        node_feeds_count=len(feeds),
-        timestamp=timestamp,
-    )
 
 
 def build_aggregate_message(

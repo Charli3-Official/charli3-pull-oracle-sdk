@@ -25,6 +25,7 @@ class TxConfig:
     script_address: str  # Oracle script address
     policy_id: str  # Oracle NFT policy ID
     wallet: WalletConfig  # Wallet configuration with mnemonic
+    odv_validity_length: int
     reward_token_policy: str | None = None  # Fee token policy ID
     reward_token_name: str | None = None  # Fee token name
 
@@ -66,6 +67,7 @@ class TxConfig:
                 reward_token_policy=tokens.get("reward_token_policy"),
                 reward_token_name=tokens.get("reward_token_name"),
                 wallet=WalletConfig.from_dict(data["wallet"]),
+                odv_validity_length=data["odv_validity_length"],
             )
         except KeyError as e:
             logger.error("Failed to load configuration: %s", e)
