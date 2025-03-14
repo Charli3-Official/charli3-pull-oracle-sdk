@@ -130,9 +130,7 @@ class TestBase:
                 "reward_dismissing_period"
             ],
             fee_token=self.reward_token,
-            reward_escrow_script_hash=bytes.fromhex(
-                "00" * 28
-            ),  # Placeholder, will be updated
+            reward_escrow_script_hash=b"",
         )
 
         # Oracle settings
