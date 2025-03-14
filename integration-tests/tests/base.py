@@ -10,13 +10,11 @@ from typing import Any, ClassVar
 
 from pycardano import (
     Network,
-    OgmiosV6ChainContext,
 )
-from pycardano.backend.kupo import KupoChainContextExtension
-from retry import retry
 
-from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.cli.setup import setup_oracle_from_config
+
+from .async_utils import async_retry
 
 # Increase recursion limit to avoid RecursionError
 sys.setrecursionlimit(2000)  # Default is usually 1000
@@ -30,25 +28,7 @@ class TestBase:
     """Base class for ODV system integration tests."""
 
     NETWORK = Network.TESTNET
-    OGMIOS_WS = "ws://localhost:1337"
-    KUPO_URL = "http://localhost:1442"
-    _, ws_host = OGMIOS_WS.split("ws://")
-    ws_url, port = ws_host.split(":")
-    ogmios_context = OgmiosV6ChainContext(
-        host=ws_url,
-        port=port,
-        secure=False,
-        refetch_chain_tip_interval=None,
-        network=NETWORK,
-    )
-    kupo_context = KupoChainContextExtension(
-        ogmios_context,
-        kupo_url=KUPO_URL,
-    )
-
-    CHAIN_CONTEXT: ClassVar[ChainQuery] = ChainQuery(kupo_ogmios_context=kupo_context)
     DIR_PATH: ClassVar[str] = os.path.dirname(os.path.realpath(__file__))
-    wallet_keys: ClassVar[list] = []
 
     def setup_method(self, method: Any) -> None:
         """Set up test configuration."""
@@ -109,7 +89,7 @@ class TestBase:
             logger.error(f"Error setting up test environment: {e}")
             raise
 
-    @retry(tries=TEST_RETRIES, delay=3)
+    @async_retry(tries=TEST_RETRIES, delay=3)
     async def assert_output(
         self, target_address: str, predicate_function: Callable
     ) -> None:
@@ -124,7 +104,7 @@ class TestBase:
 
         assert found, f"No UTxO matching the predicate at address: {target_address}"
 
-    @retry(tries=TEST_RETRIES, delay=3)
+    @async_retry(tries=TEST_RETRIES, delay=3)
     async def wait_for_transaction(self, tx_id: str, timeout: int = 60) -> Any | None:
         """Wait for a transaction to be confirmed on the blockchain."""
         start_time = asyncio.get_event_loop().time()
