@@ -23,7 +23,7 @@ class TimingConfig:
     aggregation_liveness: int = 300000
     time_uncertainty_aggregation: int = 120000
     time_uncertainty_platform: int = 180000
-    utxo_size_safety_buffer: int = 0
+    utxo_size_safety_buffer: int | None = None
     iqr_multiplier: int = 150
 
     @classmethod
@@ -37,6 +37,6 @@ class TimingConfig:
                 "time_uncertainty_aggregation", 120000
             ),
             time_uncertainty_platform=data.get("time_uncertainty_platform", 180000),
-            utxo_size_safety_buffer=data.get("utxo_size_safety_buffer", 0),
+            utxo_size_safety_buffer=data.get("utxo_size_safety_buffer", None),
             iqr_multiplier=data.get("iqr_multiplier", 150),
         )

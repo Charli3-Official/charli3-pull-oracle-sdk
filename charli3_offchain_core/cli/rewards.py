@@ -12,8 +12,11 @@ from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
     CollectingNodesError,
     CollectingPlatformError,
+    DismissRewardCancelledError,
     NodeCollectCancelled,
     NodeNotRegisteredError,
+    NoExpiredTransportsYetError,
+    NoPendingTransportsFoundError,
     NoRewardsAvailableError,
     PlatformCollectCancelled,
 )
@@ -147,7 +150,7 @@ async def node_collect(config: Path, output: Path | None) -> None:
 @click.command()
 @async_command
 async def platform_collect(config: Path, output: Path | None) -> None:
-    """Platform Withdrawal Transaction: Individual Rewards Collection"""
+    """Platform Withdrawal Transaction"""
     try:
         print_header("Platform Collect")
         (
@@ -252,4 +255,129 @@ async def platform_collect(config: Path, output: Path | None) -> None:
 
     except Exception as e:
         logger.error("Platform Collect failed", exc_info=e)
+        raise click.ClickException(str(e)) from e
+
+
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to deployment configuration YAML",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output file for transaction data",
+)
+@click.option(
+    "--batch-size",
+    type=int,
+    default=10,
+    help="Maximum number of transports to process",
+)
+@click.command()
+@async_command
+async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) -> None:
+    """Clear all rewards transport UTxO"""
+    try:
+        print_header("Dismiss Rewrads")
+        (
+            management_config,
+            _,
+            loaded_key,
+            oracle_addresses,
+            chain_query,
+            tx_manager,
+            platform_auth_finder,
+        ) = setup_management_from_config(config)
+
+        platform_utxo = await platform_auth_finder.find_auth_utxo(
+            policy_id=management_config.tokens.platform_auth_policy,
+            platform_address=oracle_addresses.platform_address,
+        )
+
+        if not platform_utxo:
+            raise click.ClickException("No platform auth UTxO found")
+
+        platform_script = await platform_auth_finder.get_platform_script(
+            oracle_addresses.platform_address
+        )
+
+        platform_config = platform_auth_finder.get_script_config(platform_script)
+
+        orchestrator = RewardOrchestrator(
+            chain_query=chain_query,
+            tx_manager=tx_manager,
+            script_address=oracle_addresses.script_address,
+            status_callback=format_status_update,
+        )
+
+        result = await orchestrator.dismiss_rewards(
+            oracle_policy=management_config.tokens.oracle_policy,
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            tokens=management_config.tokens,
+            loaded_key=loaded_key,
+            network=management_config.network.network,
+            reward_dismission_period_length=management_config.timing.reward_dismissing_period,
+            max_inputs=batch_size,
+        )
+
+        if isinstance(result.error, NoPendingTransportsFoundError):
+            user_message = "No transport rewards UTxOs available for claiming"
+            print_status(result.status, user_message, success=True)
+            return
+
+        if isinstance(result.error, NoRewardsAvailableError):
+            user_message = (
+                f"No rewards available\n"
+                f"{result.error} \n"
+                f"Contract: {oracle_addresses.script_address}\n"
+                "Try again later"
+            )
+            print_status(result.status, user_message, True)
+            return
+
+        if isinstance(result.error, NoExpiredTransportsYetError):
+            user_message = f"{result.error} Try again later"
+            print_status(result.status, user_message, True)
+            return
+
+        if isinstance(result.error, DismissRewardCancelledError):
+            print_status(
+                "Dismiss Reward Status", "Operation cancelled by user", success=True
+            )
+            return
+        if (
+            platform_config.threshold == 1
+            and result.transaction
+            and print_confirmation_message_prompt("Proceed with Dismiss Reward tx?")
+        ):
+            status, _ = await tx_manager.sign_and_submit(
+                result.transaction, [loaded_key.payment_sk], wait_confirmation=True
+            )
+            if status != ProcessStatus.TRANSACTION_CONFIRMED:
+                raise click.ClickException(f"Dismiss Reward failed: {status}")
+            print_status(
+                "Dismiss Reward transaction", "completed successfully", success=True
+            )
+        elif (
+            print_confirmation_message_prompt("Store multisig update transaction?")
+            and result.transaction
+        ):
+            output_path = output or Path("tx_oracle_dismiss_reward.json")
+            with output_path.open("w") as f:
+                json.dump(
+                    {
+                        "transaction": result.transaction.to_cbor_hex(),
+                        "signed_by": [],
+                        "threshold": platform_config.threshold,
+                    },
+                    f,
+                )
+            print_status("Transaction", "saved successfully", success=True)
+            print_hash_info("Output file", str(output_path))
+
+    except Exception as e:
+        logger.error("Dismiss Reward failed", exc_info=e)
         raise click.ClickException(str(e)) from e
