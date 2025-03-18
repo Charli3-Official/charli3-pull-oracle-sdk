@@ -9,7 +9,7 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.base import PosixTime
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateVariant,
+    AggState,
     OracleSettingsDatum,
     RewardConsensusPending,
     RewardTransportVariant,
@@ -117,10 +117,10 @@ def validate_node_updates_and_aggregation_median(
 
 def validate_transaction_datums(
     tx: Transaction, oracle_addr: str
-) -> tuple[RewardTransportVariant, AggStateVariant]:
+) -> tuple[RewardTransportVariant, AggState]:
     """Extracts and validates reward transport and aggregation state datums from transaction outputs."""
     transport_datum: RewardTransportVariant | None = None
-    agg_state_datum: AggStateVariant | None = None
+    agg_state_datum: AggState | None = None
 
     for output in tx.transaction_body.outputs:
         if str(output.address) != oracle_addr or not output.datum:
@@ -129,7 +129,7 @@ def validate_transaction_datums(
         if transport_datum is None:
             transport_datum = try_parse_datum(output.datum, RewardTransportVariant)
         if agg_state_datum is None:
-            agg_state_datum = try_parse_datum(output.datum, AggStateVariant)
+            agg_state_datum = try_parse_datum(output.datum, AggState)
 
         if transport_datum and agg_state_datum:
             break
