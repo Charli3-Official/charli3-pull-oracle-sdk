@@ -1,8 +1,13 @@
 """Oracle Redeemers for Oracle smart contract and Oracle NFTs"""
 
 from dataclasses import dataclass
+from typing import Dict
+from pycardano import PlutusData, VerificationKeyHash
 
-from pycardano import PlutusData
+from charli3_offchain_core.models.base import (
+    PosixTime,
+    NodeFeed,
+)
 
 
 @dataclass
@@ -37,13 +42,25 @@ class OracleRedeemer(PlutusData):
     CONSTR_ID = 0  # Base constructor ID
 
 
-class OdvAggregate(OracleRedeemer):
+@dataclass
+class AggregateMessage(PlutusData):
+    """Represents an aggregate message from nodes"""
+
+    CONSTR_ID = 0
+    node_feeds_sorted_by_feed: Dict[VerificationKeyHash, NodeFeed]
+    node_feeds_count: int
+    timestamp: PosixTime
+
+
+@dataclass
+class OdvAggregate(PlutusData):
     """User sends on demand validation request with oracle nodes message"""
 
     CONSTR_ID = 0
+    message: AggregateMessage
 
 
-class CalculateRewards(OracleRedeemer):
+class OdvAggregateMsg(OracleRedeemer):
     """Calculate reward consensus and transfer fees to reward UTxO"""
 
     CONSTR_ID = 1

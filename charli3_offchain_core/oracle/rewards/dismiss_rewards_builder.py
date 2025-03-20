@@ -31,9 +31,6 @@ from charli3_offchain_core.cli.config.formatting import (
 from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
-    NoRewards,
-    RewardConsensusPending,
-    RewardTransportVariant,
     SomeAsset,
 )
 from charli3_offchain_core.models.oracle_redeemers import (

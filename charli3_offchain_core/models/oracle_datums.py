@@ -1,18 +1,15 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Union
 
 from pycardano import PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.base import (
     AssetName,
     FeedVkh,
-    NodeFeed,
-    OracleFeed,
     PaymentVkh,
     PolicyId,
-    PosixTime,
     PosixTimeDiff,
     ScriptHash,
 )
@@ -218,43 +215,15 @@ class RewardAccountDatum(PlutusData):
     """Reward distribution datum"""
 
     CONSTR_ID = 0
-    nodes_to_rewards: List[int]
+    nodes_to_rewards: Dict[PaymentVkh, int]
 
+    @classmethod
+    def empty(cls) -> "RewardAccountDatum":
+        return cls(nodes_to_rewards={})
 
-@dataclass
-class AggregateMessage(PlutusData):
-    """Represents an aggregate message from nodes"""
-
-    CONSTR_ID = 0
-    node_feeds_sorted_by_feed: Dict[VerificationKeyHash, NodeFeed]
-    node_feeds_count: int
-    timestamp: PosixTime
-
-
-@dataclass
-class NoRewards(PlutusData):
-    """Reward transport with no rewards state"""
-
-    CONSTR_ID = 0
-
-
-@dataclass
-class Aggregation(PlutusData):
-    """Represents information on aggregation specific details"""
-
-    CONSTR_ID = 0
-    oracle_feed: OracleFeed
-    message: AggregateMessage
-    node_reward_price: int
-    rewards_amount_paid: int
-
-
-@dataclass
-class RewardConsensusPending(PlutusData):
-    """Reward transport with pending consensus state"""
-
-    CONSTR_ID = 1
-    aggregation: Aggregation
+    @property
+    def length(self) -> int:
+        return len(self.nodes_to_rewards)
 
 
 # Main datum variants
@@ -344,14 +313,6 @@ class RewardAccountVariant(PlutusData):
 
 
 @dataclass
-class RewardTransportVariant(PlutusData):
-    """Reward transport variant of OracleDatum"""
-
-    CONSTR_ID = 3
-    datum: Union[NoRewards, RewardConsensusPending]
-
-
-@dataclass
 class OracleDatum(PlutusData):
     """
     Main oracle datum with four possible variants:
@@ -361,6 +322,4 @@ class OracleDatum(PlutusData):
     4. RewardTransportVariant
     """
 
-    variant: (
-        AggState | RewardAccountVariant | RewardTransportVariant | OracleSettingsVariant
-    )
+    variant: AggState | RewardAccountVariant | OracleSettingsVariant

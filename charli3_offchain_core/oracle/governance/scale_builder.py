@@ -21,9 +21,7 @@ from pycardano import (
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
-    NoRewards,
     PriceData,
-    RewardTransportVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     Scale,

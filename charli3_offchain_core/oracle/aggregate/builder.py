@@ -23,21 +23,17 @@ from charli3_offchain_core.blockchain.transactions import (
     ValidityWindow,
 )
 from charli3_offchain_core.models.oracle_datums import (
-    AggregateMessage,
-    Aggregation,
     AggState,
     NoDatum,
-    NoRewards,
     OracleSettingsDatum,
     PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
-    RewardConsensusPending,
-    RewardTransportVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
-    CalculateRewards,
+    OdvAggregateMsg,
     OdvAggregate,
+    AggregateMessage,
 )
 from charli3_offchain_core.oracle.exceptions import (
     StateValidationError,
@@ -242,7 +238,7 @@ class OracleTransactionBuilder:
                 validity_start, validity_end
             )
 
-            transport, agg_state = state_checks.find_transport_pair(
+            account, agg_state = state_checks.find_account_pair(
                 utxos, self.policy_id, current_time
             )
 
@@ -281,12 +277,11 @@ class OracleTransactionBuilder:
                 )
 
             # Calculate minimum fee
-            minimum_fee = rewards.calculate_min_fee_amount(
-                reward_prices, len(current_message.node_feeds_sorted_by_feed)
-            )
+            minimum_fee = rewards.calculate_min_fee_amount(reward_prices, node_count)
 
             # Create outputs using helper methods
-            transport_output = self._create_transport_output(
+            # TODO: Fix reward distribution
+            account_output = self._create_reward_account(
                 transport=transport,
                 current_message=current_message,
                 median_value=median_value,
@@ -304,10 +299,14 @@ class OracleTransactionBuilder:
             # Estimate tx fee
             evaluated_tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
-                    (transport, Redeemer(OdvAggregate()), script_utxo),
-                    (agg_state, Redeemer(OdvAggregate()), script_utxo),
+                    (
+                        account,
+                        Redeemer(OdvAggregate(current_message)),
+                        script_utxo,
+                    ),
+                    (agg_state, Redeemer(OdvAggregateMsg()), script_utxo),
                 ],
-                script_outputs=[transport_output, agg_state_output],
+                script_outputs=[account_output, agg_state_output],
                 reference_inputs=reference_inputs,
                 required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
                 change_address=change_address,
@@ -315,14 +314,14 @@ class OracleTransactionBuilder:
                 validity_start=validity_start_slot,
                 validity_end=validity_end_slot,
             )
-            transport_output.amount.coin += evaluated_tx.transaction_body.fee
+            account_output.amount.coin += evaluated_tx.transaction_body.fee
             # Build and return transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
-                    (transport, Redeemer(OdvAggregate()), script_utxo),
-                    (agg_state, Redeemer(OdvAggregate()), script_utxo),
+                    (account, Redeemer(OdvAggregate(current_message)), script_utxo),
+                    (agg_state, Redeemer(OdvAggregateMsg()), script_utxo),
                 ],
-                script_outputs=[transport_output, agg_state_output],
+                script_outputs=[account_output, agg_state_output],
                 reference_inputs=reference_inputs,
                 required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
                 change_address=change_address,
@@ -331,7 +330,7 @@ class OracleTransactionBuilder:
                 validity_end=validity_end_slot,
             )
 
-            return OdvResult(tx, transport_output, agg_state_output)
+            return OdvResult(tx, account_output, agg_state_output)
 
         except Exception as e:
             raise TransactionError(f"Failed to build ODV transaction: {e}") from e

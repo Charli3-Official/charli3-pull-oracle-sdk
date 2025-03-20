@@ -31,14 +31,12 @@ from charli3_offchain_core.models.oracle_datums import (
     FeeConfig,
     NoDatum,
     Nodes,
-    NoRewards,
     OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
     PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
-    RewardTransportVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import Mint as MintRedeemer
 from charli3_offchain_core.oracle.config import OracleDeploymentConfig, OracleTokenNames
@@ -52,8 +50,7 @@ class StartTransactionResult:
 
     transaction: Transaction
     settings_utxo: TransactionOutput
-    reward_account_utxo: TransactionOutput
-    reward_transport_utxos: list[TransactionOutput]
+    reward_account_utxos: list[TransactionOutput]
     agg_state_utxos: list[TransactionOutput]
 
 
@@ -174,24 +171,14 @@ class OracleStartBuilder:
             utxo_size_safety_buffer,
         )
 
-        reward_account_utxo = self._create_utxo_with_nft(
-            script_address,
-            deployment_config.token_names.reward_account,
-            mint_policy.policy_id,
-            RewardAccountVariant(
-                datum=RewardAccountDatum(nodes_to_rewards=[0] * len(nodes_config.nodes))
-            ),
-            "other",
-        )
-
         # Create reward transport and agg state UTxOs
-        transport_pairs = [
+        utxo_pairs = [
             (
                 self._create_utxo_with_nft(
                     script_address,
-                    deployment_config.token_names.reward_transport,
+                    deployment_config.token_names.reward_account,
                     mint_policy.policy_id,
-                    RewardTransportVariant(datum=NoRewards()),
+                    RewardAccountVariant(datum=RewardAccountDatum.empty()),
                     "other",
                 ),
                 self._create_utxo_with_nft(
@@ -204,12 +191,11 @@ class OracleStartBuilder:
             )
             for _ in range(deployment_config.reward_transport_count)
         ]
-        reward_transport_utxos, agg_state_utxos = zip(*transport_pairs)
+        reward_account_utxos, agg_state_utxos = zip(*utxo_pairs)
 
         # Add all outputs to builder
         builder.add_output(settings_utxo)
-        builder.add_output(reward_account_utxo)
-        for utxo in [*reward_transport_utxos, *agg_state_utxos]:
+        for utxo in [*reward_account_utxos, *agg_state_utxos]:
             builder.add_output(utxo)
 
         # Add minting
@@ -233,8 +219,7 @@ class OracleStartBuilder:
         return StartTransactionResult(
             transaction=tx,
             settings_utxo=settings_utxo,
-            reward_account_utxo=reward_account_utxo,
-            reward_transport_utxos=list(reward_transport_utxos),
+            reward_account_utxos=list(reward_account_utxos),
             agg_state_utxos=list(agg_state_utxos),
         )
 
@@ -354,8 +339,7 @@ class OracleStartBuilder:
         """Create MultiAsset for minting oracle NFTs."""
         mint_map = {
             token_names.core_settings.encode(): 1,
-            token_names.reward_account.encode(): 1,
-            token_names.reward_transport.encode(): transport_count,
+            token_names.reward_account.encode(): transport_count,
             token_names.aggstate.encode(): transport_count,
         }
 
