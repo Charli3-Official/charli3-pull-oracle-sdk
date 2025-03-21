@@ -5,14 +5,14 @@ from fractions import Fraction
 
 from pycardano import Asset, AssetName, ScriptHash, UTxO, Value
 
+from charli3_offchain_core.models.base import NodeFeed, FeedVkh, PaymentVkh
 from charli3_offchain_core.models.oracle_datums import (
     IQR_APPLICABILITY_THRESHOLD,
     AggState,
-    FeedVkh,
-    NodeFeed,
     RewardAccountDatum,
     RewardPrices,
 )
+from charli3_offchain_core.models.oracle_redeemers import AggregateMessage
 from charli3_offchain_core.oracle.exceptions import DistributionError
 
 # Typical coin precision, such as lovelace for ada
@@ -40,32 +40,36 @@ def scale_rewards_by_rate(reward_prices: RewardPrices, rate_datum: AggState) -> 
     reward_prices.platform_fee = convert_reward(reward_prices.platform_fee)
 
 
-def calculate_node_rewards_from_transports(
-    transports: list[UTxO],
-    nodes: list[FeedVkh],
+def calculate_reward_distribution(
+    message: AggregateMessage,
     iqr_fence_multiplier: int,
     median_divergency_factor: int,
+    in_distribution: dict[PaymentVkh, int],
+    node_reward_price: int,
+    nodes: dict[FeedVkh, PaymentVkh],
 ) -> dict[FeedVkh, int]:
     """Calculate node rewards from transport UTxOs."""
     try:
-        node_rewards = {node_id: 0 for node_id in nodes}
+        out_distribution = {}
+        node_payment_to_feed = {
+            payment_vkh: feed_vkh for feed_vkh, payment_vkh in nodes.items()
+        }
 
-        for transport in transports:
-            pending = transport.output.datum.datum
-            aggregation = pending.aggregation
-            reward_per_node = aggregation.node_reward_price
+        rewarded_feed_nodes = consensus_by_iqr_and_divergency(
+            message.node_feeds_sorted_by_feed,
+            iqr_fence_multiplier,
+            median_divergency_factor,
+        )
 
-            rewarded_nodes = consensus_by_iqr_and_divergency(
-                aggregation.message.node_feeds_sorted_by_feed,
-                iqr_fence_multiplier,
-                median_divergency_factor,
-            )
+        for payment_vkh in set(nodes.values()):
+            feed_vkh = node_payment_to_feed.get(payment_vkh)
+            if feed_vkh is not None:
+                reward = node_reward_price if feed_vkh in rewarded_feed_nodes else 0
+                in_amount = in_distribution.get(payment_vkh, 0)
+                out_distribution[payment_vkh] = in_amount + reward
 
-            for node_id in rewarded_nodes:
-                if node_id in node_rewards:
-                    node_rewards[node_id] += reward_per_node
+        return out_distribution
 
-        return node_rewards
     except Exception as e:
         raise DistributionError(f"Failed to calculate node rewards: {e}") from e
 

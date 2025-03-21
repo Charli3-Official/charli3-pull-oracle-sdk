@@ -218,6 +218,17 @@ class RewardAccountDatum(PlutusData):
     nodes_to_rewards: Dict[PaymentVkh, int]
 
     @classmethod
+    def sort_account(cls, data: dict[PaymentVkh, int]) -> "RewardAccountDatum":
+        """Create sorted reward account datum from a dictionary."""
+        if not data:
+            return cls.empty()
+
+        sorted_items = sorted(data.items(), key=lambda item: item[0].payload)
+        sorted_distribution = {k: v for k, v in sorted_items}
+
+        return cls(nodes_to_rewards=sorted_distribution)
+
+    @classmethod
     def empty(cls) -> "RewardAccountDatum":
         return cls(nodes_to_rewards={})
 

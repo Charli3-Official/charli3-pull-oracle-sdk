@@ -3,6 +3,7 @@
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
+from typing import Dict
 
 from pycardano import (
     Address,
@@ -17,13 +18,14 @@ from pycardano import (
     TransactionOutput,
     UTxO,
 )
-
 from charli3_offchain_core.blockchain.transactions import (
     TransactionManager,
     ValidityWindow,
 )
+from charli3_offchain_core.models.base import PaymentVkh
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
+    Nodes,
     NoDatum,
     OracleSettingsDatum,
     PriceData,
@@ -252,10 +254,7 @@ class OracleTransactionBuilder:
             # Calculate median using the current message
             feeds = list(current_message.node_feeds_sorted_by_feed.values())
             node_count = current_message.node_feeds_count
-            median_value = calc_methods.median(
-                feeds,
-                node_count,
-            )
+            median_value = calc_methods.median(feeds, node_count)
 
             # Update fees according to the rate feed
             reward_prices = deepcopy(settings_datum.fee_info.reward_prices)
@@ -280,12 +279,13 @@ class OracleTransactionBuilder:
             minimum_fee = rewards.calculate_min_fee_amount(reward_prices, node_count)
 
             # Create outputs using helper methods
-            # TODO: Fix reward distribution
-            account_output = self._create_reward_account(
-                transport=transport,
+            account_output = self._create_reward_account_output(
+                account=account,
                 current_message=current_message,
-                median_value=median_value,
                 node_reward_price=reward_prices.node_fee,
+                iqr_fence_multiplier=settings_datum.iqr_fence_multiplier,
+                median_divergency_factor=settings_datum.median_divergency_factor,
+                allowed_nodes=settings_datum.nodes,
                 minimum_fee=minimum_fee,
             )
 
@@ -419,25 +419,35 @@ class OracleTransactionBuilder:
         except Exception as e:
             raise TransactionError(f"Failed to build rewards transaction: {e}") from e
 
-    def _create_transport_output(
+    def _create_reward_account_output(
         self,
-        transport: UTxO,
+        account: UTxO,
         current_message: AggregateMessage,
-        median_value: int,
         node_reward_price: int,
+        iqr_fence_multiplier: int,
+        median_divergency_factor: int,
+        allowed_nodes: Nodes,
         minimum_fee: int,
     ) -> TransactionOutput:
         """Helper method to create transport output with consistent data."""
-        transport_output = deepcopy(transport.output)
+        account_output = deepcopy(account.output)
 
-        self._add_reward_to_output(transport_output, minimum_fee)
+        self._add_reward_to_output(account_output, minimum_fee)
+
+        in_distribution = account_output.datum.datum.nodes_to_rewards
+
+        out_nodes_to_rewards = rewards.calculate_reward_distribution(
+            current_message,
+            iqr_fence_multiplier,
+            median_divergency_factor,
+            in_distribution,
+            node_reward_price,
+            allowed_nodes.node_map,
+        )
 
         return self._create_final_output(
-            transport_output,
-            current_message,
-            median_value,
-            node_reward_price,
-            minimum_fee,
+            account_output,
+            out_nodes_to_rewards,
         )
 
     def _add_reward_to_output(
@@ -479,12 +489,7 @@ class OracleTransactionBuilder:
             transport_output.amount.multi_asset += fee_asset
 
     def _create_final_output(
-        self,
-        transport_output: TransactionOutput,
-        current_message: AggregateMessage,
-        median_value: int,
-        node_reward_price: int,
-        minimum_fee: int,
+        self, account_output: TransactionOutput, nodes_to_rewards: dict[PaymentVkh, int]
     ) -> TransactionOutput:
         """
         Create the final transaction output with all necessary data.
@@ -501,16 +506,9 @@ class OracleTransactionBuilder:
         """
         return TransactionOutput(
             address=self.script_address,
-            amount=transport_output.amount,
-            datum=RewardTransportVariant(
-                datum=RewardConsensusPending(
-                    aggregation=Aggregation(
-                        oracle_feed=median_value,
-                        message=current_message,
-                        node_reward_price=node_reward_price,
-                        rewards_amount_paid=minimum_fee,
-                    )
-                )
+            amount=account_output.amount,
+            datum=RewardAccountVariant(
+                RewardAccountDatum.sort_account(nodes_to_rewards)
             ),
         )
 
@@ -532,80 +530,79 @@ class OracleTransactionBuilder:
             ),
         )
 
-    def _create_empty_transport(
-        self, transport: UTxO, min_ada: int
-    ) -> TransactionOutput:
-        """Create empty reward transport output."""
-        output_amount = deepcopy(transport.output.amount)
+    # def _create_empty_transport(
+    #     self, transport: UTxO, min_ada: int
+    # ) -> TransactionOutput:
+    #     """Create empty reward transport output."""
+    #     output_amount = deepcopy(transport.output.amount)
 
-        # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
-        if self.reward_token_hash and self.reward_token_name:
-            if (
-                output_amount.multi_asset
-                and self.reward_token_hash in output_amount.multi_asset
-                and self.reward_token_name
-                in output_amount.multi_asset[self.reward_token_hash]
-            ):
-                output_amount.multi_asset[self.reward_token_hash][
-                    self.reward_token_name
-                ] = 0
-        output_amount.coin = min_ada
+    #     # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
+    #     if self.reward_token_hash and self.reward_token_name:
+    #         if (
+    #             output_amount.multi_asset
+    #             and self.reward_token_hash in output_amount.multi_asset
+    #             and self.reward_token_name
+    #             in output_amount.multi_asset[self.reward_token_hash]
+    #         ):
+    #             output_amount.multi_asset[self.reward_token_hash][
+    #                 self.reward_token_name
+    #             ] = 0
+    #     output_amount.coin = min_ada
 
-        return TransactionOutput(
-            address=self.script_address,
-            amount=output_amount,
-            datum=RewardTransportVariant(datum=NoRewards()),
-        )
+    #     return TransactionOutput(
+    #         address=self.script_address,
+    #         amount=output_amount,
+    #         datum=RewardTransportVariant(datum=NoRewards()),
+    #     )
 
-    def _create_reward_account(
-        self,
-        reward_account: UTxO,
-        transports: list[UTxO],
-        settings: OracleSettingsDatum,
-    ) -> TransactionOutput:
-        """Create updated reward account output.
+    # def _create_reward_account(
+    #     self,
+    #     reward_account: UTxO,
+    #     transports: list[UTxO],
+    #     settings: OracleSettingsDatum,
+    # ) -> TransactionOutput:
+    #     """Create updated reward account output.
 
-        The nodes_to_rewards list contains only the reward amounts, which map positionally
-        to the nodes list in oracle settings.
-        """
-        # Calculate rewards from transports
-        output_amount = deepcopy(reward_account.output.amount)
-        current_datum = reward_account.output.datum.datum
-        nodes = list(settings.nodes.node_map.keys())
+    #     The nodes_to_rewards list contains only the reward amounts, which map positionally
+    #     to the nodes list in oracle settings.
+    #     """
+    #     # Calculate rewards from transports
+    #     output_amount = deepcopy(reward_account.output.amount)
+    #     current_datum = reward_account.output.datum.datum
+    #     nodes = list(settings.nodes.node_map.keys())
 
-        # Calculate total fees and rewards
-        total_payment_tokens = rewards.calculate_total_fees(
-            transports,
-            self.reward_token_hash,
-            self.reward_token_name,
-        )
-        node_rewards = rewards.calculate_node_rewards_from_transports(
-            transports,
-            nodes,
-            settings.iqr_fence_multiplier,
-            settings.median_divergency_factor,
-        )
+    #     # Calculate total fees and rewards
+    #     total_payment_tokens = rewards.calculate_total_fees(
+    #         transports,
+    #         self.reward_token_hash,
+    #         self.reward_token_name,
+    #     )
+    #         transports,
+    #         nodes,
+    #         settings.iqr_fence_multiplier,
+    #         settings.median_divergency_factor,
+    #     )
 
-        # Accumulate rewards
-        new_rewards = rewards.accumulate_node_rewards(
-            current_datum, node_rewards, nodes
-        )
+    #     # Accumulate rewards
+    #     new_rewards = rewards.accumulate_node_rewards(
+    #         current_datum, node_rewards, nodes
+    #     )
 
-        # Update fee tokens
-        new_value = rewards.update_fee_tokens(
-            output_amount,
-            self.reward_token_hash,
-            self.reward_token_name,
-            total_payment_tokens,
-        )
+    #     # Update fee tokens
+    #     new_value = rewards.update_fee_tokens(
+    #         output_amount,
+    #         self.reward_token_hash,
+    #         self.reward_token_name,
+    #         total_payment_tokens,
+    #     )
 
-        return TransactionOutput(
-            address=self.script_address,
-            amount=new_value,
-            datum=RewardAccountVariant(
-                datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
-            ),
-        )
+    #     return TransactionOutput(
+    #         address=self.script_address,
+    #         amount=new_value,
+    #         datum=RewardAccountVariant(
+    #             datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
+    #         ),
+    #     )
 
     def _validity_window_to_slot(
         self, validity_start: int, validity_end: int

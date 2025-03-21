@@ -5,7 +5,7 @@ import click
 
 from charli3_offchain_core.cli.config.formatting import print_header, print_status
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
-from charli3_offchain_core.models.oracle_datums import AggregateMessage
+from charli3_offchain_core.models.oracle_redeemers import AggregateMessage
 from charli3_offchain_core.oracle.aggregate.builder import OdvResult
 
 from ...constants.colors import CliColor
