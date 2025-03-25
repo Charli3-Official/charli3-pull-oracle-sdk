@@ -1,0 +1,53 @@
+blueprint_path: ../artifacts/testnet_plutus.json
+create_reference: true
+fees:
+  node_fee: 100
+  platform_fee: 100
+multisig:
+  parties:
+  - c8c47610a36034aac6fc58848bdae5c278d994ff502c05455e3b3ee8
+  platform_addr: addr_test1wp653q94ze4kc7xfffgpwrfpan79m0z7x3hvfqeczhp6uug6fwg8n
+  threshold: 1
+network:
+  network: testnet
+  ogmios_kupo:
+    kupo_url: http://localhost:1442
+    ogmios_url: ws://localhost:1337
+  wallet:
+    mnemonic: test test test test test test test test test test test test test test
+      test test test test test test test test test sauce
+nodes:
+  nodes:
+  - feed_vkh: c8c47610a36034aac6fc58848bdae5c278d994ff502c05455e3b3ee8
+    payment_vkh: f8ed3a0eea0ef835ffa7bbfcde55f7fe9d2cc5d55ea62cecb42bab3c
+  - feed_vkh: a283d083ef2b398362c4a24d3cb0d52d0b197d2158cfbe2a4cf4899f
+    payment_vkh: 2cbcd3af85fc81003a6477c1ecaca29739cf6eef8d41881e5e9ec3e4
+  - feed_vkh: dcf1967142a82089238978008350a4b159aeae5058acf4d38c8cc642
+    payment_vkh: 4e67d7b5f978c905704d7e3d6d6e2bd45b152d873613bc65039ce53e
+  - feed_vkh: eece186c6f3d39f29dee71a516d72f1d7c8559595d6770341c3a6ca9
+    payment_vkh: 8cdb2693a7e5e831e33e8284237e671ee3029fc8f8dbdc78825b5649
+  - feed_vkh: 17c578b000ec6b1fdd94df03e1148d648da057f3d2fa7dc492efcd1a
+    payment_vkh: c392772f437fe9f0c7044b515cfbb9747466ffa0ab5643776cb7a206
+  - feed_vkh: 7d0bfa594243fc2cd31c4bf92f1356f5878555cf5a379d4bf3df5595
+    payment_vkh: e8946e86c513b8a5876ec6f9793f64add90c7cd13090fdf67a9a6140
+  - feed_vkh: e4057c06b5171bcc9690960d3dfdb1bfd689b15b0f931e171143782b
+    payment_vkh: 9e4868d22c079f98bb2b77aefc2a183b29e477499efe1409f4676c42
+  - feed_vkh: 7090ccc2db3d0b090d436fee49cd22b2b07a9837b32754bf590faf07
+    payment_vkh: 07925231b92b8e75ab47c71cd26b343b42c460d7bb42453fce06aab6
+  - feed_vkh: 4a30d28918afaf4cc797f3e6a5e78d83c18b753ec44fc4d3a2ed9863
+    payment_vkh: 29561c5ab2b98230970019f4c605d3840a676cb19a0f8b75207ebc1e
+  required_signatures: 9
+oracle_address: addr_test1wp7cnme20ws05d8g9z9lpmqfecrvnwdw8rwv5zax9kxf0xsyruz5g
+timing:
+  aggregation_liveness: 600000
+  iqr_multiplier: 150
+  pause_period: 1800000
+  reward_dismissing_period: 3600000
+  time_uncertainty_aggregation: 60000
+  time_uncertainty_platform: 90000
+tokens:
+  fee_token_name: '546573744333'
+  fee_token_policy: c9c4ada29e8640077a03ec2a6982f867f356ba1d7e25d19232372828
+  oracle_policy: ceb578a7cc2cf76da6cfc59760c25b641862ce2059747b89bc9d470f
+  platform_auth_policy: 8d27ad1783297f509466c5a0715e5bf830ab6ea3045860b4cd1cbf75
+transport_count: 4
