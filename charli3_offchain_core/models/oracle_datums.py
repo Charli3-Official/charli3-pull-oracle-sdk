@@ -6,6 +6,9 @@ from typing import Any, Dict, Union
 from pycardano import PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.base import (
+    PosixTime,
+)
+from charli3_offchain_core.models.base import (
     AssetName,
     FeedVkh,
     PaymentVkh,
@@ -215,10 +218,13 @@ class RewardAccountDatum(PlutusData):
     """Reward distribution datum"""
 
     CONSTR_ID = 0
-    nodes_to_rewards: Dict[PaymentVkh, int]
+    nodes_to_rewards: Dict[FeedVkh, int]
+    last_update_time: PosixTime = 0
 
     @classmethod
-    def sort_account(cls, data: dict[PaymentVkh, int]) -> "RewardAccountDatum":
+    def sort_account(
+        cls, data: dict[FeedVkh, int], last_update_time: int
+    ) -> "RewardAccountDatum":
         """Create sorted reward account datum from a dictionary."""
         if not data:
             return cls.empty()
@@ -226,11 +232,13 @@ class RewardAccountDatum(PlutusData):
         sorted_items = sorted(data.items(), key=lambda item: item[0].payload)
         sorted_distribution = {k: v for k, v in sorted_items}
 
-        return cls(nodes_to_rewards=sorted_distribution)
+        return cls(
+            nodes_to_rewards=sorted_distribution, last_update_time=last_update_time
+        )
 
     @classmethod
     def empty(cls) -> "RewardAccountDatum":
-        return cls(nodes_to_rewards={})
+        return cls(nodes_to_rewards={}, last_update_time=0)
 
     @property
     def length(self) -> int:

@@ -44,16 +44,13 @@ def calculate_reward_distribution(
     message: AggregateMessage,
     iqr_fence_multiplier: int,
     median_divergency_factor: int,
-    in_distribution: dict[PaymentVkh, int],
+    in_distribution: dict[FeedVkh, int],
     node_reward_price: int,
     nodes: dict[FeedVkh, PaymentVkh],
 ) -> dict[FeedVkh, int]:
     """Calculate node rewards from transport UTxOs."""
     try:
         out_distribution = {}
-        node_payment_to_feed = {
-            payment_vkh: feed_vkh for feed_vkh, payment_vkh in nodes.items()
-        }
 
         rewarded_feed_nodes = consensus_by_iqr_and_divergency(
             message.node_feeds_sorted_by_feed,
@@ -61,12 +58,10 @@ def calculate_reward_distribution(
             median_divergency_factor,
         )
 
-        for payment_vkh in set(nodes.values()):
-            feed_vkh = node_payment_to_feed.get(payment_vkh)
-            if feed_vkh is not None:
-                reward = node_reward_price if feed_vkh in rewarded_feed_nodes else 0
-                in_amount = in_distribution.get(payment_vkh, 0)
-                out_distribution[payment_vkh] = in_amount + reward
+        for feed_vkh in set(nodes.keys()):
+            reward = node_reward_price if feed_vkh in rewarded_feed_nodes else 0
+            in_amount = in_distribution.get(feed_vkh, 0)
+            out_distribution[feed_vkh] = in_amount + reward
 
         return out_distribution
 

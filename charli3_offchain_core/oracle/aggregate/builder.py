@@ -3,8 +3,10 @@
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Dict
 
+from charli3_offchain_core.models.base import (
+    PosixTime,
+)
 from pycardano import (
     Address,
     Asset,
@@ -287,6 +289,7 @@ class OracleTransactionBuilder:
                 median_divergency_factor=settings_datum.median_divergency_factor,
                 allowed_nodes=settings_datum.nodes,
                 minimum_fee=minimum_fee,
+                last_update_time=current_time,
             )
 
             agg_state_output = self._create_agg_state_output(
@@ -296,25 +299,6 @@ class OracleTransactionBuilder:
                 liveness_period=settings_datum.aggregation_liveness_period,
             )
 
-            # Estimate tx fee
-            evaluated_tx = await self.tx_manager.build_script_tx(
-                script_inputs=[
-                    (
-                        account,
-                        Redeemer(OdvAggregate(current_message)),
-                        script_utxo,
-                    ),
-                    (agg_state, Redeemer(OdvAggregateMsg()), script_utxo),
-                ],
-                script_outputs=[account_output, agg_state_output],
-                reference_inputs=reference_inputs,
-                required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
-                change_address=change_address,
-                signing_key=signing_key,
-                validity_start=validity_start_slot,
-                validity_end=validity_end_slot,
-            )
-            account_output.amount.coin += evaluated_tx.transaction_body.fee
             # Build and return transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -428,6 +412,7 @@ class OracleTransactionBuilder:
         median_divergency_factor: int,
         allowed_nodes: Nodes,
         minimum_fee: int,
+        last_update_time: PosixTime,
     ) -> TransactionOutput:
         """Helper method to create transport output with consistent data."""
         account_output = deepcopy(account.output)
@@ -448,6 +433,7 @@ class OracleTransactionBuilder:
         return self._create_final_output(
             account_output,
             out_nodes_to_rewards,
+            last_update_time,
         )
 
     def _add_reward_to_output(
@@ -489,7 +475,10 @@ class OracleTransactionBuilder:
             transport_output.amount.multi_asset += fee_asset
 
     def _create_final_output(
-        self, account_output: TransactionOutput, nodes_to_rewards: dict[PaymentVkh, int]
+        self,
+        account_output: TransactionOutput,
+        nodes_to_rewards: dict[PaymentVkh, int],
+        last_update_time: PosixTime,
     ) -> TransactionOutput:
         """
         Create the final transaction output with all necessary data.
@@ -508,7 +497,7 @@ class OracleTransactionBuilder:
             address=self.script_address,
             amount=account_output.amount,
             datum=RewardAccountVariant(
-                RewardAccountDatum.sort_account(nodes_to_rewards)
+                RewardAccountDatum.sort_account(nodes_to_rewards, last_update_time)
             ),
         )
 
