@@ -1,6 +1,7 @@
 """Oracle Redeemers for Oracle smart contract and Oracle NFTs"""
 
 from dataclasses import dataclass
+from typing import Dict
 
 from pycardano import PlutusData, VerificationKeyHash
 
@@ -47,7 +48,7 @@ class AggregateMessage(PlutusData):
     """Represents an aggregate message from nodes"""
 
     CONSTR_ID = 0
-    node_feeds_sorted_by_feed: dict[VerificationKeyHash, NodeFeed]
+    node_feeds_sorted_by_feed: Dict[VerificationKeyHash, NodeFeed]  # noqa
     node_feeds_count: int
     timestamp: PosixTime
 
