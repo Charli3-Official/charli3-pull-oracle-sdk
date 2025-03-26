@@ -1,11 +1,11 @@
 """Oracle start transaction builder for initial oracle deployment."""
 
 import logging
-import subprocess
-import os
 import math
-from pathlib import Path
+import os
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from pycardano import (
@@ -39,10 +39,10 @@ from charli3_offchain_core.models.oracle_datums import (
     OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
+    OutputReference,
     PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
-    OutputReference,
 )
 from charli3_offchain_core.models.oracle_redeemers import Mint as MintRedeemer
 from charli3_offchain_core.oracle.config import OracleDeploymentConfig, OracleTokenNames

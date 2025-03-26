@@ -7,12 +7,12 @@ from typing import Any
 
 import click
 from pycardano import PaymentExtendedSigningKey, UTxO, VerificationKeyHash
-from charli3_offchain_core.models.oracle_redeemers import (
-    AggregateMessage,
-)
 
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
+)
+from charli3_offchain_core.models.oracle_redeemers import (
+    AggregateMessage,
 )
 from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,

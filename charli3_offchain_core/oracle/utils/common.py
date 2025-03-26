@@ -15,11 +15,11 @@ from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.base import PosixTime
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
-from charli3_offchain_core.models.oracle_redeemers import AggregateMessage
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     SomeAsset,
 )
+from charli3_offchain_core.models.oracle_redeemers import AggregateMessage
 
 from ..exceptions import TransactionError, ValidationError
 

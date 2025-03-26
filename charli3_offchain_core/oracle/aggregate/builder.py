@@ -4,9 +4,6 @@ import logging
 from copy import deepcopy
 from dataclasses import dataclass
 
-from charli3_offchain_core.models.base import (
-    PosixTime,
-)
 from pycardano import (
     Address,
     Asset,
@@ -20,24 +17,28 @@ from pycardano import (
     TransactionOutput,
     UTxO,
 )
+
 from charli3_offchain_core.blockchain.transactions import (
     TransactionManager,
     ValidityWindow,
 )
-from charli3_offchain_core.models.base import PaymentVkh
+from charli3_offchain_core.models.base import (
+    PaymentVkh,
+    PosixTime,
+)
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
-    Nodes,
     NoDatum,
+    Nodes,
     OracleSettingsDatum,
     PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
-    OdvAggregateMsg,
-    OdvAggregate,
     AggregateMessage,
+    OdvAggregate,
+    OdvAggregateMsg,
 )
 from charli3_offchain_core.oracle.exceptions import (
     StateValidationError,

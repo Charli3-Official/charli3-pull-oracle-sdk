@@ -5,7 +5,7 @@ from fractions import Fraction
 
 from pycardano import Asset, AssetName, ScriptHash, UTxO, Value
 
-from charli3_offchain_core.models.base import NodeFeed, FeedVkh, PaymentVkh
+from charli3_offchain_core.models.base import FeedVkh, NodeFeed, PaymentVkh
 from charli3_offchain_core.models.oracle_datums import (
     IQR_APPLICABILITY_THRESHOLD,
     AggState,

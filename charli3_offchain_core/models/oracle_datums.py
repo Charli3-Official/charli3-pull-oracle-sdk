@@ -6,13 +6,11 @@ from typing import Any, Dict, Union
 from pycardano import PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.base import (
-    PosixTime,
-)
-from charli3_offchain_core.models.base import (
     AssetName,
     FeedVkh,
     PaymentVkh,
     PolicyId,
+    PosixTime,
     PosixTimeDiff,
     ScriptHash,
 )

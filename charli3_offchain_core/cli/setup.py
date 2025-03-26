@@ -118,7 +118,6 @@ def setup_oracle_from_config(
     deployment_config = DeploymentConfig.from_yaml(config)
     validate_deployment_config(deployment_config)
 
-
     reward_token = setup_token(
         deployment_config.tokens.reward_token_policy,
         deployment_config.tokens.reward_token_name,
@@ -138,9 +137,13 @@ def setup_oracle_from_config(
 
     # Parameterize contracts
     if deployment_config.use_aiken:
-        parameterized_contracts = apply_spend_params_with_aiken_compiler(oracle_config, deployment_config.blueprint_path)
+        parameterized_contracts = apply_spend_params_with_aiken_compiler(
+            oracle_config, deployment_config.blueprint_path
+        )
     else:
-        base_contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
+        base_contracts = OracleContracts.from_blueprint(
+            deployment_config.blueprint_path
+        )
         parameterized_contracts = OracleContracts(
             spend=base_contracts.apply_spend_params(oracle_config),
             mint=base_contracts.mint,
@@ -275,7 +278,10 @@ def setup_token(
         )
     return fee_token
 
-def apply_spend_params_with_aiken_compiler(config: OracleConfiguration, blueprint_path: Path) -> OracleContracts:
+
+def apply_spend_params_with_aiken_compiler(
+    config: OracleConfiguration, blueprint_path: Path
+) -> OracleContracts:
     cbor_hex = config.to_cbor().hex()
     output_file = "tmp_oracle_manager.json"
     validator_name = "oracle_manager"
@@ -284,7 +290,7 @@ def apply_spend_params_with_aiken_compiler(config: OracleConfiguration, blueprin
     try:
         project_root = Path(__file__).parent.parent.parent
 
-        artifact_path =  project_root / blueprint_path.parent
+        artifact_path = project_root / blueprint_path.parent
 
         os.chdir(artifact_path)
 
@@ -293,7 +299,7 @@ def apply_spend_params_with_aiken_compiler(config: OracleConfiguration, blueprin
         version = "0.0.0"
         """
 
-         # Write aiken.toml file in the artifact directory
+        # Write aiken.toml file in the artifact directory
         with open("aiken.toml", "w") as f:
             f.write(aiken_toml_content)
 
