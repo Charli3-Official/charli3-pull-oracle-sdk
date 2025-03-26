@@ -278,7 +278,7 @@ def setup_token(
 def apply_spend_params_with_aiken_compiler(config: OracleConfiguration, blueprint_path: Path) -> OracleContracts:
     cbor_hex = config.to_cbor().hex()
     output_file = "tmp_oracle_manager.json"
-    validator_name = "oracle_manager.json"
+    validator_name = "oracle_manager"
 
     original_dir = os.getcwd()
     try:
