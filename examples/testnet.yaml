@@ -69,6 +69,7 @@ transport_count: 4
 
 # Path to Aiken blueprint file
 blueprint_path: "artifacts/testnet_plutus.json"
+apply_arguments_with_aiken: True
 
 # Create both reference scripts for testing
 create_reference: true

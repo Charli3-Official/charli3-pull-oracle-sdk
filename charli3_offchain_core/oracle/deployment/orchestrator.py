@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from pycardano import (
     Address,
@@ -91,6 +92,8 @@ class OracleDeploymentOrchestrator:
         self,
         # oracle configuration
         oracle_config: OracleConfiguration,
+        use_aiken: bool,
+        blueprint_path: Path,
         platform_script: NativeScript,
         admin_address: Address,
         script_address: Address,
@@ -139,6 +142,8 @@ class OracleDeploymentOrchestrator:
             # Handle start transaction
             start_result = await self._handle_start_transaction(
                 config=oracle_config,
+                use_aiken=use_aiken,
+                blueprint_path=blueprint_path,
                 deployment_config=deployment_config,
                 nodes_config=nodes_config,
                 script_address=script_address,
@@ -207,6 +212,8 @@ class OracleDeploymentOrchestrator:
     async def _handle_start_transaction(
         self,
         config: OracleConfiguration,
+        use_aiken: bool,
+        blueprint_path: Path,
         deployment_config: OracleDeploymentConfig,
         nodes_config: NodesConfig,
         script_address: Address,
@@ -229,6 +236,8 @@ class OracleDeploymentOrchestrator:
 
         return await self.start_builder.build_start_transaction(
             config=config,
+            use_aiken=use_aiken,
+            blueprint_path=blueprint_path,
             nodes_config=nodes_config,
             deployment_config=deployment_config,
             script_address=script_address,

@@ -166,7 +166,9 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
 
         # Build deployment transaction
         result = await orchestrator.build_tx(
-            oracle_config,
+            oracle_config=oracle_config,
+            use_aiken=deployment_config.use_aiken,
+            blueprint_path=deployment_config.blueprint_path,
             platform_script=platform_script,
             admin_address=addresses.admin_address,
             script_address=addresses.script_address,

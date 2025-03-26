@@ -64,6 +64,7 @@ transport_count: 4
 
 # Path to Aiken blueprint file
 blueprint_path: "artifacts/plutus.json"
+apply_arguments_with_aiken: True
 
 # Reference script creation options
 create_reference: true # Create manager reference script

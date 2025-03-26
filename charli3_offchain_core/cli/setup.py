@@ -283,11 +283,19 @@ def apply_spend_params_with_aiken_compiler(config: OracleConfiguration, blueprin
     original_dir = os.getcwd()
     try:
         project_root = Path(__file__).parent.parent.parent
-        print(project_root)
 
         artifact_path =  project_root / blueprint_path.parent
 
         os.chdir(artifact_path)
+
+        # Create aiken.toml file
+        aiken_toml_content = """name = "charli3-official/odv-multisig-charli3-oracle-onchain"
+        version = "0.0.0"
+        """
+
+         # Write aiken.toml file in the artifact directory
+        with open("aiken.toml", "w") as f:
+            f.write(aiken_toml_content)
 
         cmd = f'aiken blueprint apply -i {blueprint_path.name} -v {validator_name} -o {output_file} "{cbor_hex}"'
 
@@ -301,6 +309,7 @@ def apply_spend_params_with_aiken_compiler(config: OracleConfiguration, blueprin
         contracts = OracleContracts.from_blueprint(output_path)
 
         os.remove(output_file)
+        os.remove("aiken.toml")
 
         return contracts
     finally:

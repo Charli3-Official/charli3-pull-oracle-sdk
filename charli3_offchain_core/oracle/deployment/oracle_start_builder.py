@@ -1,7 +1,10 @@
 """Oracle start transaction builder for initial oracle deployment."""
 
 import logging
+import subprocess
+import os
 import math
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,10 +28,12 @@ from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
+from charli3_offchain_core.contracts.plutus_v3_contract import PlutusV3Contract
 from charli3_offchain_core.models.oracle_datums import (
     MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE,
     AggState,
     FeeConfig,
+    NftsConfiguration,
     NoDatum,
     Nodes,
     OracleConfiguration,
@@ -37,6 +42,7 @@ from charli3_offchain_core.models.oracle_datums import (
     PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
+    OutputReference,
 )
 from charli3_offchain_core.models.oracle_redeemers import Mint as MintRedeemer
 from charli3_offchain_core.oracle.config import OracleDeploymentConfig, OracleTokenNames
@@ -75,6 +81,8 @@ class OracleStartBuilder:
     async def build_start_transaction(
         self,
         config: OracleConfiguration,
+        use_aiken: bool,
+        blueprint_path: Path,
         nodes_config: NodesConfig,
         deployment_config: OracleDeploymentConfig,
         script_address: Address,
@@ -145,12 +153,17 @@ class OracleStartBuilder:
         )
 
         # Create minting policy
-        # mint_policy = self.contracts.apply_mint_params(
-        #     minting_utxo,
-        #     config,
-        #     self.contracts.spend.script_hash,
-        # )
-        mint_policy = self.contracts.mint
+        if use_aiken:
+            # mint_policy = self.contracts.mint
+            mint_policy = self.apply_mint_params_with_aiken_compiler(
+                minting_utxo, config, self.contracts.spend.script_hash, blueprint_path
+            )
+        else:
+            mint_policy = self.contracts.apply_mint_params(
+                minting_utxo,
+                config,
+                self.contracts.spend.script_hash,
+            )
 
         logger.info("Created minting policy with ID: %s", mint_policy.policy_id)
 
@@ -346,3 +359,55 @@ class OracleStartBuilder:
         }
 
         return MultiAsset.from_primitive({policy_id: mint_map})
+
+    def apply_mint_params_with_aiken_compiler(
+        self,
+        utxo_ref: UTxO,
+        config: OracleConfiguration,
+        oracle_script_hash: ScriptHash,
+        blueprint_path: Path,
+    ) -> PlutusV3Contract:
+
+        tx_ref = OutputReference(
+            utxo_ref.input.transaction_id.payload, utxo_ref.input.index
+        )
+        argument = NftsConfiguration(tx_ref, config, oracle_script_hash.to_primitive())
+        cbor_hex = argument.to_cbor().hex()
+
+        output_file = "tmp_oracle_nfts.json"
+        validator_name = "oracle_nfts"
+
+        original_dir = os.getcwd()
+        try:
+            project_root = Path(__file__).parent.parent.parent.parent
+
+            artifact_path = project_root / blueprint_path.parent
+
+            os.chdir(artifact_path)
+
+            # Create aiken.toml file
+            aiken_toml_content = """name = "charli3-official/odv-multisig-charli3-oracle-onchain"
+            version = "0.0.0"
+            """
+
+            # Write aiken.toml file in the artifact directory
+            with open("aiken.toml", "w") as f:
+                f.write(aiken_toml_content)
+
+            cmd = f'aiken blueprint apply -i {blueprint_path.name} -v {validator_name} -o {output_file} "{cbor_hex}"'
+
+            output_path = artifact_path / output_file
+
+            if os.path.exists(output_path):
+                os.remove(output_path)
+
+            subprocess.run(cmd, shell=True, check=True)
+
+            contracts = OracleContracts.from_blueprint(output_path)
+
+            os.remove(output_file)
+            os.remove("aiken.toml")
+
+            return contracts.mint
+        finally:
+            os.chdir(original_dir)

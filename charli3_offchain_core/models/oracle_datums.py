@@ -159,6 +159,16 @@ class OracleConfiguration(PlutusData):
 
 
 @dataclass
+class NftsConfiguration(PlutusData):
+    """Immutable nfts settings"""
+
+    CONSTR_ID = 0
+    utxo_ref: OutputReference
+    oracle_config: OracleConfiguration
+    script_hash: ScriptHash
+
+
+@dataclass
 class OracleSettingsDatum(PlutusData):
     """Mutable oracle settings"""
 

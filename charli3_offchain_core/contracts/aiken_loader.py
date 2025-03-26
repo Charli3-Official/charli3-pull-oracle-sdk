@@ -9,12 +9,12 @@ from typing import Any, ClassVar, TypedDict
 from pycardano import (
     PlutusV3Script,
     ScriptHash,
-    TransactionOutput,
     UTxO,
 )
 
 from charli3_offchain_core.contracts.plutus_v3_contract import PlutusV3Contract, Purpose
 from charli3_offchain_core.models.oracle_datums import (
+    NftsConfiguration,
     OracleConfiguration,
     OracleDatum,
     OutputReference,
@@ -69,11 +69,7 @@ class OracleContracts:
         },
         OracleValidatorType.MINT: {
             "redeemer_type": ("redeemer", MintingRedeemer),
-            "parameter_types": [
-                ("utxo_ref", TransactionOutput),
-                ("config", OracleConfiguration),
-                ("oracle_script_hash", ScriptHash),
-            ],
+            "parameter_types": [("nfts_config", NftsConfiguration)],
             "purpose": [Purpose.minting],
         },
     }
@@ -131,7 +127,9 @@ class OracleContracts:
         tx_ref = OutputReference(
             utxo_ref.input.transaction_id.payload, utxo_ref.input.index
         )
-        return self.mint.apply_parameter(tx_ref, config, oracle_script_hash)
+        return self.mint.apply_parameter(
+            NftsConfiguration(tx_ref, config, oracle_script_hash.to_primitive())
+        )
 
 
 @dataclass
