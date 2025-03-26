@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -12,7 +14,6 @@ from pycardano import (
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.contracts.aiken_loader import (
     OracleContracts,
-    RewardEscrowContract,
 )
 from charli3_offchain_core.models.oracle_datums import (
     Asset,
@@ -117,8 +118,6 @@ def setup_oracle_from_config(
     deployment_config = DeploymentConfig.from_yaml(config)
     validate_deployment_config(deployment_config)
 
-    # Load base contracts
-    base_contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
 
     reward_token = setup_token(
         deployment_config.tokens.reward_token_policy,
@@ -128,13 +127,6 @@ def setup_oracle_from_config(
         deployment_config.tokens.rate_token_policy,
         deployment_config.tokens.rate_token_name,
     )
-    if isinstance(reward_token, NoDatum):
-        escrow_script_hash = b""
-    else:
-        escrow_script = RewardEscrowContract.from_blueprint(
-            deployment_config.blueprint_path
-        )
-        escrow_script_hash = escrow_script.escrow_manager.script_hash.payload
 
     # Create oracle configuration
     oracle_config = OracleConfiguration(
@@ -142,14 +134,17 @@ def setup_oracle_from_config(
         pause_period_length=deployment_config.timing.pause_period,
         reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
         fee_token=reward_token,
-        reward_escrow_script_hash=escrow_script_hash,
     )
 
     # Parameterize contracts
-    parameterized_contracts = OracleContracts(
-        spend=base_contracts.apply_spend_params(oracle_config),
-        mint=base_contracts.mint,
-    )
+    if deployment_config.use_aiken:
+        parameterized_contracts = apply_spend_params_with_aiken_compiler(oracle_config, deployment_config.blueprint_path)
+    else:
+        base_contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
+        parameterized_contracts = OracleContracts(
+            spend=base_contracts.apply_spend_params(oracle_config),
+            mint=base_contracts.mint,
+        )
 
     # Load keys and derive addresses
     keys = load_keys_with_validation(deployment_config, parameterized_contracts)
@@ -229,21 +224,12 @@ def setup_management_from_config(config: Path) -> tuple[
         management_config.tokens.reward_token_policy,
         management_config.tokens.reward_token_name,
     )
-    if reward_token == NoDatum():
-        escrow_script_hash = b""
-    else:
-        escrow_script = RewardEscrowContract.from_blueprint(
-            management_config.blueprint_path
-        )
-        escrow_script_hash = escrow_script.escrow_manager.script_hash.payload
-
     # Create oracle configuration
     oracle_config = OracleConfiguration(
         platform_auth_nft=bytes.fromhex(management_config.tokens.platform_auth_policy),
         pause_period_length=management_config.timing.pause_period,
         reward_dismissing_period_length=management_config.timing.reward_dismissing_period,
         fee_token=reward_token,
-        reward_escrow_script_hash=escrow_script_hash,
     )
 
     keys = load_keys_with_validation(management_config, base_contracts)
@@ -288,3 +274,34 @@ def setup_token(
             )
         )
     return fee_token
+
+def apply_spend_params_with_aiken_compiler(config: OracleConfiguration, blueprint_path: Path) -> OracleContracts:
+    cbor_hex = config.to_cbor().hex()
+    output_file = "tmp_oracle_manager.json"
+    validator_name = "oracle_manager.json"
+
+    original_dir = os.getcwd()
+    try:
+        project_root = Path(__file__).parent.parent.parent
+        print(project_root)
+
+        artifact_path =  project_root / blueprint_path.parent
+
+        os.chdir(artifact_path)
+
+        cmd = f'aiken blueprint apply -i {blueprint_path.name} -v {validator_name} -o {output_file} "{cbor_hex}"'
+
+        output_path = artifact_path / output_file
+
+        if os.path.exists(output_path):
+            os.remove(output_path)
+
+        subprocess.run(cmd, shell=True, check=True)
+
+        contracts = OracleContracts.from_blueprint(output_path)
+
+        os.remove(output_file)
+
+        return contracts
+    finally:
+        os.chdir(original_dir)

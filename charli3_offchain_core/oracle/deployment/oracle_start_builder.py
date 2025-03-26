@@ -145,11 +145,13 @@ class OracleStartBuilder:
         )
 
         # Create minting policy
-        mint_policy = self.contracts.apply_mint_params(
-            minting_utxo,
-            config,
-            self.contracts.spend.script_hash,
-        )
+        # mint_policy = self.contracts.apply_mint_params(
+        #     minting_utxo,
+        #     config,
+        #     self.contracts.spend.script_hash,
+        # )
+        mint_policy = self.contracts.mint
+
         logger.info("Created minting policy with ID: %s", mint_policy.policy_id)
 
         # Create core UTxOs - Calculate CoreSettings first to set standard min ADA

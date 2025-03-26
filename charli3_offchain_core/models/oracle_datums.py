@@ -151,7 +151,6 @@ class OracleConfiguration(PlutusData):
     pause_period_length: PosixTimeDiff
     reward_dismissing_period_length: PosixTimeDiff
     fee_token: Union[SomeAsset, NoDatum]
-    reward_escrow_script_hash: ScriptHash
 
     def __post_init__(self) -> None:
         # Add validation for platform_auth_nft length (28 bytes for Cardano)

@@ -23,6 +23,7 @@ class DeploymentConfig:
     transport_count: int = 4
     multi_sig: MultisigConfig | None = None
     blueprint_path: Path = Path("artifacts/plutus.json")
+    use_aiken: bool = False
     create_reference: bool = True
 
     @classmethod
@@ -39,5 +40,6 @@ class DeploymentConfig:
             nodes=NodesConfig.from_dict(data.get("nodes", {})),
             transport_count=data.get("transport_count", 4),
             blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),
+            use_aiken=data.get("apply_arguments_with_aiken", False),
             create_reference=data.get("create_reference", True),
         )
