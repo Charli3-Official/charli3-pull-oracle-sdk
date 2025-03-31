@@ -58,6 +58,9 @@ run_test "TestDeployment"
 # 2. Create reference script
 run_test "TestCreateReferenceScript"
 
+# 3. Oracle Pause
+run_test "TestOraclePause"
+
 # 3. Run aggregate tests multiple times
 # run_test_multiple_times "TestAggregate" 1 10
 

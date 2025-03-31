@@ -33,7 +33,7 @@ from ..exceptions import StateValidationError, TransactionError, ValidationError
 
 
 async def get_script_utxos(
-    script_address: Address, tx_manager: TransactionManager
+    script_address: str | Address, tx_manager: TransactionManager
 ) -> list[UTxO]:
     """Get and validate UTxOs at script address."""
     try:

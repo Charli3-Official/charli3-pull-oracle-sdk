@@ -122,7 +122,11 @@ class TestDeployment(TestBase):
             f"Updating configuration file with new oracle script address: {self.oracle_script_address}"
         )
         update_config_file(
-            self.config_path, {"oracle_address": str(self.oracle_script_address)}
+            self.config_path,
+            {
+                "oracle_address": str(self.oracle_script_address),
+                "tokens.oracle_policy": result.start_result.oracle_policy_id,
+            },
         )
 
         logger.info("Oracle deployment test completed successfully")

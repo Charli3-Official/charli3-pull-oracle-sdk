@@ -54,6 +54,7 @@ class StartTransactionResult:
     reward_account_utxo: TransactionOutput
     reward_transport_utxos: list[TransactionOutput]
     agg_state_utxos: list[TransactionOutput]
+    oracle_policy_id: str
 
 
 class OracleStartBuilder:
@@ -233,6 +234,7 @@ class OracleStartBuilder:
             reward_account_utxo=reward_account_utxo,
             reward_transport_utxos=list(reward_transport_utxos),
             agg_state_utxos=list(agg_state_utxos),
+            oracle_policy_id=mint_policy.policy_id,
         )
 
     def _verify_platform_auth(self, utxo: UTxO, policy_id: bytes) -> bool:
