@@ -4,7 +4,7 @@ import logging
 import secrets
 import time
 
-from pycardano import Transaction, TransactionWitnessSet
+from pycardano import Transaction, TransactionWitnessSet, VerificationKeyWitness
 
 from charli3_offchain_core.models.client import OdvFeedRequest, OdvTxSignatureRequest
 from charli3_offchain_core.models.message import (
@@ -85,7 +85,10 @@ class NodeSimulator:
                 tx.transaction_witness_set = TransactionWitnessSet()
 
             signature = self.node.signing_key.sign(tx.transaction_body.hash())
-            tx.transaction_witness_set.vkey_witnesses.append(signature)
+            witness = VerificationKeyWitness(
+                vkey=self.node.verification_key, signature=signature
+            )
+            tx.transaction_witness_set.vkey_witnesses.append(witness)
 
             logger.info(f"Node {self.node.hex_feed_vkh[:8]} signed transaction")
             return tx
