@@ -96,6 +96,7 @@ class DelNodesBuilder(BaseBuilder):
         reward_issuer_addr: Address | None = None,
         escrow_address: Address | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
+        test_mode: bool = False,
     ) -> GovernanceTxResult:
         """Builds a governance transaction for updating node configurations.
 
@@ -196,7 +197,9 @@ class DelNodesBuilder(BaseBuilder):
                 payment_distribution,
                 reward_token,
                 self.MIN_UTXO_VALUE,
+                test_mode,
             )
+
             # Build the transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -703,6 +706,7 @@ def confirm_node_updates(
     payment_distribution: dict[VerificationKeyHash, int],
     reward_token: NoDatum | SomeAsset,
     min_utxo_value: int,
+    test_mode: bool = False,
 ) -> bool:
     """
     Validate and confirm node updates with the user.
@@ -731,7 +735,7 @@ def confirm_node_updates(
         raise RemoveNodesValidationError("Removing nodes validation failed")
 
     # Get user confirmation
-    if not print_confirmation_message_prompt(
+    if not test_mode and not print_confirmation_message_prompt(
         "Do you want to continue with the detected changes?"
     ):
         logger.info("User cancelled operation: Delete Nodes")

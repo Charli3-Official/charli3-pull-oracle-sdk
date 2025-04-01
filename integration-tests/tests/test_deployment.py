@@ -9,6 +9,7 @@ from charli3_offchain_core.oracle.utils.common import get_script_utxos
 
 from .base import TestBase
 from .test_utils import (
+    find_oracle_policy_hash,
     find_platform_auth_nft,
     logger,
     update_config_file,
@@ -105,7 +106,7 @@ class TestDeployment(TestBase):
         ), f"Deployment transaction failed with status: {status}"
 
         # Wait for UTxOs to be indexed
-        await wait_for_indexing(5)
+        await wait_for_indexing(20)
 
         # Check that UTxOs exist at the oracle script address
         logger.info(
@@ -125,4 +126,13 @@ class TestDeployment(TestBase):
             self.config_path, {"oracle_address": str(self.oracle_script_address)}
         )
 
+        # Update the configuration file with the new oracle policy id
+        oracle_policy_id = find_oracle_policy_hash(utxos, "CoreSettings")
+        logger.info(
+            f"Updating configuration file with new oracle policy ID: {oracle_policy_id}"
+        )
+        update_config_file(
+            self.config_path,
+            {"tokens.oracle_policy": oracle_policy_id},
+        )
         logger.info("Oracle deployment test completed successfully")

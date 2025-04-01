@@ -63,6 +63,12 @@ run_test "TestCreateReferenceScript"
 
 # # 4. Test governance functions
 # run_test "TestEditSettings or TestAddNodes or TestRemoveNodes"
+# 4.3
+# run_test "TestRemoveNodes"
+# 4.4
+run_test "TestAddNodes"
+# 4.5
+# run_test "TestEditSettings"
 
 # # 5. Test reward collection
 # run_test "TestNodeCollect or TestPlatformCollect"
