@@ -117,9 +117,12 @@ class TestDeployment(TestBase):
             len(utxos) > 0
         ), "No UTxOs found at oracle script address after deployment"
 
-        # Update the configuration file with the new oracle script address
+        # Update the configuration file with the new params
         logger.info(
             f"Updating configuration file with new oracle script address: {self.oracle_script_address}"
+        )
+        logger.info(
+            f"Updating configuration file with new oracle policy id: {result.start_result.oracle_policy_id}"
         )
         update_config_file(
             self.config_path,
