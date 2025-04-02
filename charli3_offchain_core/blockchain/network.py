@@ -189,8 +189,8 @@ def get_devnet_config() -> NetworkConfig | None:
 
         return NetworkConfig(
             zero_time=zero_time,
-            zero_slot=1000,  # Keep the existing value
-            slot_length=1000,  # Keep the existing value
+            zero_slot=0,
+            slot_length=1000,
         )
     except requests.RequestException as e:
         raise NetworkConfigError(

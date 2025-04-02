@@ -91,7 +91,7 @@ run_test "TestDeployment"
 run_test "TestCreateReferenceScript"
 
 # 3. Run aggregate tests multiple times
-# run_test_multiple_times "TestAggregate" 1 10
+run_test "TestAggregate"
 
 # # 4. Test governance functions
 # run_test "TestEditSettings or TestAddNodes or TestRemoveNodes"

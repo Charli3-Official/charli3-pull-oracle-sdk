@@ -1,6 +1,5 @@
 """Test ODV aggregate transaction and reward processing."""
 
-import asyncio
 from collections.abc import Callable
 from pathlib import Path
 
@@ -9,7 +8,6 @@ from pycardano import (
     PaymentExtendedSigningKey,
     PaymentVerificationKey,
     ScriptHash,
-    TransactionWitnessSet,
     VerificationKeyHash,
 )
 
@@ -203,38 +201,30 @@ class TestAggregate(TestBase):
             change_address=change_address,
         )
 
-        # 6. Sign transaction with all node keys
-        for skey, _, _ in self.node_keys:
-            signature = skey.sign(odv_result.transaction.transaction_body.hash())
+        # 6. Extract node signing keys
+        node_signing_keys = [skey for skey, _, _ in self.node_keys]
 
-            if odv_result.transaction.transaction_witness_set is None:
-                odv_result.transaction.transaction_witness_set = TransactionWitnessSet()
+        # 7. Submit transaction with all signing keys
+        all_signing_keys = [signing_key, *node_signing_keys]
 
-            if odv_result.transaction.transaction_witness_set.vkey_witnesses is None:
-                odv_result.transaction.transaction_witness_set.vkey_witnesses = []
+        logger.info(
+            f"Submitting ODV transaction with {len(all_signing_keys)} signing keys: {odv_result.transaction.id}"
+        )
+        logger.info(f"Transaction details: {odv_result.transaction}")
 
-            odv_result.transaction.transaction_witness_set.vkey_witnesses.append(
-                signature
-            )
-
-        # 7. Submit transaction
-        logger.info(f"Submitting ODV transaction: {odv_result.transaction.id}")
         status, _ = await self.tx_manager.sign_and_submit(
             odv_result.transaction,
-            [signing_key],
+            all_signing_keys,
             wait_confirmation=True,
         )
 
         assert status == "confirmed", f"ODV transaction failed with status: {status}"
         logger.info(f"ODV transaction confirmed: {odv_result.transaction.id}")
 
-        # 8. Store transaction ID for subsequent tests
-        self.odv_tx_id = str(odv_result.transaction.id)
-
-        # 9. Wait for indexing before verification
+        # 8. Wait for indexing before verification
         await wait_for_indexing(10)
 
-        # 10. Verify state changes
+        # 9. Verify state changes
         await self.verify_odv_outputs(expected_median)
 
         logger.info("ODV transaction test completed successfully")
@@ -244,27 +234,17 @@ class TestAggregate(TestBase):
         """Test rewards calculation and distribution after ODV transaction."""
         logger.info("Starting rewards processing test")
 
-        # Skip if ODV transaction didn't complete
-        if not hasattr(self, "odv_tx_id"):
-            pytest.skip("ODV transaction not completed")
-
         # 1. Load keys
         signing_key, change_address = self.admin_signing_key, self.admin_address
 
-        # 2. Wait for required time window to pass (based on aggregation_liveness_period)
-        logger.info(
-            f"Waiting for aggregation liveness period: {self.timing_config.aggregation_liveness}ms"
-        )
-        await asyncio.sleep(self.timing_config.aggregation_liveness / 1000)
-
-        # 3. Build rewards transaction
+        # 2. Build rewards transaction
         logger.info("Building rewards transaction")
         rewards_result = await self.odv_builder.build_rewards_tx(
             signing_key=signing_key,
             change_address=change_address,
         )
 
-        # 4. Submit the transaction
+        # 3. Submit the transaction
         logger.info(f"Submitting rewards transaction: {rewards_result.transaction.id}")
         status, _ = await self.tx_manager.sign_and_submit(
             rewards_result.transaction,
@@ -277,10 +257,10 @@ class TestAggregate(TestBase):
         ), f"Rewards transaction failed with status: {status}"
         logger.info(f"Rewards transaction confirmed: {rewards_result.transaction.id}")
 
-        # 5. Wait for indexing
+        # 4. Wait for indexing
         await wait_for_indexing(10)
 
-        # 6. Verify reward distribution is correct
+        # 5. Verify reward distribution is correct
         await self.verify_reward_distribution(rewards_result)
 
         logger.info("Rewards processing test completed successfully")
