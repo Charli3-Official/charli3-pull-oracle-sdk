@@ -1,9 +1,9 @@
-"""Test module for scaling up Oracle Data Verification UTxO pairs.
+"""Test module for scaling down Oracle Data Verification UTxO pairs.
 
-This module tests the functionality of increasing the number of UTxO pairs
-in the Oracle. It validates that the scaling up operation correctly
-adds the specified number of pairs (each consisting of an AggState UTxO and a
-RewardTransport UTxO) to the blockchain environment.
+This module tests the functionality of decreasing the number of UTxO pairs
+in the Oracle. It validates that the scaling down operation correctly
+removes the specified number of pairs (each consisting of an AggState UTxO and a
+RewardTransport UTxO) from the blockchain environment.
 """
 
 from collections.abc import Callable
@@ -21,17 +21,17 @@ from .test_utils import (
 )
 
 
-class TestScaleUp(GovernanceBase):
-    """Test class for validating Oracle scale-up operations in the governance system.
+class TestScaleDown(GovernanceBase):
+    """Test class for validating Oracle scale-down operations in the governance system.
 
     This class inherits from GovernanceBase and implements test methods for
-    increasing the number of UTxO pairs in the Oracle system. Each pair consists of an
+    decreasing the number of UTxO pairs in the Oracle system. Each pair consists of an
     AggState UTxO and a RewardTransport UTxO. It verifies the transaction building,
     signing, and submission processes, and ensures that the expected number of pairs
-    are added.
+    are removed.
     """
 
-    NEW_PAIR_UTXOS = 2
+    REMOVE_PAIR_UTXOS = 1
 
     def setup_method(self, method: "Callable") -> None:
         """Set up the test environment before each test method execution.
@@ -39,13 +39,13 @@ class TestScaleUp(GovernanceBase):
         Args:
             method (Callable): The test method being run.
         """
-        logger.info("Setting up TestScaleUp environment")
+        logger.info("Setting up TestScaleDown environment")
         super().setup_method(method)
-        logger.info("TestScaleUp setup completed")
+        logger.info("TestScaleDown setup completed")
 
     @pytest.mark.asyncio
-    async def test_scale_up(self) -> None:
-        """Test the process of scaling up Oracle UTxO pairs.
+    async def test_scale_down(self) -> None:
+        """Test the process of scaling down Oracle UTxO pairs.
 
         Each pair consists of an AggState UTxO and a RewardTransport UTxO.
 
@@ -53,16 +53,16 @@ class TestScaleUp(GovernanceBase):
         1. Counts the current AggState and RewardTransport UTxOs
         2. Retrieves the platform authentication NFT
         3. Gets the platform script configuration
-        4. Builds a transaction to add UTxO pairs
+        4. Builds a transaction to remove UTxO pairs
         5. Signs and submits the transaction
         6. Verifies the transaction was confirmed
-        7. Confirms the UTxO pairs are added correctly
+        7. Confirms the UTxO pairs are removed correctly
 
         Raises:
             AssertionError: If the transaction fails to build or confirm,
-                           or if the expected number of pairs is not added
+                           or if the expected number of pairs is not removed
         """
-        logger.info("Starting Oracle scale-up operation")
+        logger.info("Starting Oracle scale-down operation")
 
         # Log current configuration
         logger.info(f"Using admin address: {self.oracle_addresses.admin_address}")
@@ -76,7 +76,9 @@ class TestScaleUp(GovernanceBase):
         logger.info(
             f"Oracle Token ScriptHash: {self.management_config.tokens.oracle_policy}"
         )
-        logger.info(f"Scale-up amount: {self.NEW_PAIR_UTXOS} UTxO pair(s) to add")
+        logger.info(
+            f"Scale-down amount: {self.REMOVE_PAIR_UTXOS} UTxO pair(s) to remove"
+        )
 
         # Get current UTxOs and count both AggState and RewardTransport UTxOs
         utxos = await get_script_utxos(
@@ -113,13 +115,13 @@ class TestScaleUp(GovernanceBase):
             str(self.oracle_addresses.platform_address)
         )
 
-        # Build the scale-up transaction
+        # Build the scale-down transaction
         logger.info(
-            f"Building scale-up transaction to add {self.NEW_PAIR_UTXOS} UTxO pair(s)"
+            f"Building scale-down transaction to remove {self.REMOVE_PAIR_UTXOS} aggregation state pair(s)"
         )
-        result = await self.governance_orchestrator.scale_up_oracle(
+        result = await self.governance_orchestrator.scale_down_oracle(
             oracle_policy=self.management_config.tokens.oracle_policy,
-            scale_amount=self.NEW_PAIR_UTXOS,
+            scale_amount=self.REMOVE_PAIR_UTXOS,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=self.oracle_addresses.admin_address,
@@ -128,29 +130,30 @@ class TestScaleUp(GovernanceBase):
 
         assert (
             result.status == ProcessStatus.TRANSACTION_BUILT
-        ), f"Scale-up transaction failed to build: {result.error}"
+        ), f"Scale-down transaction failed to build: {result.error}"
 
-        logger.info(f"Scale-up transaction built successfully: {result.transaction.id}")
+        logger.info(
+            f"Scale-down transaction built successfully: {result.transaction.id}"
+        )
 
         # Sign and submit the transaction
-        logger.info("Signing and submitting scale-up transaction")
+        logger.info("Signing and submitting scale-down transaction")
         transaction_status, _ = await self.tx_manager.sign_and_submit(
             result.transaction,
             [self.loaded_key.payment_sk],
             wait_confirmation=True,
         )
 
-        logger.info(f"Scale-up transaction submission status: {transaction_status}")
+        logger.info(f"Scale-down transaction submission status: {transaction_status}")
         assert (
             transaction_status == "confirmed"
-        ), f"Scale-up transaction failed with status: {transaction_status}"
+        ), f"Scale-down transaction failed with status: {transaction_status}"
 
         # Wait for UTxOs to be indexed
-        logger.info(f"Waiting {20} seconds for UTxOs to be indexed")
         await wait_for_indexing(20)
 
         # Check the updated UTxOs
-        logger.info("Verifying UTxO pairs were added correctly")
+        logger.info("Verifying UTxO pairs were removed correctly")
         utxos = await get_script_utxos(
             Address.from_primitive(self.oracle_addresses.script_address),
             self.tx_manager,
@@ -171,10 +174,10 @@ class TestScaleUp(GovernanceBase):
         logger.info(f"Updated RewardTransport UTxOs: {new_reward_transport_count}")
 
         # Compare counts before and after
-        expected_count = total_agg_state_utxos + self.NEW_PAIR_UTXOS
+        expected_count = total_agg_state_utxos - self.REMOVE_PAIR_UTXOS
         logger.info(f"Expected UTxOs of each type: {expected_count}")
 
-        # Assert that both types of UTxOs were added correctly
+        # Assert that both types of UTxOs were removed correctly
         assert expected_count == new_agg_state_count, (
             f"AggState UTxO mismatch: Expected {expected_count} UTxOs, "
             f"but found {new_agg_state_count} UTxOs in the blockchain"
@@ -191,4 +194,4 @@ class TestScaleUp(GovernanceBase):
             f"but {new_reward_transport_count} RewardTransport UTxOs"
         )
 
-        logger.info("Scale-up operation completed successfully")
+        logger.info("Scale-down operation completed successfully")

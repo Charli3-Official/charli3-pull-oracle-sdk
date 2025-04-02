@@ -72,7 +72,7 @@ run_test "TestEditSettings"
 # 4.6
 run_test "TestScaleUp"
 # 4.7
-# run_test "TestScaleDown"
+run_test "TestScaleDown"
 
 # # 5. Test reward collection
 # run_test "TestNodeCollect or TestPlatformCollect"

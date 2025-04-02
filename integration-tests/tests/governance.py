@@ -3,15 +3,22 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from pycardano import Network, UTxO
+from pycardano import Network, ScriptHash, UTxO
 
 from charli3_offchain_core.cli.config.escrow import EscrowConfig
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.config.nodes import NodeConfig, NodesConfig
 from charli3_offchain_core.cli.governance import setup_management_from_config
-from charli3_offchain_core.models.oracle_datums import AggStateVariant
+from charli3_offchain_core.models.oracle_datums import (
+    AggStateVariant,
+    RewardTransportVariant,
+)
 from charli3_offchain_core.oracle.governance.orchestrator import GovernanceOrchestrator
-from charli3_offchain_core.oracle.utils.state_checks import convert_cbor_to_agg_states
+from charli3_offchain_core.oracle.utils.asset_checks import filter_utxos_by_token_name
+from charli3_offchain_core.oracle.utils.state_checks import (
+    convert_cbor_to_agg_states,
+    convert_cbor_to_transports,
+)
 
 from .test_utils import (
     logger,
@@ -130,20 +137,47 @@ class GovernanceBase:
             required_signatures=required_signatures, nodes=selected_nodes
         )
 
-    def filter_all_agg_states(self, utxos: Sequence[UTxO]) -> list[UTxO]:
+    def filter_all_agg_states(
+        self, utxos: Sequence[UTxO], policy_hash: str
+    ) -> list[UTxO]:
         """Filter UTxOs for empty or expired aggregation states.
 
         Args:
             utxos: List of UTxOs to filter
-            current_time: Current time for checking expiry
 
         Returns:
-            List of UTxOs with empty or expired aggregation states
+            List of AggState UTxOs
         """
-        utxos_with_datum = convert_cbor_to_agg_states(utxos)
+        agg_state = filter_utxos_by_token_name(
+            utxos, ScriptHash(bytes.fromhex(policy_hash)), "AggregationState"
+        )
+        utxos_with_datum = convert_cbor_to_agg_states(agg_state)
 
         return [
             utxo
             for utxo in utxos_with_datum
             if utxo.output.datum and isinstance(utxo.output.datum, AggStateVariant)
+        ]
+
+    def filter_all_reward_transports(
+        self, utxos: Sequence[UTxO], policy_hash: str
+    ) -> list[UTxO]:
+        """Filter UTxOs for Reward Transports.
+
+        Args:
+            utxos: List of UTxOs to filter
+
+        Returns:
+            List of RewardTransport UTxOs
+        """
+        reward_transports = filter_utxos_by_token_name(
+            utxos, ScriptHash(bytes.fromhex(policy_hash)), "RewardTransport"
+        )
+        utxos_with_datum = convert_cbor_to_transports(reward_transports)
+
+        return [
+            utxo
+            for utxo in utxos_with_datum
+            if utxo.output.datum
+            and isinstance(utxo.output.datum, RewardTransportVariant)
         ]
