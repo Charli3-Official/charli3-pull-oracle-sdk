@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - 52-add-yaci-devkit-for-integration-tests
+
   pull_request:
     branches:
       - main
