@@ -40,7 +40,7 @@ class TestDeployment(TestBase):
         )
 
         # Create collateral UTxOs first to ensure they're available
-        await self.create_collateral_utxos(count=5, amount=9_000_000)
+        await self.create_collateral_utxos(count=5, amount=13_000_000)
 
         # Find platform auth NFT at the platform address
         platform_utxo = await find_platform_auth_nft(
@@ -100,6 +100,9 @@ class TestDeployment(TestBase):
         )
 
         logger.info(f"Deployment transaction submission status: {status}")
+        # Extract the oracle policy ID from the result
+        oracle_policy_id = result.start_result.minting_policy_id
+
         assert (
             status == "confirmed"
         ), f"Deployment transaction failed with status: {status}"
@@ -122,13 +125,13 @@ class TestDeployment(TestBase):
             f"Updating configuration file with new oracle script address: {self.oracle_script_address}"
         )
         logger.info(
-            f"Updating configuration file with new oracle policy id: {result.start_result.oracle_policy_id}"
+            f"Updating configuration file with new oracle policy id: {oracle_policy_id}"
         )
         update_config_file(
             self.config_path,
             {
                 "oracle_address": str(self.oracle_script_address),
-                "tokens.oracle_policy": result.start_result.oracle_policy_id,
+                "tokens.oracle_policy": oracle_policy_id,
             },
         )
 

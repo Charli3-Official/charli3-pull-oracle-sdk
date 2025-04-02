@@ -50,11 +50,11 @@ class StartTransactionResult:
     """Result of oracle start transaction"""
 
     transaction: Transaction
+    minting_policy_id: str
     settings_utxo: TransactionOutput
     reward_account_utxo: TransactionOutput
     reward_transport_utxos: list[TransactionOutput]
     agg_state_utxos: list[TransactionOutput]
-    oracle_policy_id: str
 
 
 class OracleStartBuilder:
@@ -230,11 +230,11 @@ class OracleStartBuilder:
 
         return StartTransactionResult(
             transaction=tx,
+            minting_policy_id=mint_policy.policy_id,
             settings_utxo=settings_utxo,
             reward_account_utxo=reward_account_utxo,
             reward_transport_utxos=list(reward_transport_utxos),
             agg_state_utxos=list(agg_state_utxos),
-            oracle_policy_id=mint_policy.policy_id,
         )
 
     def _verify_platform_auth(self, utxo: UTxO, policy_id: bytes) -> bool:

@@ -15,7 +15,7 @@ from .base import TEST_RETRIES, TestBase
 from .test_utils import logger, wait_for_indexing
 
 
-@pytest.mark.run(order=3)
+@pytest.mark.run(order=4)
 class TestOraclePause(TestBase):
     """Test oracle pause/resume."""
 
@@ -42,7 +42,7 @@ class TestOraclePause(TestBase):
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.run(order=3.1)
+    @pytest.mark.run(order=4.1)
     @async_retry(tries=TEST_RETRIES, delay=5)
     async def test_oracle_pause(self) -> None:
         """Test oracle pause."""
