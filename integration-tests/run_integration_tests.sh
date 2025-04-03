@@ -19,7 +19,7 @@ trap 'kill_processes' SIGINT SIGTERM EXIT
 ./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
 # Wait for the node to start
 echo "Waiting for the node to start..."
-sleep 60
+sleep 70
 
 # Tests
 run_test() {
