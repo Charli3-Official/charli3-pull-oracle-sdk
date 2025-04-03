@@ -39,10 +39,10 @@ class RemoveBuilder(BaseBuilder):
     FEE_BUFFER = 10_000
     EXTRA_COLLATERAL = 10_000_000
 
-    TOKEN_CORE_SETTINGS = "CoreSettings"  # noqa
-    TOKEN_REWARD_ACCOUNT = "RewardAccount"  # noqa
-    TOKEN_AGG_STATE = "AggregationState"  # noqa
-    TOKEN_REWARD_TRANSPORT = "RewardTransport"  # noqa
+    TOKEN_CORE_SETTINGS = "C3CS"  # noqa
+    TOKEN_REWARD_ACCOUNT = "C3RA"  # noqa
+    TOKEN_AGG_STATE = "C3AS"  # noqa
+    TOKEN_REWARD_TRANSPORT = "C3RT"  # noqa
 
     async def build_tx(
         self,

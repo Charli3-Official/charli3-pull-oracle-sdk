@@ -27,7 +27,7 @@ from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE,
-    AggStateVariant,
+    AggState,
     FeeConfig,
     NoDatum,
     Nodes,
@@ -35,6 +35,7 @@ from charli3_offchain_core.models.oracle_datums import (
     OracleConfiguration,
     OracleSettingsDatum,
     OracleSettingsVariant,
+    PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
     RewardTransportVariant,
@@ -90,6 +91,7 @@ class OracleStartBuilder:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        median_divergency_factor: int,
         utxo_size_safety_buffer: int | None = None,
     ) -> StartTransactionResult:
         """
@@ -167,6 +169,7 @@ class OracleStartBuilder:
                 time_uncertainty_aggregation,
                 time_uncertainty_platform,
                 iqr_fence_multiplier,
+                median_divergency_factor,
             ),
             "core_settings",
             utxo_size_safety_buffer,
@@ -196,7 +199,7 @@ class OracleStartBuilder:
                     script_address,
                     deployment_config.token_names.aggstate,
                     mint_policy.policy_id,
-                    AggStateVariant(datum=NoDatum()),
+                    AggState(price_data=PriceData.empty()),
                     "agg_state",
                 ),
             )
@@ -269,6 +272,7 @@ class OracleStartBuilder:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        median_divergency_factor: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
         node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
@@ -281,6 +285,7 @@ class OracleStartBuilder:
             time_uncertainty_aggregation=time_uncertainty_aggregation,
             time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
+            median_divergency_factor=median_divergency_factor,
             utxo_size_safety_buffer=MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE,
             pause_period_started_at=NoDatum(),
         )

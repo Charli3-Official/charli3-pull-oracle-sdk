@@ -61,6 +61,7 @@ timing:
   time_uncertainty_aggregation: 120000 # 2 minutes in ms
   time_uncertainty_platform: 180000    # 3 minutes in ms
   iqr_multiplier: 150                  # 1.5x multiplier for outlier detection
+  median_divergency_factor: 200        # 20% divergency allowed when iqr=0
   utxo_size_safety_buffer: 7500000     # 7.5 ada for utxo fee buffer, if not provided settings utxo size will be used to calculate this dynamically
 
 # Can use fewer transport UTxOs on testnet

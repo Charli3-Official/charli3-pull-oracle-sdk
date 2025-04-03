@@ -25,16 +25,15 @@ from charli3_offchain_core.blockchain.transactions import (
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
     Aggregation,
-    AggStateDatum,
-    AggStateVariant,
+    AggState,
     NoDatum,
     NoRewards,
     OracleSettingsDatum,
+    PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
     RewardConsensusPending,
     RewardTransportVariant,
-    SomeAggStateDatum,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     CalculateRewards,
@@ -268,9 +267,17 @@ class OracleTransactionBuilder:
                 oracle_fee_rate_utxo = common.get_fee_rate_reference_utxo(
                     self.tx_manager.chain_query, settings_datum.fee_info.rate_nft
                 )
+                if oracle_fee_rate_utxo.output.datum is None:
+                    raise ValueError(
+                        "Oracle fee rate datum is None. "
+                        "A valid fee rate datum is required to scale rewards."
+                    )
+
+                standard_datum: AggState = oracle_fee_rate_utxo.output.datum
                 reference_inputs.add(oracle_fee_rate_utxo)
                 rewards.scale_rewards_by_rate(
-                    reward_prices, oracle_fee_rate_utxo.output.datum.datum.aggstate
+                    reward_prices,
+                    standard_datum,
                 )
 
             # Calculate minimum fee
@@ -359,9 +366,7 @@ class OracleTransactionBuilder:
 
             # Find pending transports
             pending_transports = state_checks.filter_pending_transports(
-                asset_checks.filter_utxos_by_token_name(
-                    utxos, self.policy_id, "RewardTransport"
-                )
+                asset_checks.filter_utxos_by_token_name(utxos, self.policy_id, "C3RT")
             )[:max_inputs]
             if not pending_transports:
                 raise StateValidationError("No pending transport UTxOs found")
@@ -521,13 +526,9 @@ class OracleTransactionBuilder:
         return TransactionOutput(
             address=self.script_address,
             amount=agg_state.output.amount,
-            datum=AggStateVariant(
-                datum=SomeAggStateDatum(
-                    aggstate=AggStateDatum(
-                        oracle_feed=median_value,
-                        expiry_timestamp=current_time + liveness_period,
-                        created_at=current_time,
-                    )
+            datum=AggState(
+                price_data=PriceData.set_price_map(
+                    median_value, current_time, current_time + liveness_period
                 )
             ),
         )
@@ -580,7 +581,10 @@ class OracleTransactionBuilder:
             self.reward_token_name,
         )
         node_rewards = rewards.calculate_node_rewards_from_transports(
-            transports, nodes, settings.iqr_fence_multiplier
+            transports,
+            nodes,
+            settings.iqr_fence_multiplier,
+            settings.median_divergency_factor,
         )
 
         # Accumulate rewards
