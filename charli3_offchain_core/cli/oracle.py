@@ -174,6 +174,7 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
             time_uncertainty_aggregation=deployment_config.timing.time_uncertainty_aggregation,
             time_uncertainty_platform=deployment_config.timing.time_uncertainty_platform,
             iqr_fence_multiplier=deployment_config.timing.iqr_multiplier,
+            median_divergency_factor=deployment_config.timing.median_divergency_factor,
             deployment_config=configs["deployment"],
             rate_config=configs["rate_token"],
             nodes_config=deployment_config.nodes,

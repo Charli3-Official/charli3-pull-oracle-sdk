@@ -17,7 +17,9 @@ from charli3_offchain_core.models.base import (
     ScriptHash,
 )
 
-MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE = 5_500_000
+MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE: int = 5_500_000
+
+IQR_APPLICABILITY_THRESHOLD: int = 4
 
 
 @dataclass
@@ -169,6 +171,7 @@ class OracleSettingsDatum(PlutusData):
     time_uncertainty_aggregation: PosixTimeDiff
     time_uncertainty_platform: PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
+    median_divergency_factor: int  # Permille
     utxo_size_safety_buffer: int  # Lovelace
     pause_period_started_at: Union[SomePosixTime, NoDatum]
 
@@ -190,7 +193,7 @@ class OracleSettingsDatum(PlutusData):
                 "Oracle Settings Validator: Must have fair time interval lengths"
             )
 
-        if self.iqr_fence_multiplier <= 100:
+        if self.iqr_fence_multiplier <= 100 or self.median_divergency_factor < 1:
             raise ValueError("Oracle Settings Validator: Must be fair about outliers")
 
         if self.utxo_size_safety_buffer <= 0:
@@ -229,24 +232,6 @@ class AggregateMessage(PlutusData):
 
 
 @dataclass
-class AggStateDatum(PlutusData):
-    """AggState contains oracle feed data and timing information"""
-
-    CONSTR_ID = 0
-    oracle_feed: OracleFeed
-    expiry_timestamp: PosixTime
-    created_at: PosixTime
-
-
-@dataclass
-class SomeAggStateDatum(PlutusData):
-    """AggState contains oracle feed data"""
-
-    CONSTR_ID = 0
-    aggstate: AggStateDatum
-
-
-@dataclass
 class NoRewards(PlutusData):
     """Reward transport with no rewards state"""
 
@@ -274,10 +259,79 @@ class RewardConsensusPending(PlutusData):
 
 # Main datum variants
 @dataclass
+class PriceData(PlutusData):
+    """represents cip oracle datum PriceMap(Tag +2)"""
+
+    CONSTR_ID = 2
+    price_map: dict
+
+    @property
+    def get_price(self) -> int:
+        """get price from price map"""
+        return self.price_map[0]
+
+    @property
+    def get_creation_time(self) -> int:
+        """get timestamp of the feed"""
+        return self.price_map[1]
+
+    @property
+    def get_expiration_time(self) -> int:
+        """get expiry of the feed"""
+        return self.price_map[2]
+
+    @property
+    def has_required_fields(self) -> bool:
+        """Check if price_map contains all required fields (price, timestamp, expiry)"""
+        return all(key in self.price_map for key in (0, 1, 2))
+
+    def is_expired(self, current_time: int) -> bool:
+        """Check if the price data is expired based on current_time"""
+        if not self.has_required_fields:
+            return False
+        return self.get_expiration_time < current_time
+
+    def is_active(self, current_time: int) -> bool:
+        """Check if the price data is expired based on current_time"""
+        if not self.has_required_fields:
+            return False
+        return self.get_expiration_time > current_time
+
+    @property
+    def is_valid(self) -> bool:
+        """Check if price data is valid (not empty and has all required fields)"""
+        return not self.is_empty and self.has_required_fields
+
+    @property
+    def is_empty(self) -> bool:
+        """Check if price_map is empty"""
+        return len(self.price_map) == 0
+
+    @classmethod
+    def set_price_map(cls, price: int, timestamp: int, expiry: int) -> "PriceData":
+        """set price_map"""
+        price_map = {0: price, 1: timestamp, 2: expiry}
+        return cls(price_map)
+
+    @classmethod
+    def empty(cls) -> "PriceData":
+        """Create an empty PriceData instance"""
+        return cls({})
+
+
+@dataclass
+class AggState(PlutusData):
+    """Oracle Datum"""
+
+    CONSTR_ID = 0
+    price_data: PriceData
+
+
+@dataclass
 class OracleSettingsVariant(PlutusData):
     """Oracle settings variant of OracleDatum"""
 
-    CONSTR_ID = 0
+    CONSTR_ID = 1
     datum: OracleSettingsDatum
 
 
@@ -285,7 +339,7 @@ class OracleSettingsVariant(PlutusData):
 class RewardAccountVariant(PlutusData):
     """Reward account variant of OracleDatum"""
 
-    CONSTR_ID = 1
+    CONSTR_ID = 2
     datum: RewardAccountDatum
 
 
@@ -293,31 +347,20 @@ class RewardAccountVariant(PlutusData):
 class RewardTransportVariant(PlutusData):
     """Reward transport variant of OracleDatum"""
 
-    CONSTR_ID = 2
-    datum: Union[NoRewards, RewardConsensusPending]
-
-
-@dataclass
-class AggStateVariant(PlutusData):
-    """Agg state variant of OracleDatum"""
-
     CONSTR_ID = 3
-    datum: Union[SomeAggStateDatum, NoDatum]
+    datum: Union[NoRewards, RewardConsensusPending]
 
 
 @dataclass
 class OracleDatum(PlutusData):
     """
     Main oracle datum with four possible variants:
-    1. OracleSettingsVariant
-    2. RewardAccountVariant
-    3. RewardTransportVariant
-    4. AggStateVariant
+    1. AggState
+    2. OracleSettingsVariant
+    3. RewardAccountVariant
+    4. RewardTransportVariant
     """
 
     variant: (
-        OracleSettingsVariant
-        | RewardAccountVariant
-        | RewardTransportVariant
-        | AggStateVariant
+        AggState | RewardAccountVariant | RewardTransportVariant | OracleSettingsVariant
     )

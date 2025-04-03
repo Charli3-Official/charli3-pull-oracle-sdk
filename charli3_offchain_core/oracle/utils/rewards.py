@@ -3,10 +3,11 @@
 import math
 from fractions import Fraction
 
-from pycardano import Asset, AssetName, ScriptHash, UTxO, Value, VerificationKeyHash
+from pycardano import Asset, AssetName, ScriptHash, UTxO, Value
 
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateDatum,
+    IQR_APPLICABILITY_THRESHOLD,
+    AggState,
     FeedVkh,
     NodeFeed,
     RewardAccountDatum,
@@ -28,11 +29,9 @@ def calculate_min_fee_amount(reward_prices: RewardPrices, node_count: int) -> in
         raise DistributionError(f"Failed to calculate minimum fee: {e}") from e
 
 
-def scale_rewards_by_rate(
-    reward_prices: RewardPrices, rate_datum: AggStateDatum
-) -> None:
+def scale_rewards_by_rate(reward_prices: RewardPrices, rate_datum: AggState) -> None:
     """Calculate new reward prices based on the fee rate."""
-    rate = Fraction(rate_datum.oracle_feed, COIN_PRECISION)
+    rate = Fraction(rate_datum.price_data.get_price, COIN_PRECISION)
 
     def convert_reward(reward: int) -> int:
         return math.ceil(rate * Fraction(reward))
@@ -44,7 +43,8 @@ def scale_rewards_by_rate(
 def calculate_node_rewards_from_transports(
     transports: list[UTxO],
     nodes: list[FeedVkh],
-    iqr: int,
+    iqr_fence_multiplier: int,
+    median_divergency_factor: int,
 ) -> dict[FeedVkh, int]:
     """Calculate node rewards from transport UTxOs."""
     try:
@@ -55,10 +55,10 @@ def calculate_node_rewards_from_transports(
             aggregation = pending.aggregation
             reward_per_node = aggregation.node_reward_price
 
-            rewarded_nodes = consensus_by_iqr(
+            rewarded_nodes = consensus_by_iqr_and_divergency(
                 aggregation.message.node_feeds_sorted_by_feed,
-                aggregation.message.node_feeds_count,
-                iqr,
+                iqr_fence_multiplier,
+                median_divergency_factor,
             )
 
             for node_id in rewarded_nodes:
@@ -70,27 +70,43 @@ def calculate_node_rewards_from_transports(
         raise DistributionError(f"Failed to calculate node rewards: {e}") from e
 
 
-def consensus_by_iqr(
-    node_feeds: dict[VerificationKeyHash, NodeFeed],
-    node_feed_count: int,
+def consensus_by_iqr_and_divergency(
+    node_feeds: dict[FeedVkh, NodeFeed],
     iqr_fence_multiplier: int,
+    median_divergency_factor: int,
 ) -> list[FeedVkh]:
     """
     Filter nodes based on IQR consensus.
+    Uses divergency from the middle point (median) if IQR is not applicable.
     Returns list of node IDs that fall within the IQR fences.
     """
+    node_feed_count = len(node_feeds)
+
+    if node_feed_count == 0:
+        raise RuntimeError("Empty nodes feeds list")
+
+    if node_feed_count == 1:
+        return [*node_feeds.keys()]
+
     # Convert percentage to multiplier
     multiplier = iqr_fence_multiplier / 100
+    factor = median_divergency_factor / 1000
 
     # Get sorted values
     values = sorted(node_feeds.values())
+    midpoint = quantile(values, node_feed_count, 0.5)
 
-    # Calculate IQR fences
-    lower_fence, upper_fence = iqr_fence(values, node_feed_count, multiplier)
+    if node_feed_count >= IQR_APPLICABILITY_THRESHOLD:
+        # Calculate IQR fences
+        lower_fence, upper_fence = iqr_fence(values, node_feed_count, multiplier)
+        # Round fences
+        lower_limit = round(lower_fence)
+        upper_limit = round(upper_fence)
 
-    # Round fences
-    lower_limit = round(lower_fence)
-    upper_limit = round(upper_fence)
+    if node_feed_count < IQR_APPLICABILITY_THRESHOLD or lower_limit == upper_limit:
+        fence = midpoint * factor
+        lower_limit = round(midpoint - fence)
+        upper_limit = round(midpoint + fence)
 
     # Filter nodes within fences
     return [

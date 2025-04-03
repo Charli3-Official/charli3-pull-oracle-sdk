@@ -244,9 +244,7 @@ class DismissRewardsBuilder(BaseBuilder):
         reward_dismission_period_length: int,
     ) -> tuple[list[UTxO], int]:
         pending_transports = filter_pending_transports(
-            asset_checks.filter_utxos_by_token_name(
-                input_utxos, policy_id, "RewardTransport"
-            )
+            asset_checks.filter_utxos_by_token_name(input_utxos, policy_id, "C3RT")
         )[:max_inputs]
 
         if not pending_transports:

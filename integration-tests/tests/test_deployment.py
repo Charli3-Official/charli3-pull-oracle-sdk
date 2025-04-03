@@ -78,6 +78,7 @@ class TestDeployment(TestBase):
             time_uncertainty_aggregation=self.timing_config.time_uncertainty_aggregation,
             time_uncertainty_platform=self.timing_config.time_uncertainty_platform,
             iqr_fence_multiplier=self.timing_config.iqr_multiplier,
+            median_divergency_factor=self.timing_config.median_divergency_factor,
             deployment_config=self.configs["deployment"],
             nodes_config=self.nodes_config,
             rate_config=self.fee_config,

@@ -22,8 +22,8 @@ from charli3_offchain_core.models.message import (
     SignedOracleNodeMessage,
 )
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateVariant,
-    NoDatum,
+    AggState,
+    PriceData,
     RewardConsensusPending,
     RewardTransportVariant,
 )
@@ -312,7 +312,7 @@ class TestAggregate(TestBase):
             "AggregationState",
         )
 
-        # Convert CBOR to AggStateVariant objects
+        # Convert CBOR to AggState objects
         agg_states = state_checks.convert_cbor_to_agg_states(agg_states)
 
         # Find non-empty agg states
@@ -320,22 +320,22 @@ class TestAggregate(TestBase):
             utxo
             for utxo in agg_states
             if utxo.output.datum
-            and isinstance(utxo.output.datum, AggStateVariant)
-            and not isinstance(utxo.output.datum.datum, NoDatum)
+            and isinstance(utxo.output.datum, AggState)
+            and not utxo.output.datum.price_data.is_empty
         ]
 
         assert len(non_empty_agg_states) > 0, "No non-empty agg state UTxOs found"
 
         # Verify the agg state has the correct feed value
-        latest_agg_state = non_empty_agg_states[0]
-        agg_state_feed = latest_agg_state.output.datum.datum.aggstate.oracle_feed
+        latest_agg_state: PriceData = non_empty_agg_states[0].output.datum.price_data
+        agg_state_feed = latest_agg_state.get_price
         assert (
             agg_state_feed == expected_median
         ), f"AggState feed mismatch: {agg_state_feed} vs {expected_median}"
 
         # Verify the agg state has a valid expiry timestamp
         current_time = self.tx_manager.chain_query.get_current_posix_chain_time_ms()
-        expiry = latest_agg_state.output.datum.datum.aggstate.expiry_timestamp
+        expiry = latest_agg_state.get_expiration_time
         assert (
             expiry > current_time
         ), f"Invalid expiry timestamp: {expiry} vs {current_time}"

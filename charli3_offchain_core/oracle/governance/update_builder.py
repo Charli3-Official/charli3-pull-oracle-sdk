@@ -60,11 +60,12 @@ class SettingOption(Enum):
     TIME_UNCERTAINTY_AGGREGATION = ("2", "Time Uncertainty For ODV Aggregation")
     TIME_UNCERTAINTY_PLATFORM = ("3", "Time Uncertainty For Platform Governance")
     IQR_MULTIPLIER = ("4", "IQR Fence Multiplier")
-    UTXO_BUFFER = ("5", "UTxO size safety buffer")
-    THRESHOLD = ("6", "Required Node Signature Count")
-    NODE_REWARD_FEE = ("7", "Reward price for node fee")
-    PLATFORM_REWARD_FEE = ("8", "Reward price for platform fee")
-    DONE = ("9", "Done")
+    MEDIAN_DIVERGENCY_FACTOR = ("5", "Median divergency factor")
+    UTXO_BUFFER = ("6", "UTxO size safety buffer")
+    THRESHOLD = ("7", "Required Node Signature Count")
+    NODE_REWARD_FEE = ("8", "Reward price for node fee")
+    PLATFORM_REWARD_FEE = ("9", "Reward price for platform fee")
+    DONE = ("0", "Done")
 
     def __init__(self, id: str, label: str) -> None:
         self.id = id
@@ -124,7 +125,6 @@ async def get_setting_value(  # noqa: C901
     current_value: int,
     deployed_settings: Any,
     current_settings: dict,
-    oracle_config: OracleConfiguration,
 ) -> int:
     """Prompt user for new setting value with validation."""
     while True:
@@ -153,6 +153,8 @@ async def get_setting_value(  # noqa: C901
                 )
             elif option == SettingOption.IQR_MULTIPLIER:
                 help_text.append("must be greater than 100")
+            elif option == SettingOption.MEDIAN_DIVERGENCY_FACTOR:
+                help_text.append("must be greater or equal to 1")
             elif option in (
                 SettingOption.NODE_REWARD_FEE,
                 SettingOption.PLATFORM_REWARD_FEE,
@@ -169,9 +171,7 @@ async def get_setting_value(  # noqa: C901
                 click.style(prompt_text, fg=CliColor.WARNING, bold=True), type=int
             )
 
-            validate_setting(
-                option, new_value, current_settings, deployed_settings, oracle_config
-            )
+            validate_setting(option, new_value, current_settings, deployed_settings)
             return new_value
         except SettingsValidationError as e:
             print_status("Validation Error", str(e), success=False)
@@ -189,6 +189,7 @@ async def manual_settings_menu(  # noqa: C901
         SettingOption.TIME_UNCERTAINTY_AGGREGATION: deployed_core_settings.datum.time_uncertainty_aggregation,
         SettingOption.TIME_UNCERTAINTY_PLATFORM: deployed_core_settings.datum.time_uncertainty_platform,
         SettingOption.IQR_MULTIPLIER: deployed_core_settings.datum.iqr_fence_multiplier,
+        SettingOption.MEDIAN_DIVERGENCY_FACTOR: deployed_core_settings.datum.median_divergency_factor,
         SettingOption.THRESHOLD: deployed_core_settings.datum.required_node_signatures_count,
         SettingOption.UTXO_BUFFER: deployed_core_settings.datum.utxo_size_safety_buffer,
         SettingOption.NODE_REWARD_FEE: deployed_core_settings.datum.fee_info.reward_prices.node_fee,
@@ -204,7 +205,6 @@ async def manual_settings_menu(  # noqa: C901
             deployed_core_settings,
             current_settings,
             invalid_settings,
-            oracle_config,
         )
 
         # Get user choice
@@ -236,7 +236,6 @@ async def manual_settings_menu(  # noqa: C901
                             current_settings[option],
                             current_settings,
                             deployed_core_settings,
-                            oracle_config,
                         )
 
                 if invalid_settings:
@@ -267,7 +266,6 @@ async def manual_settings_menu(  # noqa: C901
             deployed_core_settings,
             current_settings,
             invalid_settings,
-            oracle_config,
         )
 
 
@@ -302,6 +300,9 @@ def build_new_settings_datum(
             SettingOption.TIME_UNCERTAINTY_PLATFORM
         ],
         iqr_fence_multiplier=current_settings[SettingOption.IQR_MULTIPLIER],
+        median_divergency_factor=current_settings[
+            SettingOption.MEDIAN_DIVERGENCY_FACTOR
+        ],
         utxo_size_safety_buffer=current_settings[SettingOption.UTXO_BUFFER],
         pause_period_started_at=deployed_core_settings.datum.pause_period_started_at,
     )
@@ -318,7 +319,6 @@ async def add_settings_value(
     deployed_core_settings: Datum,
     current_settings: dict,
     invalid_settings: set,
-    oracle_config: OracleConfiguration,
 ) -> None:
     try:
         new_value = await get_setting_value(
@@ -326,7 +326,6 @@ async def add_settings_value(
             current_settings[selected_option],
             deployed_core_settings,
             current_settings,
-            oracle_config,
         )
         current_settings[selected_option] = new_value
         invalid_settings.discard(
@@ -341,7 +340,6 @@ def display_initial_settings_context(
     deployed_core_settings: Datum,
     current_settings: dict,
     invalid_settings: set,
-    oracle_config: OracleConfiguration,
 ) -> None:
     # Print current settings
     print_header("Current Settings")
@@ -360,7 +358,6 @@ def display_initial_settings_context(
                     current_settings[option],
                     current_settings,
                     deployed_core_settings,
-                    oracle_config,
                 )
             except SettingsValidationError as e:
                 print_status(option.label, str(e), success=False)
@@ -380,7 +377,6 @@ def validate_setting(  # noqa: C901
     value: int,
     current_settings: dict,
     deployed_settings: Any,
-    oracle_config: OracleConfiguration,
 ) -> None:
     """Validate a setting value."""
     if value <= 0 and option in [
@@ -391,19 +387,14 @@ def validate_setting(  # noqa: C901
             "Time uncertainty for odv-aggregation and Node signature count must be positive"
         )
 
-    if option == SettingOption.UTXO_BUFFER:
-        is_ada_token = oracle_config.fee_token == NoDatum()
-
-        if is_ada_token and value <= 0:
-            raise SettingsValidationError(
-                "UTxO size must be positive when used with ADA"
-            )
-        elif not is_ada_token and value != 0:
-            raise SettingsValidationError(
-                "The UTxO size safety buffer must be set to zero when using non-ADA reward tokens"
-            )
+    if option == SettingOption.UTXO_BUFFER and value <= 0:
+        raise SettingsValidationError("UTxO ada buffer size must be positive")
     if option == SettingOption.IQR_MULTIPLIER and value <= 100:
         raise SettingsValidationError("IQR fence multiplier must be greater than 100")
+    if option == SettingOption.MEDIAN_DIVERGENCY_FACTOR and value < 1:
+        raise SettingsValidationError(
+            "Median divergency factor must be greater or equal to 1"
+        )
 
     if (
         option == SettingOption.THRESHOLD
