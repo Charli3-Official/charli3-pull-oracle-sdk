@@ -268,7 +268,7 @@ class OracleScaleBuilder:
                         expiry = None
                     else:
                         state_type = "Expired"
-                        expiry = datum.price_data.get_expirity_time
+                        expiry = datum.price_data.get_expiration_time
 
                     logger.info(
                         "AggState UTxO %d: TxId=%s#%d, Type=%s, Expiry=%s",
