@@ -130,10 +130,11 @@ class OracleSimulator:
 
     def attach_tx_signatures(
         self,
-        transaction: Transaction,
+        tx_cbor: str,
         signed_txs: dict[str, Transaction],
-    ) -> None:
+    ) -> Transaction:
         """Attach collected signatures to transaction."""
+        transaction = Transaction.from_cbor(tx_cbor)
         if transaction.transaction_witness_set is None:
             transaction.transaction_witness_set = TransactionWitnessSet()
 
@@ -142,20 +143,17 @@ class OracleSimulator:
 
             for vkh, signed_tx in signed_txs.items():
                 if (
-                    signed_tx.transaction_witness_set
-                    and isinstance(
-                        signed_tx.transaction_witness_set.vkey_witnesses, list
-                    )
+                    isinstance(signed_tx.transaction_witness_set, TransactionWitnessSet)
                     and signed_tx.transaction_witness_set.vkey_witnesses
+                    and isinstance(
+                        signed_tx.transaction_witness_set.vkey_witnesses[0],
+                        VerificationKeyWitness,
+                    )
                 ):
 
-                    raw_witness = signed_tx.transaction_witness_set.vkey_witnesses[0]
+                    witness = signed_tx.transaction_witness_set.vkey_witnesses[0]
 
                     if vkh in self.node_simulators:
-                        node = self.node_simulators[vkh].node
-                        witness = VerificationKeyWitness(
-                            vkey=node.verification_key, signature=raw_witness
-                        )
                         transaction.transaction_witness_set.vkey_witnesses.append(
                             witness
                         )
@@ -165,6 +163,7 @@ class OracleSimulator:
                 f"{len(transaction.transaction_witness_set.vkey_witnesses)} successfully attached",
                 success=True,
             )
+            return transaction
 
         except Exception as e:
             logger.error(f"Error attaching signatures: {e}")
@@ -205,11 +204,13 @@ class OracleSimulator:
         signed_txs = await self.collect_signatures(node_messages, result.transaction)
 
         print_progress("Adding node signatures to transaction")
-        self.attach_tx_signatures(result.transaction, signed_txs)
+        transaction = self.attach_tx_signatures(
+            result.transaction.to_cbor_hex(), signed_txs
+        )
 
         print_progress("Submitting final ODV transaction")
         status, _ = await self.ctx.tx_manager.sign_and_submit(
-            result.transaction,
+            transaction,
             [signing_key],
             wait_confirmation=True,
         )

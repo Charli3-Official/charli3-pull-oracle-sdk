@@ -32,6 +32,7 @@ class NetworkType(str, Enum):
     PREVIEW = "PREVIEW"
     PREPROD = "PREPROD"
     CUSTOM = "CUSTOM"
+    DEVNET = "DEVNET"
 
 
 # Network magic numbers for identification
@@ -39,6 +40,7 @@ NETWORK_MAGIC: dict[NetworkType, NetworkMagic] = {
     NetworkType.MAINNET: 764824073,
     NetworkType.PREPROD: 1,
     NetworkType.PREVIEW: 2,
+    NetworkType.DEVNET: 42,
     NetworkType.CUSTOM: 4,
 }
 
@@ -159,6 +161,11 @@ NETWORK_CONFIGS: dict[NetworkType, NetworkConfig] = {
     ),
     NetworkType.CUSTOM: NetworkConfig(
         zero_time=0,
+        zero_slot=0,
+        slot_length=1000,
+    ),
+    NetworkType.DEVNET: NetworkConfig(
+        zero_time=int(time.time() * 1000),  # Current time
         zero_slot=0,
         slot_length=1000,
     ),
