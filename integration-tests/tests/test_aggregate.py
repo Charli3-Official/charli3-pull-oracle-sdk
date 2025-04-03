@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pycardano import (
+    AssetName,
     PaymentExtendedSigningKey,
     PaymentVerificationKey,
     ScriptHash,
@@ -80,7 +81,7 @@ class TestAggregate(TestBase):
             script_address=self.oracle_script_address,
             policy_id=ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
             reward_token_hash=reward_token_hash,
-            reward_token_name=reward_token_name,
+            reward_token_name=AssetName(reward_token_name),
         )
 
         logger.info("TestAggregate setup complete")

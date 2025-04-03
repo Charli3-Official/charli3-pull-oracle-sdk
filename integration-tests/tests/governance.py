@@ -91,8 +91,8 @@ class GovernanceBase:
             raise
 
     def load_nodes_to_remove(
-        self, nodes_config: NodesConfig, required_signatures: int, slice_count: int
-    ) -> NodesConfig:
+        self, nodes_config: NodesConfig, slice_count: int
+    ) -> tuple[int, list[NodeConfig]]:
         """Create a node configuration for removing nodes.
 
         Creates a new NodesConfig with the first 'slice_count' nodes from the original
@@ -100,17 +100,16 @@ class GovernanceBase:
 
         Args:
             nodes_config (NodesConfig): Original nodes configuration
-            required_signatures (int): Number of required signatures for the new configuration
             slice_count (int): Number of nodes to include in the new configuration
 
         Returns:
-            NodesConfig: A new nodes configuration with only the selected nodes
+            Selected nodes: Nodes to be removed
+            Selected signatures: Updated signatures threshold
         """
         selected_nodes = nodes_config.nodes[:slice_count]
+        selected_signatures = nodes_config.required_signatures - slice_count
 
-        return NodesConfig(
-            required_signatures=required_signatures, nodes=selected_nodes
-        )
+        return (selected_signatures, selected_nodes)
 
     def load_nodes_to_add(
         self, nodes_config: NodesConfig, required_signatures: int, attach_count: int

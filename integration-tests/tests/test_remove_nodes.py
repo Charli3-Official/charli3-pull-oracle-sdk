@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import pytest
 
+from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.constants.status import ProcessStatus
 
 from .governance import GovernanceBase
@@ -25,6 +26,8 @@ class TestRemoveNodes(GovernanceBase):
     removing oracle nodes from the system configuration. It verifies the
     transaction building, signing, and submission processes.
     """
+
+    REMOVE_NODES = 2
 
     def setup_method(self, method: "Callable") -> None:
         """Set up the test environment before each test method execution.
@@ -80,15 +83,17 @@ class TestRemoveNodes(GovernanceBase):
         )
 
         # Since the intended purpose is to remove 1 node
-        nodes_to_remove = self.load_nodes_to_remove(
-            self.management_config.nodes, required_signatures=1, slice_count=8
+        (new_required_sig, nodes_to_remove) = self.load_nodes_to_remove(
+            nodes_config=self.management_config.nodes,
+            slice_count=self.REMOVE_NODES,
         )
 
         logger.info(f"Nodes to remove: {nodes_to_remove}")
+        logger.info(f"New required signatures: {new_required_sig}")
 
         result = await self.governance_orchestrator.del_nodes_oracle(
             oracle_policy=self.management_config.tokens.oracle_policy,
-            new_nodes_config=nodes_to_remove,
+            new_nodes_config=NodesConfig(new_required_sig, nodes_to_remove),
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=self.oracle_addresses.admin_address,

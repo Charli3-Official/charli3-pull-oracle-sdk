@@ -109,7 +109,7 @@ class TestDeployment(TestBase):
         ), f"Deployment transaction failed with status: {status}"
 
         # Wait for UTxOs to be indexed
-        await wait_for_indexing(20)
+        await wait_for_indexing(5)
 
         # Check that UTxOs exist at the oracle script address
         logger.info(

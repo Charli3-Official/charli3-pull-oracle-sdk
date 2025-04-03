@@ -595,6 +595,7 @@ def show_nodes_update_info(
     payment_distribution: dict[VerificationKeyHash, int],
     reward_token: NoDatum | SomeAsset,
     min_utxo_value: int,
+    test_mode: bool = False,
 ) -> bool:
     """
     Displays information about the changes that will be made to the nodes.
@@ -617,7 +618,7 @@ def show_nodes_update_info(
         return False
 
     # Display changes
-    if nodes_to_remove:
+    if nodes_to_remove and not test_mode:
         click.secho("\n", nl=True)
         print_nodes_table(
             nodes_to_remove,
@@ -729,6 +730,7 @@ def confirm_node_updates(
         payment_distribution,
         reward_token,
         min_utxo_value,
+        test_mode,
     )
     if not changes_valid:
         logger.warning("Validation failed for delete nodes")
