@@ -155,6 +155,7 @@ def modified_core_utxo(
         time_uncertainty_aggregation=in_core_datum.time_uncertainty_aggregation,
         time_uncertainty_platform=in_core_datum.time_uncertainty_platform,
         iqr_fence_multiplier=in_core_datum.iqr_fence_multiplier,
+        median_divergency_factor=in_core_datum.median_divergency_factor,
         utxo_size_safety_buffer=in_core_datum.utxo_size_safety_buffer,
         pause_period_started_at=in_core_datum.pause_period_started_at,
     )

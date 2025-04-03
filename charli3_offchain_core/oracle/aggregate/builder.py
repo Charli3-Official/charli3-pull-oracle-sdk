@@ -581,7 +581,10 @@ class OracleTransactionBuilder:
             self.reward_token_name,
         )
         node_rewards = rewards.calculate_node_rewards_from_transports(
-            transports, nodes, settings.iqr_fence_multiplier
+            transports,
+            nodes,
+            settings.iqr_fence_multiplier,
+            settings.median_divergency_factor,
         )
 
         # Accumulate rewards

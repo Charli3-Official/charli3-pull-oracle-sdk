@@ -98,6 +98,7 @@ class OracleDeploymentOrchestrator:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        median_divergency_factor: int,
         # Deployment configuration
         deployment_config: OracleDeploymentConfig,
         nodes_config: NodesConfig,
@@ -150,6 +151,7 @@ class OracleDeploymentOrchestrator:
                 time_uncertainty_aggregation=time_uncertainty_aggregation,
                 time_uncertainty_platform=time_uncertainty_platform,
                 iqr_fence_multiplier=iqr_fence_multiplier,
+                median_divergency_factor=median_divergency_factor,
                 utxo_size_safety_buffer=utxo_size_safety_buffer,
             )
 
@@ -217,6 +219,7 @@ class OracleDeploymentOrchestrator:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        median_divergency_factor: int,
         utxo_size_safety_buffer: int | None = None,
     ) -> StartTransactionResult:
         """Build and submit oracle start transaction."""
@@ -238,5 +241,6 @@ class OracleDeploymentOrchestrator:
             time_uncertainty_aggregation=time_uncertainty_aggregation,
             time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
+            median_divergency_factor=median_divergency_factor,
             utxo_size_safety_buffer=utxo_size_safety_buffer,
         )

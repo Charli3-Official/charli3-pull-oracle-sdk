@@ -90,6 +90,7 @@ class OracleStartBuilder:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        median_divergency_factor: int,
         utxo_size_safety_buffer: int | None = None,
     ) -> StartTransactionResult:
         """
@@ -167,6 +168,7 @@ class OracleStartBuilder:
                 time_uncertainty_aggregation,
                 time_uncertainty_platform,
                 iqr_fence_multiplier,
+                median_divergency_factor,
             ),
             "core_settings",
             utxo_size_safety_buffer,
@@ -268,6 +270,7 @@ class OracleStartBuilder:
         time_uncertainty_aggregation: int,
         time_uncertainty_platform: int,
         iqr_fence_multiplier: int,
+        median_divergency_factor: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
         node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
@@ -280,6 +283,7 @@ class OracleStartBuilder:
             time_uncertainty_aggregation=time_uncertainty_aggregation,
             time_uncertainty_platform=time_uncertainty_platform,
             iqr_fence_multiplier=iqr_fence_multiplier,
+            median_divergency_factor=median_divergency_factor,
             utxo_size_safety_buffer=MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE,
             pause_period_started_at=NoDatum(),
         )

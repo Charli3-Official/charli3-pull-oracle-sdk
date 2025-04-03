@@ -17,7 +17,9 @@ from charli3_offchain_core.models.base import (
     ScriptHash,
 )
 
-MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE = 5_500_000
+MINIMUM_ADA_AMOUNT_HELD_AT_MAXIMUM_EXPECTED_ORACLE_UTXO_SIZE: int = 5_500_000
+
+IQR_APPLICABILITY_THRESHOLD: int = 4
 
 
 @dataclass
@@ -169,6 +171,7 @@ class OracleSettingsDatum(PlutusData):
     time_uncertainty_aggregation: PosixTimeDiff
     time_uncertainty_platform: PosixTimeDiff
     iqr_fence_multiplier: int  # Percent
+    median_divergency_factor: int  # Permille
     utxo_size_safety_buffer: int  # Lovelace
     pause_period_started_at: Union[SomePosixTime, NoDatum]
 
@@ -190,7 +193,7 @@ class OracleSettingsDatum(PlutusData):
                 "Oracle Settings Validator: Must have fair time interval lengths"
             )
 
-        if self.iqr_fence_multiplier <= 100:
+        if self.iqr_fence_multiplier <= 100 or self.median_divergency_factor < 1:
             raise ValueError("Oracle Settings Validator: Must be fair about outliers")
 
         if self.utxo_size_safety_buffer <= 0:
