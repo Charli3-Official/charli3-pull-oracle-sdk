@@ -20,9 +20,9 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateVariant,
-    NoDatum,
+    AggState,
     NoRewards,
+    PriceData,
     RewardTransportVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
@@ -97,8 +97,8 @@ class OracleScaleBuilder:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         scale_amount: int,
         required_signers: list[VerificationKeyHash] | None = None,
-        transport_name: str = "RewardTransport",
-        aggstate_name: str = "AggregationState",
+        transport_name: str = "C3RT",
+        aggstate_name: str = "C3AS",
     ) -> ScaleUpResult:
         """Build transaction to increase ODV capacity by creating new UTxO pairs."""
         try:
@@ -137,7 +137,7 @@ class OracleScaleBuilder:
                             {self.policy_id.payload: {aggstate_name.encode(): 1}}
                         ),
                     ),
-                    datum=AggStateVariant(datum=NoDatum()),
+                    datum=AggState(price_data=PriceData.empty()),
                 )
                 for _ in range(scale_amount)
             ]
@@ -203,12 +203,8 @@ class OracleScaleBuilder:
                 raise ValueError("Reference script UTxO not found")
 
             # Find and log UTxOs to remove
-            transport_utxos = filter_utxos_by_token_name(
-                utxos, self.policy_id, "RewardTransport"
-            )
-            aggstate_utxos = filter_utxos_by_token_name(
-                utxos, self.policy_id, "AggregationState"
-            )
+            transport_utxos = filter_utxos_by_token_name(utxos, self.policy_id, "C3RT")
+            aggstate_utxos = filter_utxos_by_token_name(utxos, self.policy_id, "C3AS")
 
             logger.info(
                 "Found UTxOs - Total Transports: %d, Total AggStates: %d",
@@ -266,13 +262,13 @@ class OracleScaleBuilder:
             # Log AggState UTxO details
             for i, utxo in enumerate(selected_agg_states):
                 datum = utxo.output.datum
-                if isinstance(datum, AggStateVariant):
-                    if isinstance(datum.datum, NoDatum):
+                if isinstance(datum, AggState):
+                    if datum.price_data.is_empty:
                         state_type = "Empty"
                         expiry = None
                     else:
                         state_type = "Expired"
-                        expiry = datum.datum.aggstate.expiry_timestamp
+                        expiry = datum.price_data.get_expiration_time
 
                     logger.info(
                         "AggState UTxO %d: TxId=%s#%d, Type=%s, Expiry=%s",
@@ -290,8 +286,8 @@ class OracleScaleBuilder:
 
             # Add burning
             mint_map = {
-                b"RewardTransport": -scale_amount,
-                b"AggregationState": -scale_amount,
+                b"C3RT": -scale_amount,
+                b"C3AS": -scale_amount,
             }
             mint = MultiAsset.from_primitive({self.policy_id.payload: mint_map})
 

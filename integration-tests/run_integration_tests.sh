@@ -48,7 +48,7 @@ ensure_node_keys
 ./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
 # Wait for the node to start
 echo "Waiting for the node to start..."
-sleep 60
+sleep 70
 
 # Tests
 run_test() {
@@ -93,11 +93,22 @@ run_test "TestCreateReferenceScript"
 # 3. Run aggregate tests multiple times
 run_test "TestAggregate"
 
-# 4. Oracle Pause
-run_test "TestOraclePause"
-
 # # 4. Test governance functions
 # run_test "TestEditSettings or TestAddNodes or TestRemoveNodes"
+# 4. Test governance functions
+# 4.1
+run_test "TestRemoveNodes"
+# 4.2
+run_test "TestAddNodes"
+# 4.3
+run_test "TestEditSettings"
+# 4.4
+run_test "TestScaleUp"
+# 4.5
+run_test "TestScaleDown"
+
+# 5. Oracle Pause
+run_test "TestOraclePause"
 
 # # 5. Test reward collection
 # run_test "TestNodeCollect or TestPlatformCollect"

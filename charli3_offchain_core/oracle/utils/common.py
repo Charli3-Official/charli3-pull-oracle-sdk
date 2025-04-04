@@ -17,19 +17,11 @@ from charli3_offchain_core.models.base import PosixTime
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
     AggregateMessage,
-    AggStateVariant,
-    NoDatum,
+    AggState,
     SomeAsset,
 )
-from charli3_offchain_core.oracle.utils.asset_checks import validate_token_quantities
-from charli3_offchain_core.oracle.utils.state_checks import (
-    filter_empty_agg_states,
-    filter_empty_transports,
-    filter_oracle_settings_utxo,
-    filter_reward_accounts,
-)
 
-from ..exceptions import StateValidationError, TransactionError, ValidationError
+from ..exceptions import TransactionError, ValidationError
 
 
 async def get_script_utxos(
@@ -57,16 +49,16 @@ def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) ->
 
         for utxo in utxos:
             if utxo.output.datum and utxo.output.datum.cbor:
-                utxo.output.datum = AggStateVariant.from_cbor(utxo.output.datum.cbor)
+                utxo.output.datum = AggState.from_cbor(utxo.output.datum.cbor)
 
         current_time = int(time.time_ns() * 1e-6)
         non_expired_agg_states = [
             utxo
             for utxo in utxos
             if utxo.output.datum
-            and isinstance(utxo.output.datum, AggStateVariant)
-            and not isinstance(utxo.output.datum.datum, NoDatum)
-            and utxo.output.datum.datum.aggstate.expiry_timestamp > current_time
+            and isinstance(utxo.output.datum, AggState)
+            and utxo.output.datum.price_data.is_valid
+            and utxo.output.datum.price_data.is_active(current_time)
         ]
         if not non_expired_agg_states:
             raise ValidationError(
@@ -74,7 +66,7 @@ def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) ->
             )
 
         non_expired_agg_states.sort(
-            key=lambda utxo: utxo.output.datum.datum.aggstate.expiry_timestamp
+            key=lambda utxo: utxo.output.datum.price_data.get_expirity_time
         )
         return non_expired_agg_states.pop()
     except Exception as e:
@@ -98,32 +90,6 @@ def get_reference_script_utxo(utxos: list[UTxO]) -> UTxO:
             return utxo
 
     raise ValidationError("No reference script UTxO found")
-
-
-def get_oracle_utxos(
-    utxos: list[UTxO], oracle_policy: str
-) -> tuple[UTxO, UTxO | None, list[UTxO], list[UTxO]]:
-    """Return oracle UTxOs from the utxos list by filtering them based on policy hash."""
-
-    policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
-
-    settings_utxo = filter_oracle_settings_utxo(utxos, policy_hash)
-    if not settings_utxo:
-        raise StateValidationError(f"Oracle {oracle_policy} not found")
-
-    if not validate_token_quantities(settings_utxo, {"CoreSettings": 1}):
-        raise StateValidationError("Invalid settings token quantities")
-
-    reward_accounts = filter_reward_accounts(utxos)
-    reward_transports = filter_empty_transports(utxos)
-    agg_states = filter_empty_agg_states(utxos)
-
-    return (
-        settings_utxo,
-        next(iter(reward_accounts), None),
-        reward_transports or [],
-        agg_states or [],
-    )
 
 
 def build_aggregate_message(
