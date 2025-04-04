@@ -9,6 +9,7 @@ from charli3_offchain_core.oracle.utils.common import get_script_utxos
 
 from .base import TestBase
 from .test_utils import (
+    find_oracle_policy_hash,
     find_platform_auth_nft,
     logger,
     update_config_file,
@@ -134,4 +135,13 @@ class TestDeployment(TestBase):
             },
         )
 
+        # Update the configuration file with the new oracle policy id
+        oracle_policy_id = find_oracle_policy_hash(utxos, "C3CS")
+        logger.info(
+            f"Updating configuration file with new oracle policy ID: {oracle_policy_id}"
+        )
+        update_config_file(
+            self.config_path,
+            {"tokens.oracle_policy": oracle_policy_id},
+        )
         logger.info("Oracle deployment test completed successfully")

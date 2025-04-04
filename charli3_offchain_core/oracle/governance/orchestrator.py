@@ -80,6 +80,7 @@ class GovernanceOrchestrator:
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         required_signers: list[VerificationKeyHash] | None = None,
+        test_mode: bool = False,
     ) -> GovernanceResult:
         try:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
@@ -97,6 +98,7 @@ class GovernanceOrchestrator:
                     signing_key=signing_key,
                     new_nodes_config=new_nodes_config,
                     required_signers=required_signers,
+                    test_mode=test_mode,
                 )
             except (AddingNodesError, AddNodesValidationError):
                 return GovernanceResult(status=ProcessStatus.FAILED)
@@ -129,6 +131,7 @@ class GovernanceOrchestrator:
         reward_issuer_addr: Address | None = None,
         escrow_address: Address | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
+        test_mode: bool = False,
     ) -> GovernanceResult:
         """
         Delete oracle nodes
@@ -180,6 +183,7 @@ class GovernanceOrchestrator:
                     reward_issuer_addr=reward_issuer_addr,
                     escrow_address=escrow_address,
                     required_signers=required_signers,
+                    test_mode=test_mode,
                 )
 
                 if result.reason:
