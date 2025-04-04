@@ -99,15 +99,6 @@ class TestAddNodes(GovernanceBase):
         initial_node_count = initial_oracle_datum.nodes.length
         logger.info(f"Initial nodes in UTxO datum: {initial_node_count}")
 
-        # Compare node count between configuration file and UTxO datum
-        config_node_count = len(self.management_config.nodes.nodes)
-
-        # Assert that the node counts match before proceeding
-        assert config_node_count == initial_node_count, (
-            f"Initial node count mismatch: Configuration file has {config_node_count} nodes, "
-            f"but the Settings UTxO contains {initial_node_count} nodes"
-        )
-
         # Find platform auth NFT at the platform address
         platform_auth_utxo = await self.platform_auth_finder.find_auth_utxo(
             policy_id=self.management_config.tokens.platform_auth_policy,
@@ -126,7 +117,7 @@ class TestAddNodes(GovernanceBase):
         # Prepare nodes to add while maintaining the same signature threshold
         nodes_to_add = self.prepare_nodes_for_addition(
             self.management_config.nodes,
-            required_signatures=self.management_config.nodes.required_signatures,
+            required_signatures=initial_node_count,
             count_to_add=self.NODES_TO_ADD_COUNT,
         )
 

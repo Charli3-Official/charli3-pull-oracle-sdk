@@ -88,6 +88,7 @@ class TestEditSettings(GovernanceBase):
             time_uncertainty_aggregation=current_datum.time_uncertainty_aggregation,
             time_uncertainty_platform=current_datum.time_uncertainty_platform,
             iqr_fence_multiplier=current_datum.iqr_fence_multiplier,
+            median_divergency_factor=current_datum.median_divergency_factor,
             utxo_size_safety_buffer=current_datum.utxo_size_safety_buffer,
             pause_period_started_at=current_datum.pause_period_started_at,
         )
@@ -214,7 +215,7 @@ class TestEditSettings(GovernanceBase):
         ), f"Transaction failed with status: {transaction_status}"
 
         # Wait for UTxOs to be indexed with additional time for settings updates
-        await wait_for_indexing(20)
+        await wait_for_indexing(5)
 
         # Verify that the configuration has been updated correctly (AFTER changes)
         updated_utxos = await get_script_utxos(

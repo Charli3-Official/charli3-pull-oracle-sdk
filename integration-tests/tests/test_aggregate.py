@@ -279,7 +279,7 @@ class TestAggregate(TestBase):
             asset_checks.filter_utxos_by_token_name(
                 utxos,
                 ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-                "RewardTransport",
+                "C3RT",
             )
         )
 
@@ -309,7 +309,7 @@ class TestAggregate(TestBase):
         agg_states = asset_checks.filter_utxos_by_token_name(
             utxos,
             ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-            "AggregationState",
+            "C3AS",
         )
 
         # Convert CBOR to AggState objects
@@ -400,7 +400,7 @@ class TestAggregate(TestBase):
             asset_checks.filter_utxos_by_token_name(
                 utxos,
                 ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-                "RewardTransport",
+                "C3RT",
             )
         )
 

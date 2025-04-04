@@ -12,7 +12,7 @@ from charli3_offchain_core.cli.config.nodes import NodeConfig, NodesConfig
 from charli3_offchain_core.cli.governance import setup_management_from_config
 from charli3_offchain_core.contracts.aiken_loader import RewardEscrowContract
 from charli3_offchain_core.models.oracle_datums import (
-    AggStateVariant,
+    AggState,
     RewardTransportVariant,
 )
 from charli3_offchain_core.oracle.governance.orchestrator import GovernanceOrchestrator
@@ -157,31 +157,31 @@ class GovernanceBase:
     def extract_aggregation_state_utxos(
         self, utxos: Sequence[UTxO], policy_hash: str
     ) -> list[UTxO]:
-        """Extract UTxOs containing valid AggregationState tokens and datums.
+        """Extract UTxOs containing valid AggState tokens and datums.
 
-        Filters and returns UTxOs that contain AggregationState tokens with
-        valid AggStateVariant datums.
+        Filters and returns UTxOs that contain AggState tokens with
+        valid AggState datums.
 
         Args:
             utxos (Sequence[UTxO]): List of UTxOs to filter
             policy_hash (str): The policy hash to filter tokens by
 
         Returns:
-            List[UTxO]: List of UTxOs with valid AggStateVariant datums
+            List[UTxO]: List of UTxOs with valid AggState datums
         """
-        # Filter UTxOs containing AggregationState tokens
+        # Filter UTxOs containing AggState tokens
         agg_state_utxos = filter_utxos_by_token_name(
-            utxos, ScriptHash(bytes.fromhex(policy_hash)), "AggregationState"
+            utxos, ScriptHash(bytes.fromhex(policy_hash)), "C3AS"
         )
 
-        # Convert CBOR encoded datums to AggStateVariant objects
+        # Convert CBOR encoded datums to AggState objects
         utxos_with_datum = convert_cbor_to_agg_states(agg_state_utxos)
 
-        # Return only UTxOs with valid AggStateVariant datums
+        # Return only UTxOs with valid AggState datums
         return [
             utxo
             for utxo in utxos_with_datum
-            if utxo.output.datum and isinstance(utxo.output.datum, AggStateVariant)
+            if utxo.output.datum and isinstance(utxo.output.datum, AggState)
         ]
 
     def extract_reward_transport_utxos(
@@ -201,7 +201,7 @@ class GovernanceBase:
         """
         # Filter UTxOs containing RewardTransport tokens
         reward_transport_utxos = filter_utxos_by_token_name(
-            utxos, ScriptHash(bytes.fromhex(policy_hash)), "RewardTransport"
+            utxos, ScriptHash(bytes.fromhex(policy_hash)), "C3RT"
         )
 
         # Convert CBOR encoded datums to RewardTransportVariant objects
@@ -214,18 +214,6 @@ class GovernanceBase:
             if utxo.output.datum
             and isinstance(utxo.output.datum, RewardTransportVariant)
         ]
-
-    def generate_reward_issuer_address(self) -> Address:
-        """Generate an address for the reward issuer.
-
-        This method is currently a placeholder for implementing reward issuer
-        address generation functionality.
-
-        Returns:
-            Address: The reward issuer address.
-        """
-        # Implementation needed
-        pass
 
     @pytest.mark.asyncio
     @async_retry(tries=MAX_TEST_RETRIES, delay=5)

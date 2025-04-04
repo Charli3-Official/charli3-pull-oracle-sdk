@@ -136,7 +136,7 @@ class TestDeployment(TestBase):
         )
 
         # Update the configuration file with the new oracle policy id
-        oracle_policy_id = find_oracle_policy_hash(utxos, "CoreSettings")
+        oracle_policy_id = find_oracle_policy_hash(utxos, "C3CS")
         logger.info(
             f"Updating configuration file with new oracle policy ID: {oracle_policy_id}"
         )
