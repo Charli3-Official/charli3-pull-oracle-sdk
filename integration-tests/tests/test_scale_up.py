@@ -2,8 +2,8 @@
 
 This module tests the functionality of increasing the number of UTxO pairs
 in the Oracle. It validates that the scaling up operation correctly
-adds the specified number of pairs (each consisting of an AggState UTxO and a
-RewardTransport UTxO) to the blockchain environment.
+adds the specified number of pairs (each consisting of an AggregationState UTxO
+and a RewardTransport UTxO) to the blockchain environment.
 """
 
 from collections.abc import Callable
@@ -26,15 +26,21 @@ class TestScaleUp(GovernanceBase):
 
     This class inherits from GovernanceBase and implements test methods for
     increasing the number of UTxO pairs in the Oracle system. Each pair consists of an
-    AggState UTxO and a RewardTransport UTxO. It verifies the transaction building,
+    AggregationState UTxO and a RewardTransport UTxO. It verifies the transaction building,
     signing, and submission processes, and ensures that the expected number of pairs
-    are added.
+    are added to the blockchain.
+
+    Attributes:
+        PAIRS_TO_ADD_COUNT (int): Number of UTxO pairs to add during the test.
     """
 
-    NEW_PAIR_UTXOS = 2
+    PAIRS_TO_ADD_COUNT = 2
 
-    def setup_method(self, method: "Callable") -> None:
+    def setup_method(self, method: Callable) -> None:
         """Set up the test environment before each test method execution.
+
+        Initializes the test environment by calling the parent class setup
+        and performing any additional test-specific configuration.
 
         Args:
             method (Callable): The test method being run.
@@ -47,16 +53,18 @@ class TestScaleUp(GovernanceBase):
     async def test_scale_up(self) -> None:
         """Test the process of scaling up Oracle UTxO pairs.
 
-        Each pair consists of an AggState UTxO and a RewardTransport UTxO.
+        Each pair consists of an AggregationState UTxO and a RewardTransport UTxO.
+        These pairs are used by the Oracle system to track aggregation states and
+        manage reward distribution.
 
         This test method:
-        1. Counts the current AggState and RewardTransport UTxOs
+        1. Counts the current AggregationState and RewardTransport UTxOs
         2. Retrieves the platform authentication NFT
         3. Gets the platform script configuration
         4. Builds a transaction to add UTxO pairs
         5. Signs and submits the transaction
         6. Verifies the transaction was confirmed
-        7. Confirms the UTxO pairs are added correctly
+        7. Confirms the UTxO pairs are added correctly in the blockchain
 
         Raises:
             AssertionError: If the transaction fails to build or confirm,
@@ -76,31 +84,37 @@ class TestScaleUp(GovernanceBase):
         logger.info(
             f"Oracle Token ScriptHash: {self.management_config.tokens.oracle_policy}"
         )
-        logger.info(f"Scale-up amount: {self.NEW_PAIR_UTXOS} UTxO pair(s) to add")
+        logger.info(f"Scale-up amount: {self.PAIRS_TO_ADD_COUNT} UTxO pair(s) to add")
 
-        # Get current UTxOs and count both AggState and RewardTransport UTxOs
-        utxos = await get_script_utxos(
+        # BEFORE: Get current UTxOs and count initial AggregationState and RewardTransport UTxOs
+        initial_utxos = await get_script_utxos(
             Address.from_primitive(self.oracle_addresses.script_address),
             self.tx_manager,
         )
 
-        agg_state_utxos = self.filter_all_agg_states(
-            utxos, self.management_config.tokens.oracle_policy
+        initial_agg_state_utxos = self.extract_aggregation_state_utxos(
+            initial_utxos, self.management_config.tokens.oracle_policy
         )
 
-        reward_transport_utxos = self.filter_all_reward_transports(
-            utxos, self.management_config.tokens.oracle_policy
+        initial_reward_transport_utxos = self.extract_reward_transport_utxos(
+            initial_utxos, self.management_config.tokens.oracle_policy
         )
 
-        total_agg_state_utxos = len(agg_state_utxos)
-        total_reward_transport_utxos = len(reward_transport_utxos)
+        initial_agg_state_count = len(initial_agg_state_utxos)
+        initial_reward_transport_count = len(initial_reward_transport_utxos)
 
-        logger.info(f"Current AggState UTxOs: {total_agg_state_utxos}")
-        logger.info(f"Current RewardTransport UTxOs: {total_reward_transport_utxos}")
+        logger.info(f"Initial AggregationState UTxOs: {initial_agg_state_count}")
+        logger.info(f"Initial RewardTransport UTxOs: {initial_reward_transport_count}")
+
+        # Verify that the initial counts match (should be in pairs)
+        assert initial_agg_state_count == initial_reward_transport_count, (
+            f"Initial UTxO pair mismatch: Found {initial_agg_state_count} AggregationState UTxOs "
+            f"but {initial_reward_transport_count} RewardTransport UTxOs"
+        )
 
         # Find platform auth NFT at the platform address
         logger.info("Retrieving platform authentication NFT")
-        platform_utxo = await self.platform_auth_finder.find_auth_utxo(
+        platform_auth_utxo = await self.platform_auth_finder.find_auth_utxo(
             policy_id=self.management_config.tokens.platform_auth_policy,
             platform_address=self.oracle_addresses.platform_address,
         )
@@ -115,27 +129,29 @@ class TestScaleUp(GovernanceBase):
 
         # Build the scale-up transaction
         logger.info(
-            f"Building scale-up transaction to add {self.NEW_PAIR_UTXOS} UTxO pair(s)"
+            f"Building scale-up transaction to add {self.PAIRS_TO_ADD_COUNT} UTxO pair(s)"
         )
-        result = await self.governance_orchestrator.scale_up_oracle(
+        scale_up_result = await self.governance_orchestrator.scale_up_oracle(
             oracle_policy=self.management_config.tokens.oracle_policy,
-            scale_amount=self.NEW_PAIR_UTXOS,
-            platform_utxo=platform_utxo,
+            scale_amount=self.PAIRS_TO_ADD_COUNT,
+            platform_utxo=platform_auth_utxo,
             platform_script=platform_script,
             change_address=self.oracle_addresses.admin_address,
             signing_key=self.loaded_key.payment_sk,
         )
 
         assert (
-            result.status == ProcessStatus.TRANSACTION_BUILT
-        ), f"Scale-up transaction failed to build: {result.error}"
+            scale_up_result.status == ProcessStatus.TRANSACTION_BUILT
+        ), f"Scale-up transaction failed to build: {scale_up_result.error}"
 
-        logger.info(f"Scale-up transaction built successfully: {result.transaction.id}")
+        logger.info(
+            f"Scale-up transaction built successfully: {scale_up_result.transaction.id}"
+        )
 
         # Sign and submit the transaction
         logger.info("Signing and submitting scale-up transaction")
         transaction_status, _ = await self.tx_manager.sign_and_submit(
-            result.transaction,
+            scale_up_result.transaction,
             [self.loaded_key.payment_sk],
             wait_confirmation=True,
         )
@@ -146,49 +162,53 @@ class TestScaleUp(GovernanceBase):
         ), f"Scale-up transaction failed with status: {transaction_status}"
 
         # Wait for UTxOs to be indexed
-        logger.info(f"Waiting {20} seconds for UTxOs to be indexed")
+        logger.info("Waiting 20 seconds for UTxOs to be indexed")
         await wait_for_indexing(20)
 
-        # Check the updated UTxOs
+        # AFTER: Check the updated UTxOs to verify pairs were added
         logger.info("Verifying UTxO pairs were added correctly")
-        utxos = await get_script_utxos(
+        updated_utxos = await get_script_utxos(
             Address.from_primitive(self.oracle_addresses.script_address),
             self.tx_manager,
         )
 
-        new_agg_state_utxos = self.filter_all_agg_states(
-            utxos, self.management_config.tokens.oracle_policy
+        final_agg_state_utxos = self.extract_aggregation_state_utxos(
+            updated_utxos, self.management_config.tokens.oracle_policy
         )
 
-        new_reward_transport_utxos = self.filter_all_reward_transports(
-            utxos, self.management_config.tokens.oracle_policy
+        final_reward_transport_utxos = self.extract_reward_transport_utxos(
+            updated_utxos, self.management_config.tokens.oracle_policy
         )
 
-        new_agg_state_count = len(new_agg_state_utxos)
-        new_reward_transport_count = len(new_reward_transport_utxos)
+        final_agg_state_count = len(final_agg_state_utxos)
+        final_reward_transport_count = len(final_reward_transport_utxos)
 
-        logger.info(f"Updated AggState UTxOs: {new_agg_state_count}")
-        logger.info(f"Updated RewardTransport UTxOs: {new_reward_transport_count}")
+        logger.info(f"Final AggregationState UTxOs: {final_agg_state_count}")
+        logger.info(f"Final RewardTransport UTxOs: {final_reward_transport_count}")
 
-        # Compare counts before and after
-        expected_count = total_agg_state_utxos + self.NEW_PAIR_UTXOS
-        logger.info(f"Expected UTxOs of each type: {expected_count}")
+        # Calculate expected counts after adding pairs
+        expected_utxo_count = initial_agg_state_count + self.PAIRS_TO_ADD_COUNT
+        logger.info(
+            f"Expected UTxOs of each type after addition: {expected_utxo_count}"
+        )
 
         # Assert that both types of UTxOs were added correctly
-        assert expected_count == new_agg_state_count, (
-            f"AggState UTxO mismatch: Expected {expected_count} UTxOs, "
-            f"but found {new_agg_state_count} UTxOs in the blockchain"
+        assert expected_utxo_count == final_agg_state_count, (
+            f"AggregationState UTxO count mismatch: Expected {expected_utxo_count} UTxOs "
+            f"(initial {initial_agg_state_count} + {self.PAIRS_TO_ADD_COUNT} added), "
+            f"but found {final_agg_state_count} UTxOs in the blockchain"
         )
 
-        assert expected_count == new_reward_transport_count, (
-            f"RewardTransport UTxO mismatch: Expected {expected_count} UTxOs, "
-            f"but found {new_reward_transport_count} UTxOs in the blockchain"
+        assert expected_utxo_count == final_reward_transport_count, (
+            f"RewardTransport UTxO count mismatch: Expected {expected_utxo_count} UTxOs "
+            f"(initial {initial_reward_transport_count} + {self.PAIRS_TO_ADD_COUNT} added), "
+            f"but found {final_reward_transport_count} UTxOs in the blockchain"
         )
 
-        # Assert that we have the same number of each type of UTxO
-        assert new_agg_state_count == new_reward_transport_count, (
-            f"UTxO pair mismatch: Found {new_agg_state_count} AggState UTxOs "
-            f"but {new_reward_transport_count} RewardTransport UTxOs"
+        # Assert that we have the same number of each type of UTxO (should be in pairs)
+        assert final_agg_state_count == final_reward_transport_count, (
+            f"Final UTxO pair mismatch: Found {final_agg_state_count} AggregationState UTxOs "
+            f"but {final_reward_transport_count} RewardTransport UTxOs"
         )
 
         logger.info("Scale-up operation completed successfully")
