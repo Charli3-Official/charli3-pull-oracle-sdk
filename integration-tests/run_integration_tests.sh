@@ -93,17 +93,16 @@ run_test "TestCreateReferenceScript"
 # 3. Run aggregate tests multiple times
 run_test "TestAggregate"
 
-# # 4. Test governance functions
-# run_test "TestEditSettings or TestAddNodes or TestRemoveNodes"
-# 4.3
-# run_test "TestRemoveNodes" (WIP)
-# 4.4
+# 4. Test governance functions
+# 4.1
+run_test "TestRemoveNodes"
+# 4.2
 run_test "TestAddNodes"
-# 4.5
+# 4.3
 run_test "TestEditSettings"
-# 4.6
+# 4.4
 run_test "TestScaleUp"
-# 4.7
+# 4.5
 run_test "TestScaleDown"
 
 # # 5. Test reward collection

@@ -3,12 +3,14 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from pycardano import Network, ScriptHash, UTxO
+import pytest
+from pycardano import Address, ScriptHash, UTxO
 
 from charli3_offchain_core.cli.config.escrow import EscrowConfig
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.config.nodes import NodeConfig, NodesConfig
 from charli3_offchain_core.cli.governance import setup_management_from_config
+from charli3_offchain_core.contracts.aiken_loader import RewardEscrowContract
 from charli3_offchain_core.models.oracle_datums import (
     AggStateVariant,
     RewardTransportVariant,
@@ -20,11 +22,11 @@ from charli3_offchain_core.oracle.utils.state_checks import (
     convert_cbor_to_transports,
 )
 
-from .test_utils import (
-    logger,
-)
+from .async_utils import async_retry
+from .test_utils import logger, update_config_file, wait_for_indexing
 
-TEST_RETRIES = 3
+# Number of retry attempts for test operations
+MAX_TEST_RETRIES = 3
 
 
 class GovernanceBase:
@@ -34,13 +36,26 @@ class GovernanceBase:
     operations such as adding, removing, or updating node configurations. It loads
     configuration from a YAML file and initializes the necessary components for
     interacting with the blockchain.
+
+    Attributes:
+        NETWORK (Network): The blockchain network to use for testing (TESTNET).
+        DIR_PATH (str): The directory path where this test file is located.
+        config_path (Path): Path to the configuration YAML file.
+        management_config: Configuration for managing the oracle.
+        oracle_configuration: Configuration for the oracle.
+        loaded_key: The cryptographic keys used for signing transactions.
+        oracle_addresses: Addresses associated with the oracle.
+        chain_query: Interface for querying the blockchain.
+        tx_manager: Manager for building and submitting transactions.
+        platform_auth_finder: Component to find platform authentication.
+        escrow_config (EscrowConfig): Configuration for the escrow contract.
+        governance_orchestrator (GovernanceOrchestrator): Orchestrator for governance operations.
     """
 
-    NETWORK = Network.TESTNET
     DIR_PATH: ClassVar[str] = os.path.dirname(os.path.realpath(__file__))
 
     def setup_method(self, method: Any) -> None:
-        """Set up test configuration and environment.
+        """Set up test configuration and environment for each test method.
 
         This method loads the configuration from a YAML file, initializes blockchain
         connection components, and prepares the governance orchestrator for testing.
@@ -77,6 +92,7 @@ class GovernanceBase:
                 self.platform_auth_finder,
             ) = setup_result
 
+            # Initialize escrow configuration and governance orchestrator
             self.escrow_config = EscrowConfig.from_yaml(self.config_path)
             self.governance_orchestrator = GovernanceOrchestrator(
                 chain_query=self.chain_query,
@@ -90,93 +106,225 @@ class GovernanceBase:
             logger.error(f"Error setting up test environment: {e}")
             raise
 
-    def load_nodes_to_remove(
-        self, nodes_config: NodesConfig, slice_count: int
+    def prepare_nodes_for_removal(
+        self, nodes_config: NodesConfig, count_to_remove: int
     ) -> tuple[int, list[NodeConfig]]:
-        """Create a node configuration for removing nodes.
+        """Prepare a list of nodes for removal testing.
 
-        Creates a new NodesConfig with the first 'slice_count' nodes from the original
-        configuration, which can be used for testing node removal operations.
+        Creates a subset of nodes from the original configuration that will be
+        used for testing node removal operations. Also calculates the updated
+        signature threshold after removal.
 
         Args:
             nodes_config (NodesConfig): Original nodes configuration
-            slice_count (int): Number of nodes to include in the new configuration
+            count_to_remove (int): Number of nodes to select for removal
 
         Returns:
-            Selected nodes: Nodes to be removed
-            Selected signatures: Updated signatures threshold
+            Tuple[int, List[NodeConfig]]: A tuple containing:
+                - The adjusted signature threshold after removal
+                - List of node configurations to be removed
         """
-        selected_nodes = nodes_config.nodes[:slice_count]
-        selected_signatures = nodes_config.required_signatures - slice_count
+        nodes_to_remove = nodes_config.nodes[:count_to_remove]
+        adjusted_signature_threshold = (
+            nodes_config.required_signatures - count_to_remove
+        )
 
-        return (selected_signatures, selected_nodes)
+        return (adjusted_signature_threshold, nodes_to_remove)
 
-    def load_nodes_to_add(
-        self, nodes_config: NodesConfig, required_signatures: int, attach_count: int
+    def prepare_nodes_for_addition(
+        self, nodes_config: NodesConfig, required_signatures: int, count_to_add: int
     ) -> NodesConfig:
-        """Create a node configuration for adding nodes.
+        """Create a node configuration for adding new nodes.
 
-        Creates a new NodesConfig based on the first 'attach_count' nodes from the original
+        Creates a new NodesConfig with a subset of nodes from the original
         configuration, which can be used for testing node addition operations.
 
         Args:
             nodes_config (NodesConfig): Original nodes configuration
             required_signatures (int): Number of required signatures for the new configuration
-            attach_count (int): Number of nodes to include in the new configuration
+            count_to_add (int): Number of nodes to include in the new configuration
 
         Returns:
-            NodesConfig: A new nodes configuration with the selected nodes recreated
+            NodesConfig: A new nodes configuration with the selected nodes
         """
-        selected_nodes = [
+        new_nodes = [
             NodeConfig(node_config.payment_vkh, node_config.feed_vkh)
-            for node_config in nodes_config.nodes[:attach_count]
+            for node_config in nodes_config.nodes[:count_to_add]
         ]
 
-        return NodesConfig(
-            required_signatures=required_signatures, nodes=selected_nodes
-        )
+        return NodesConfig(required_signatures=required_signatures, nodes=new_nodes)
 
-    def filter_all_agg_states(
+    def extract_aggregation_state_utxos(
         self, utxos: Sequence[UTxO], policy_hash: str
     ) -> list[UTxO]:
-        """Filter UTxOs for empty or expired aggregation states.
+        """Extract UTxOs containing valid AggregationState tokens and datums.
+
+        Filters and returns UTxOs that contain AggregationState tokens with
+        valid AggStateVariant datums.
 
         Args:
-            utxos: List of UTxOs to filter
+            utxos (Sequence[UTxO]): List of UTxOs to filter
+            policy_hash (str): The policy hash to filter tokens by
 
         Returns:
-            List of AggState UTxOs
+            List[UTxO]: List of UTxOs with valid AggStateVariant datums
         """
-        agg_state = filter_utxos_by_token_name(
+        # Filter UTxOs containing AggregationState tokens
+        agg_state_utxos = filter_utxos_by_token_name(
             utxos, ScriptHash(bytes.fromhex(policy_hash)), "AggregationState"
         )
-        utxos_with_datum = convert_cbor_to_agg_states(agg_state)
 
+        # Convert CBOR encoded datums to AggStateVariant objects
+        utxos_with_datum = convert_cbor_to_agg_states(agg_state_utxos)
+
+        # Return only UTxOs with valid AggStateVariant datums
         return [
             utxo
             for utxo in utxos_with_datum
             if utxo.output.datum and isinstance(utxo.output.datum, AggStateVariant)
         ]
 
-    def filter_all_reward_transports(
+    def extract_reward_transport_utxos(
         self, utxos: Sequence[UTxO], policy_hash: str
     ) -> list[UTxO]:
-        """Filter UTxOs for Reward Transports.
+        """Extract UTxOs containing valid RewardTransport tokens and datums.
+
+        Filters and returns UTxOs that contain RewardTransport tokens with
+        valid RewardTransportVariant datums.
 
         Args:
-            utxos: List of UTxOs to filter
+            utxos (Sequence[UTxO]): List of UTxOs to filter
+            policy_hash (str): The policy hash to filter tokens by
 
         Returns:
-            List of RewardTransport UTxOs
+            List[UTxO]: List of UTxOs with valid RewardTransportVariant datums
         """
-        reward_transports = filter_utxos_by_token_name(
+        # Filter UTxOs containing RewardTransport tokens
+        reward_transport_utxos = filter_utxos_by_token_name(
             utxos, ScriptHash(bytes.fromhex(policy_hash)), "RewardTransport"
         )
-        utxos_with_datum = convert_cbor_to_transports(reward_transports)
 
+        # Convert CBOR encoded datums to RewardTransportVariant objects
+        utxos_with_datum = convert_cbor_to_transports(reward_transport_utxos)
+
+        # Return only UTxOs with valid RewardTransportVariant datums
         return [
             utxo
             for utxo in utxos_with_datum
             if utxo.output.datum
             and isinstance(utxo.output.datum, RewardTransportVariant)
         ]
+
+    def generate_reward_issuer_address(self) -> Address:
+        """Generate an address for the reward issuer.
+
+        This method is currently a placeholder for implementing reward issuer
+        address generation functionality.
+
+        Returns:
+            Address: The reward issuer address.
+        """
+        # Implementation needed
+        pass
+
+    @pytest.mark.asyncio
+    @async_retry(tries=MAX_TEST_RETRIES, delay=5)
+    async def test_create_escrow_reference_script(self) -> None:
+        """Test the creation of an escrow reference script.
+
+        This test creates a reference script for the escrow contract and verifies
+        that it was successfully created on the blockchain. It also updates the
+        configuration file with the newly created escrow address and reward issuer
+        address.
+
+        The test uses retry mechanisms to handle potential network issues.
+
+        Raises:
+            AssertionError: If the escrow reference script is not found after creation.
+        """
+        logger.info("Starting Escrow contract reference script creation")
+
+        # Load the escrow contract from the blueprint
+        escrow_script = RewardEscrowContract.from_blueprint(
+            self.escrow_config.blueprint_path
+        )
+
+        # Generate the address for the escrow script
+        escrow_script_address = Address(
+            payment_part=escrow_script.escrow_manager.script_hash,
+            network=self.escrow_config.network.network,
+        )
+        logger.info(f"Escrow address: {escrow_script_address}")
+
+        # Create the reference script transaction
+        logger.info("Creating Escrow reference script")
+        tx_build_result = await self.tx_manager.build_reference_script_tx(
+            script=escrow_script.escrow_manager.contract,
+            script_address=escrow_script_address,
+            admin_address=self.loaded_key.address,
+            signing_key=self.loaded_key.payment_sk,
+            reference_ada=6107270,  # Amount of ADA to lock with the reference script
+        )
+
+        logger.info("Manager reference script transaction built")
+
+        # Sign and submit the transaction
+        tx_status, _tx = await self.tx_manager.sign_and_submit(
+            tx_build_result, [self.loaded_key.payment_sk]
+        )
+
+        logger.info("Escrow reference script transaction submitted")
+
+        # Wait for the transaction to be indexed
+        await wait_for_indexing(10)
+
+        # Verify that the reference script now exists
+        escrow_reference_script_utxo = await self.get_escrow_reference_script_utxo(
+            escrow_script_address
+        )
+
+        assert (
+            escrow_reference_script_utxo is not None
+        ), "Escrow reference script not found after creation"
+
+        logger.info(
+            "The Escrow contract reference script has been created successfully."
+        )
+
+        # Update configuration file with new escrow and reward issuer addresses
+        logger.info(
+            f"Updating configuration file with new escrow address: {escrow_script_address}"
+        )
+        update_config_file(
+            self.config_path,
+            {"reference_script_addr": str(escrow_script_address)},
+        )
+
+        logger.info(f"Updating reward issuer address: {self.loaded_key.address}")
+        update_config_file(
+            self.config_path,
+            {"reward_issuer_address": str(self.loaded_key.address)},
+        )
+
+    async def get_escrow_reference_script_utxo(
+        self, escrow_address: Address
+    ) -> UTxO | None:
+        """Retrieve the reference script UTxO for the escrow contract.
+
+        Queries the blockchain for UTxOs at the given escrow address and returns
+        the first UTxO containing a reference script.
+
+        Args:
+            escrow_address (Address): The address of the escrow contract.
+
+        Returns:
+            Optional[UTxO]: The UTxO containing the reference script, or None if not found.
+        """
+        # Get all UTxOs at the escrow address
+        utxos = await self.chain_query.get_utxos(escrow_address)
+
+        # Filter for UTxOs that contain a reference script
+        reference_utxos = [utxo for utxo in utxos if utxo.output.script]
+
+        # Return the first reference script UTxO, or None if none exist
+        return reference_utxos[0] if reference_utxos else None
