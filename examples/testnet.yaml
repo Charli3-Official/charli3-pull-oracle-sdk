@@ -25,7 +25,10 @@ network:
     # stake_vkey_path: "testnet-keys/stake.vkey"
 
 multisig:
-  platform_addr: "addr_test1wqrqgd6jpkkaxwfr29s60p0xrtazlvcpvp2xp6vrtc7rm9g2r63c3" #By Default wallet address is used
+  # Default config for platform_addr:
+  # 1. on mint tx - native script multisig address is used
+  # 2. on governance txs to look for the auth NFT - the wallet address is used
+  platform_addr: "addr_test1wqrqgd6jpkkaxwfr29s60p0xrtazlvcpvp2xp6vrtc7rm9g2r63c3"
   threshold: 1  # Number of required signatures
   parties:  #List of pkhs that can sign
     - 47438589f392891ba49fbbb883c0fdf6892e894aaa5a371ed1f042ac
