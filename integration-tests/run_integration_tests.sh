@@ -107,8 +107,11 @@ run_test "TestScaleUp"
 # 4.5
 run_test "TestScaleDown"
 
-# 5. Oracle Pause
-run_test "TestOraclePause"
+# 5. Oracle Pause and Resume
+run_test "TestOraclePauseResume"
+
+# 10. Oracle Remove
+run_test "TestOracleRemove"
 
 # # 5. Test reward collection
 # run_test "TestNodeCollect or TestPlatformCollect"
