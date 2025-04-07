@@ -96,3 +96,59 @@ class TestOraclePause(TestBase):
         assert (
             settings_datum.pause_period_started_at != NoDatum()
         ), "Oracle pause timestamp not found after creation"
+
+    @pytest.mark.asyncio
+    @pytest.mark.run(order=5.2)
+    @async_retry(tries=TEST_RETRIES, delay=5)
+    async def test_oracle_resume(self) -> None:
+        """Test oracle resume."""
+        # Prepare the transaction
+        platform_utxo = await self.platform_auth_finder.find_auth_utxo(
+            policy_id=self.management_config.tokens.platform_auth_policy,
+            platform_address=self.oracle_addresses.platform_address,
+        )
+
+        assert (
+            platform_utxo is not None
+        ), "No platform auth UTxO found for oracle resume test"
+
+        platform_script = await self.platform_auth_finder.get_platform_script(
+            self.oracle_addresses.platform_address
+        )
+
+        result = await self.lifecycle_orchestrator.resume_oracle(
+            oracle_policy=self.management_config.tokens.oracle_policy,
+            platform_utxo=platform_utxo,
+            platform_script=platform_script,
+            change_address=self.oracle_addresses.admin_address,
+            signing_key=self.loaded_keys.payment_sk,
+        )
+
+        assert (
+            result.transaction is not None
+        ), "Failed to build oracle resume transaction"
+
+        logger.info("Oracle resume transaction built")
+
+        # Submit the transaction
+        await self.lifecycle_orchestrator.tx_manager.sign_and_submit(
+            result.transaction, [self.loaded_keys.payment_sk], wait_confirmation=False
+        )
+
+        logger.info("Oracle resume transaction submitted")
+
+        # Verify that the oracle was resumed
+        await wait_for_indexing(10)
+
+        utxos = await common.get_script_utxos(
+            self.oracle_addresses.script_address, self.lifecycle_orchestrator.tx_manager
+        )
+        policy_hash = ScriptHash.from_primitive(
+            self.management_config.tokens.oracle_policy
+        )
+        settings_datum, _settings_utxo = state_checks.get_oracle_settings_by_policy_id(
+            utxos, policy_hash
+        )
+        assert (
+            settings_datum.pause_period_started_at == NoDatum()
+        ), "Oracle was not resumed"
