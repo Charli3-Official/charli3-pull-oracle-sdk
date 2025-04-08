@@ -115,6 +115,7 @@ run_test "TestScaleDown"
 # run_test "TestOracleClose"
 
 # # 8. Test multisig functionality
+run_test "TestMultisigPlatformAuth"
 # run_test "TestMultisigDeployment"
 # run_test "TestMultisigReferenceScript"
 # run_test "TestMultisigGovernance"

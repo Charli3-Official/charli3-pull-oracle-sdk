@@ -52,5 +52,5 @@ tokens:
   fee_token_name: '546573744333'
   fee_token_policy: d7e216e35185f9631b03abd8649d47f627f02ecc04ba770f8d77ee1a
   oracle_policy: a4d31c4530ae6c08d564866c3973f15977a8cb4d4ebee7447b33ca46
-  platform_auth_policy: 27112e898dd3a24de25f82fd606c32812f13b007285ad1aa08da9a92
+  platform_auth_policy: d2d0f9a98b12a8d702da8e0a1cf338fcc7a0a88649b20310dbdc8875
 transport_count: 4

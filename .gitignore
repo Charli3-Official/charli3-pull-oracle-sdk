@@ -151,6 +151,7 @@ venv.bak/
 .dmypy.json
 dmypy.json
 node_keys/
+platform_keys/
 
 # Pyre type checker
 .pyre/
