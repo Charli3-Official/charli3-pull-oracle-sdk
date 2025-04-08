@@ -32,6 +32,18 @@ class SequenceError(StateValidationError):
     pass
 
 
+class NoPendingTransportUtxosFoundError(StateValidationError):
+    """Raised when no pending transport UTxOs were found."""
+
+    pass
+
+
+class RewardCalculationIsNotSubsidizedError(StateValidationError):
+    """Raised when transaction fee for reward calculation is not subsidized."""
+
+    pass
+
+
 # Time Validation Errors
 class TimeValidationError(ValidationError):
     """Raised when time-related validation fails."""
