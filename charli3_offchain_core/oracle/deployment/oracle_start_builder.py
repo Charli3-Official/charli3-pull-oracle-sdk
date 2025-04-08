@@ -51,6 +51,7 @@ class StartTransactionResult:
     """Result of oracle start transaction"""
 
     transaction: Transaction
+    minting_policy_id: str
     settings_utxo: TransactionOutput
     reward_account_utxo: TransactionOutput
     reward_transport_utxos: list[TransactionOutput]
@@ -232,6 +233,7 @@ class OracleStartBuilder:
 
         return StartTransactionResult(
             transaction=tx,
+            minting_policy_id=mint_policy.policy_id,
             settings_utxo=settings_utxo,
             reward_account_utxo=reward_account_utxo,
             reward_transport_utxos=list(reward_transport_utxos),

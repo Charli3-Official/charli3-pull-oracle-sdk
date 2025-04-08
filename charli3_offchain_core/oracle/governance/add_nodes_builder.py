@@ -61,6 +61,7 @@ class AddNodesBuilder(BaseBuilder):
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         new_nodes_config: NodesConfig,
         required_signers: list[VerificationKeyHash] | None = None,
+        test_mode: bool = False,
     ) -> GovernanceTxResult:
         """Build the update transaction."""
         try:
@@ -91,7 +92,7 @@ class AddNodesBuilder(BaseBuilder):
                 )
                 try:
                     confirm_node_updates(
-                        in_core_datum, out_core_utxo.output.datum.datum
+                        in_core_datum, out_core_utxo.output.datum.datum, test_mode
                     )
                 except AddNodesValidationError as e:
                     error_msg = f"Failed to validate add nodes rules: {e}"
@@ -366,7 +367,9 @@ def display_signature_change(current: int, new: int) -> None:
 
 
 def confirm_node_updates(
-    in_core_datum: OracleSettingsDatum, out_core_datum: OracleSettingsDatum
+    in_core_datum: OracleSettingsDatum,
+    out_core_datum: OracleSettingsDatum,
+    test_mode: bool = False,
 ) -> bool:
     """
     Validate and confirm node updates with the user.
@@ -388,7 +391,7 @@ def confirm_node_updates(
         raise AddNodesValidationError("Adding nodes validation failed")
 
     # Get user confirmation
-    if not print_confirmation_message_prompt(
+    if not test_mode and not print_confirmation_message_prompt(
         "Do you want to continue with the detected changes?"
     ):
         logger.info("User cancelled node update")
