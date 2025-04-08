@@ -97,7 +97,7 @@ def filter_empty_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
 
 
 def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Filter UTxOs for pending reward consensus states.
+    """Filter UTxOs for pending reward consensus states, and sort by timestamp
 
     Args:
         utxos: List of UTxOs to filter
@@ -108,13 +108,18 @@ def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
 
     utxos_with_datum = convert_cbor_to_transports(utxos)
 
-    return [
+    pending_transports = [
         utxo
         for utxo in utxos_with_datum
         if utxo.output.datum
         and isinstance(utxo.output.datum, RewardTransportVariant)
         and isinstance(utxo.output.datum.datum, RewardConsensusPending)
     ]
+    pending_transports.sort(
+        key=lambda utxo: utxo.output.datum.datum.aggregation.message.timestamp
+    )
+
+    return pending_transports
 
 
 def filter_empty_agg_states(utxos: Sequence[UTxO]) -> list[UTxO]:
