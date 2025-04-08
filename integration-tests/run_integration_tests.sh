@@ -105,8 +105,9 @@ run_test "TestScaleUp"
 # 4.5
 run_test "TestScaleDown"
 
-# # 5. Test reward collection
-# run_test "TestNodeCollect or TestPlatformCollect"
+# 5. Test reward collection
+run_test "TestNodeCollect"
+run_test "TestPlatformCollect"
 
 # # 6. Run aggregate tests again to verify it still works after changes
 # run_test_multiple_times "TestAggregate" 1 10

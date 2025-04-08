@@ -2,10 +2,12 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pycardano import (
     Address,
+    AssetName,
     PaymentExtendedSigningKey,
     PaymentVerificationKey,
     ScriptHash,
@@ -54,7 +56,8 @@ class TestNodeCollect(TestBase):
         tuple[
             PaymentExtendedSigningKey,
             PaymentVerificationKey,
-            VerificationKeyHash,
+            PaymentExtendedSigningKey,
+            PaymentVerificationKey,
             Address,
         ]
         | None
@@ -70,28 +73,43 @@ class TestNodeCollect(TestBase):
             node_dir = node_dirs[0]
 
             # Load the signing key
-            skey = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
+            feed_skey = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
 
             # Load the verification key
-            vkey = PaymentVerificationKey.load(node_dir / "feed.vkey")
+            feed_vkey = PaymentVerificationKey.load(node_dir / "feed.vkey")
 
             # Load the verification key hash
             feed_vkh = VerificationKeyHash(
                 bytes.fromhex((node_dir / "feed.vkh").read_text().strip())
             )
 
+            # Load the payment signing key
+            payment_skey = PaymentExtendedSigningKey.load(node_dir / "payment.skey")
+            payment_vkey = PaymentVerificationKey.load(node_dir / "payment.vkey")
+
+            # Load the payment verification key hash
+            payment_vkh = VerificationKeyHash(
+                bytes.fromhex((node_dir / "payment.vkh").read_text().strip())
+            )
+
             # Derive the node's payment address
             node_address = Address(
-                payment_part=vkey.hash(),
+                payment_part=payment_vkh,
                 network=self.NETWORK,
             )
 
             logger.info(
-                f"Loaded node key: feed VKH={feed_vkh}, payment VKH={vkey.hash()}"
+                f"Loaded node key: feed_vkh={feed_vkh}, payment_vkh={payment_vkh}"
             )
             logger.info(f"Node payment address: {node_address}")
 
-            return skey, vkey, feed_vkh, node_address
+            return (
+                feed_skey,
+                feed_vkey,
+                payment_skey,
+                payment_vkey,
+                node_address,
+            )
 
         except Exception as e:
             logger.error(f"Failed to load node key: {e}")
@@ -107,140 +125,157 @@ class TestNodeCollect(TestBase):
         if not self.node_keys:
             pytest.skip("No node keys available for testing")
 
-        # Unpack the node keys
-        node_skey, node_vkey, node_feed_vkh, node_address = self.node_keys
+        # Mock the confirm_withdrawal_amount_and_address function
+        with patch(
+            "charli3_offchain_core.oracle.rewards.node_collect_builder.confirm_withdrawal_amount_and_address",
+            new=AsyncMock(return_value=self.node_keys[-1]),
+        ):
+            # Unpack the node keys
+            (
+                _,
+                node_feed_vkey,
+                node_payment_skey,
+                node_payment_vkey,
+                node_address,
+            ) = self.node_keys
 
-        # 1. First, check if there are rewards to collect
-        # Get UTxOs at script address
-        utxos = await self.chain_query.get_utxos(self.oracle_script_address)
+            # 1. First, check if there are rewards to collect
+            # Get UTxOs at script address
+            utxos = await self.chain_query.get_utxos(self.oracle_script_address)
 
-        # Check reward account
-        try:
-            reward_datum, _ = state_checks.get_reward_account_by_policy_id(
-                utxos,
-                ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-            )
-
-            # Get settings to find registered nodes
-            settings_datum, _ = state_checks.get_oracle_settings_by_policy_id(
-                utxos,
-                ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-            )
-
-            # Check if our node is registered
-            registered_nodes = list(settings_datum.nodes.node_map.keys())
-
-            if node_feed_vkh not in registered_nodes:
-                logger.warning(
-                    f"Test node with VKH {node_feed_vkh} is not registered in the oracle"
+            # Check reward account
+            try:
+                reward_datum, _ = state_checks.get_reward_account_by_policy_id(
+                    utxos,
+                    ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
                 )
 
-                # Try to find the index of a node that has rewards
-                node_index = -1
-                for i, _ in enumerate(registered_nodes):
-                    if (
-                        i < len(reward_datum.nodes_to_rewards)
-                        and reward_datum.nodes_to_rewards[i] > 0
-                    ):
-                        node_index = i
-                        break
+                # Get settings to find registered nodes
+                settings_datum, _ = state_checks.get_oracle_settings_by_policy_id(
+                    utxos,
+                    ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
+                )
 
-                if node_index == -1:
-                    logger.info("No registered nodes with rewards found, skipping test")
-                    pytest.skip("No registered nodes with rewards found")
+                # Check if our node is registered
+                registered_nodes = list(settings_datum.nodes.node_map.keys())
+                node_feed_vkh = node_feed_vkey.hash()
+                logger.info(f"Node feed VKH: {node_feed_vkh}")
 
-                # We can't actually run the test since we don't have the keys for a registered node
-                logger.info("Cannot run test with available node keys, skipping test")
-                pytest.skip("Cannot run test with available node keys")
+                if node_feed_vkh not in registered_nodes:
+                    logger.warning(
+                        f"Test node with VKH {node_feed_vkh} is not registered in the oracle"
+                    )
 
-            # Find the index of our node in the nodes list
-            node_index = registered_nodes.index(node_feed_vkh)
+                    # Try to find the index of a node that has rewards
+                    node_index = -1
+                    for i, _ in enumerate(registered_nodes):
+                        if (
+                            i < len(reward_datum.nodes_to_rewards)
+                            and reward_datum.nodes_to_rewards[i] > 0
+                        ):
+                            node_index = i
+                            break
 
-            # Check if this node has rewards to collect
-            if (
-                node_index >= len(reward_datum.nodes_to_rewards)
-                or reward_datum.nodes_to_rewards[node_index] == 0
-            ):
+                    if node_index == -1:
+                        logger.info(
+                            "No registered nodes with rewards found, skipping test"
+                        )
+                        pytest.skip("No registered nodes with rewards found")
+
+                    # We can't actually run the test since we don't have the keys for a registered node
+                    logger.info(
+                        "Cannot run test with available node keys, skipping test"
+                    )
+                    pytest.skip("Cannot run test with available node keys")
+
+                # Get initial balance of the node's address for verification
+                initial_utxos = await self.chain_query.get_utxos(node_address)
+
+                # Calculate initial balance (tokens or ADA)
+                initial_balance = self._calculate_balance(initial_utxos)
+                logger.info(f"Node initial balance: {initial_balance}")
+
+                # Find the index of our node in the nodes list
+                node_index = registered_nodes.index(node_feed_vkh)
+
+                # Check if this node has rewards to collect
+                if (
+                    node_index >= len(reward_datum.nodes_to_rewards)
+                    or reward_datum.nodes_to_rewards[node_index] == 0
+                ):
+                    logger.info(
+                        f"No rewards available for test node {node_feed_vkh}, skipping test"
+                    )
+                    pytest.skip("No rewards available for test node")
+
+                # Record initial reward amount for verification
+                initial_reward = reward_datum.nodes_to_rewards[node_index]
                 logger.info(
-                    f"No rewards available for test node {node_feed_vkh}, skipping test"
-                )
-                pytest.skip("No rewards available for test node")
-
-            # Record initial reward amount for verification
-            initial_reward = reward_datum.nodes_to_rewards[node_index]
-            logger.info(
-                f"Test node has {initial_reward} rewards available for collection"
-            )
-
-            # Get initial balance of the node's address for verification
-            initial_utxos = await self.chain_query.get_utxos(node_address)
-
-            # Calculate initial balance (tokens or ADA)
-            initial_balance = self._calculate_balance(initial_utxos)
-            logger.info(f"Node initial balance: {initial_balance}")
-
-            # Create LoadedKeys with node keys for testing
-            payment_vkh = settings_datum.nodes.node_map[node_feed_vkh]
-            payment_address = Address(
-                payment_part=payment_vkh,
-                network=self.NETWORK,
-            )
-
-            loaded_keys = LoadedKeys(
-                payment_sk=node_skey,
-                payment_vk=payment_vkh,
-                stake_vk=None,
-                address=payment_address,
-            )
-
-            # 2. Use the reward orchestrator to collect rewards
-            result = await self.reward_orchestrator.collect_node_oracle(
-                oracle_policy=self.token_config.oracle_policy,
-                tokens=self.token_config,
-                loaded_key=loaded_keys,
-                network=self.NETWORK,
-            )
-
-            # 3. Check the result
-            if result is not None:
-                # If we have a transaction, we can test submission
-                assert (
-                    result.transaction is not None
-                ), "Should have transaction for node collect"
-
-                # 4. Submit the transaction
-                logger.info(
-                    f"Submitting node collect transaction: {result.transaction.id}"
-                )
-                status, _ = await self.tx_manager.sign_and_submit(
-                    result.transaction,
-                    [node_skey],
-                    wait_confirmation=True,
+                    f"Test node has {initial_reward} rewards available for collection"
                 )
 
-                assert (
-                    status == "confirmed"
-                ), f"Node collect transaction failed with status: {status}"
-                logger.info(
-                    f"Node collect transaction confirmed: {result.transaction.id}"
+                # Create LoadedKeys with node keys for testing
+                payment_vkh = settings_datum.nodes.node_map[node_feed_vkh]
+                payment_address = Address(
+                    payment_part=payment_vkh,
+                    network=self.NETWORK,
                 )
 
-                # 5. Wait for indexing
-                await wait_for_indexing(10)
-
-                # 6. Verify the reward was collected
-                await self.verify_reward_collection(
-                    node_feed_vkh=node_feed_vkh,
-                    node_address=node_address,
-                    initial_balance=initial_balance,
-                    initial_reward=initial_reward,
+                loaded_keys = LoadedKeys(
+                    payment_sk=node_payment_skey,
+                    payment_vk=node_payment_vkey,
+                    stake_vk=None,
+                    address=payment_address,
                 )
 
-                logger.info("Node collect test completed successfully")
+                # 2. Use the reward orchestrator to collect rewards
+                result = await self.reward_orchestrator.collect_node_oracle(
+                    oracle_policy=self.token_config.oracle_policy,
+                    tokens=self.token_config,
+                    loaded_key=loaded_keys,
+                    network=self.NETWORK,
+                )
 
-        except Exception as e:
-            logger.error(f"Error in node collect test: {e}")
-            raise
+                # 3. Check the result
+                if result is not None:
+                    # If we have a transaction, we can test submission
+                    assert (
+                        result.transaction is not None
+                    ), "Should have transaction for node collect"
+
+                    # 4. Submit the transaction
+                    logger.info(
+                        f"Submitting node collect transaction: {result.transaction.id}"
+                    )
+                    status, _ = await self.tx_manager.sign_and_submit(
+                        result.transaction,
+                        [node_payment_skey],
+                        wait_confirmation=True,
+                    )
+
+                    assert (
+                        status == "confirmed"
+                    ), f"Node collect transaction failed with status: {status}"
+                    logger.info(
+                        f"Node collect transaction confirmed: {result.transaction.id}"
+                    )
+
+                    # 5. Wait for indexing
+                    await wait_for_indexing(10)
+
+                    # 6. Verify the reward was collected
+                    await self.verify_reward_collection(
+                        node_feed_vkh=node_feed_vkh,
+                        node_address=payment_address,
+                        initial_balance=initial_balance,
+                        initial_reward=initial_reward,
+                    )
+
+                    logger.info("Node collect test completed successfully")
+
+            except Exception as e:
+                logger.error(f"Error in node collect test: {e}")
+                raise
 
     def _calculate_balance(self, utxos: list[UTxO]) -> int:
         """Calculate the balance of an address (either tokens or ADA)."""
@@ -252,7 +287,7 @@ class TestNodeCollect(TestBase):
             script_hash = ScriptHash(
                 bytes.fromhex(self.token_config.reward_token_policy)
             )
-            token_name = bytes.fromhex(self.token_config.reward_token_name)
+            token_name = AssetName(bytes.fromhex(self.token_config.reward_token_name))
 
             total = 0
             for utxo in utxos:

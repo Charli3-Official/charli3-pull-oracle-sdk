@@ -1,9 +1,11 @@
 """Test platform collection of rewards in the Charli3 ODV Oracle."""
 
 from collections.abc import Callable
+from unittest.mock import patch
 
 import pytest
 from pycardano import (
+    AssetName,
     ScriptHash,
     UTxO,
 )
@@ -44,120 +46,135 @@ class TestPlatformCollect(TestBase):
         """Test platform collection of rewards."""
         logger.info("Starting platform collect test")
 
-        # 1. First, check if there are rewards to collect
-        # Get UTxOs at script address
-        utxos = await self.chain_query.get_utxos(self.oracle_script_address)
+        # Mock the confirm_withdrawal_amount_and_address function to avoid user input
+        with patch(
+            "charli3_offchain_core.oracle.rewards.platform_collect_builder.confirm_withdrawal_amount_and_address"
+        ) as mock_confirm:
+            # Properly set up the async mock to return the loaded address
+            mock_confirm.return_value = self.platform_address
 
-        # Check reward account
-        try:
-            reward_datum, reward_utxo = state_checks.get_reward_account_by_policy_id(
-                utxos,
-                ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-            )
+            # 1. First, check if there are rewards to collect
+            # Get UTxOs at script address
+            utxos = await self.chain_query.get_utxos(self.oracle_script_address)
 
-            # Get initial reward account state for verification
-            initial_reward_amount = self._get_reward_account_amount(reward_utxo)
-            logger.info(f"Initial reward account amount: {initial_reward_amount}")
+            # Check reward account
+            try:
+                reward_datum, reward_utxo = (
+                    state_checks.get_reward_account_by_policy_id(
+                        utxos,
+                        ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
+                    )
+                )
 
-            # Check if we have rewards in excess of node allocations that can be collected by platform
-            total_node_rewards = sum(reward_datum.nodes_to_rewards)
-            logger.info(f"Total allocated node rewards: {total_node_rewards}")
+                # Get initial reward account state for verification
+                initial_reward_amount = self._get_reward_account_amount(reward_utxo)
+                logger.info(f"Initial reward account amount: {initial_reward_amount}")
 
-            if initial_reward_amount <= total_node_rewards:
+                # Check if we have rewards in excess of node allocations that can be collected by platform
+                total_node_rewards = sum(reward_datum.nodes_to_rewards)
+                logger.info(f"Total allocated node rewards: {total_node_rewards}")
+
+                if initial_reward_amount <= total_node_rewards:
+                    logger.info(
+                        "No excess rewards available for platform collection, skipping test"
+                    )
+                    pytest.skip("No excess rewards available for platform collection")
+
+                # Calculate expected platform rewards (excess beyond node allocations)
+                expected_platform_rewards = initial_reward_amount - total_node_rewards
+                logger.info(f"Expected platform rewards: {expected_platform_rewards}")
+
+                # 2. Find platform auth NFT at the platform address
+                platform_utxo = await find_platform_auth_nft(
+                    self.platform_auth_finder,
+                    self.token_config.platform_auth_policy,
+                    [self.platform_address, self.admin_address],
+                )
+
+                if not platform_utxo:
+                    logger.error(
+                        "Platform auth NFT not found - please create one first"
+                    )
+                    pytest.skip("Platform auth NFT not found")
+
                 logger.info(
-                    "No excess rewards available for platform collection, skipping test"
+                    f"Found platform auth NFT at UTxO: {platform_utxo.input.transaction_id}#{platform_utxo.input.index}"
                 )
-                pytest.skip("No excess rewards available for platform collection")
 
-            # Calculate expected platform rewards (excess beyond node allocations)
-            expected_platform_rewards = initial_reward_amount - total_node_rewards
-            logger.info(f"Expected platform rewards: {expected_platform_rewards}")
+                # 3. Get platform script
+                platform_script = await self.platform_auth_finder.get_platform_script(
+                    str(self.platform_address)
+                )
 
-            # 2. Find platform auth NFT at the platform address
-            platform_utxo = await find_platform_auth_nft(
-                self.platform_auth_finder,
-                self.token_config.platform_auth_policy,
-                [self.platform_address, self.admin_address],
-            )
+                # Create LoadedKeys with admin keys for testing
+                loaded_keys = LoadedKeys(
+                    payment_sk=self.admin_signing_key,
+                    payment_vk=self.admin_verification_key,
+                    stake_vk=None,  # Not needed for testing
+                    address=self.admin_address,
+                )
 
-            if not platform_utxo:
-                logger.error("Platform auth NFT not found - please create one first")
-                pytest.skip("Platform auth NFT not found")
-
-            logger.info(
-                f"Found platform auth NFT at UTxO: {platform_utxo.input.transaction_id}#{platform_utxo.input.index}"
-            )
-
-            # 3. Get platform script
-            platform_script = await self.platform_auth_finder.get_platform_script(
-                str(self.platform_address)
-            )
-
-            # Create LoadedKeys with admin keys for testing
-            loaded_keys = LoadedKeys(
-                payment_sk=self.admin_signing_key,
-                payment_vk=self.admin_verification_key,
-                stake_vk=None,  # Not needed for testing
-                address=self.admin_address,
-            )
-
-            # Get initial platform address balance
-            initial_platform_utxos = await self.chain_query.get_utxos(
-                self.platform_address
-            )
-            initial_platform_balance = self._calculate_balance(initial_platform_utxos)
-            logger.info(f"Initial platform address balance: {initial_platform_balance}")
-
-            # 4. Use the reward orchestrator to test platform collection
-            result = await self.reward_orchestrator.collect_platform_oracle(
-                oracle_policy=self.token_config.oracle_policy,
-                platform_utxo=platform_utxo,
-                platform_script=platform_script,
-                tokens=self.token_config,
-                loaded_key=loaded_keys,
-                network=self.NETWORK,
-            )
-
-            # 5. Check the result
-            if result is not None:
-                # If we have a transaction, we can test submission
-                assert (
-                    result.transaction is not None
-                ), "Should have transaction for platform collect"
-
-                # 6. Submit the transaction
+                # Get initial platform address balance
+                initial_platform_utxos = await self.chain_query.get_utxos(
+                    self.platform_address
+                )
+                initial_platform_balance = self._calculate_balance(
+                    initial_platform_utxos
+                )
                 logger.info(
-                    f"Submitting platform collect transaction: {result.transaction.id}"
-                )
-                status, _ = await self.tx_manager.sign_and_submit(
-                    result.transaction,
-                    [loaded_keys.payment_sk],
-                    wait_confirmation=True,
+                    f"Initial platform address balance: {initial_platform_balance}"
                 )
 
-                assert (
-                    status == "confirmed"
-                ), f"Platform collect transaction failed with status: {status}"
-                logger.info(
-                    f"Platform collect transaction confirmed: {result.transaction.id}"
+                # 4. Use the reward orchestrator to test platform collection
+                result = await self.reward_orchestrator.collect_platform_oracle(
+                    oracle_policy=self.token_config.oracle_policy,
+                    platform_utxo=platform_utxo,
+                    platform_script=platform_script,
+                    tokens=self.token_config,
+                    loaded_key=loaded_keys,
+                    network=self.NETWORK,
                 )
 
-                # 7. Wait for indexing
-                await wait_for_indexing(10)
+                # 5. Check the result
+                if result is not None:
+                    # If we have a transaction, we can test submission
+                    assert (
+                        result.transaction is not None
+                    ), "Should have transaction for platform collect"
 
-                # 8. Verify platform rewards were collected
-                await self.verify_platform_reward_collection(
-                    original_reward_datum=reward_datum,
-                    original_reward_amount=initial_reward_amount,
-                    expected_platform_rewards=expected_platform_rewards,
-                    initial_platform_balance=initial_platform_balance,
-                )
+                    # 6. Submit the transaction
+                    logger.info(
+                        f"Submitting platform collect transaction: {result.transaction.id}"
+                    )
+                    status, _ = await self.tx_manager.sign_and_submit(
+                        result.transaction,
+                        [loaded_keys.payment_sk],
+                        wait_confirmation=True,
+                    )
 
-                logger.info("Platform collect test completed successfully")
+                    assert (
+                        status == "confirmed"
+                    ), f"Platform collect transaction failed with status: {status}"
+                    logger.info(
+                        f"Platform collect transaction confirmed: {result.transaction.id}"
+                    )
 
-        except Exception as e:
-            logger.error(f"Error in platform collect test: {e}")
-            raise
+                    # 7. Wait for indexing
+                    await wait_for_indexing(10)
+
+                    # 8. Verify platform rewards were collected
+                    await self.verify_platform_reward_collection(
+                        original_reward_datum=reward_datum,
+                        original_reward_amount=initial_reward_amount,
+                        expected_platform_rewards=expected_platform_rewards,
+                        initial_platform_balance=initial_platform_balance,
+                    )
+
+                    logger.info("Platform collect test completed successfully")
+
+            except Exception as e:
+                logger.error(f"Error in platform collect test: {e}")
+                raise
 
     def _get_reward_account_amount(self, reward_utxo: UTxO) -> int:
         """Get the amount of rewards in the reward account (tokens or ADA)."""
@@ -169,7 +186,7 @@ class TestPlatformCollect(TestBase):
             script_hash = ScriptHash(
                 bytes.fromhex(self.token_config.reward_token_policy)
             )
-            token_name = bytes.fromhex(self.token_config.reward_token_name)
+            token_name = AssetName(bytes.fromhex(self.token_config.reward_token_name))
 
             if (
                 reward_utxo.output.amount.multi_asset
@@ -192,7 +209,7 @@ class TestPlatformCollect(TestBase):
             script_hash = ScriptHash(
                 bytes.fromhex(self.token_config.reward_token_policy)
             )
-            token_name = bytes.fromhex(self.token_config.reward_token_name)
+            token_name = AssetName(bytes.fromhex(self.token_config.reward_token_name))
 
             total = 0
             for utxo in utxos:
