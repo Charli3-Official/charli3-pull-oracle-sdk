@@ -276,7 +276,7 @@ class PriceData(PlutusData):
         return self.price_map[1]
 
     @property
-    def get_expirity_time(self) -> int:
+    def get_expiration_time(self) -> int:
         """get expiry of the feed"""
         return self.price_map[2]
 
@@ -289,13 +289,13 @@ class PriceData(PlutusData):
         """Check if the price data is expired based on current_time"""
         if not self.has_required_fields:
             return False
-        return self.get_expirity_time < current_time
+        return self.get_expiration_time < current_time
 
     def is_active(self, current_time: int) -> bool:
         """Check if the price data is expired based on current_time"""
         if not self.has_required_fields:
             return False
-        return self.get_expirity_time > current_time
+        return self.get_expiration_time > current_time
 
     @property
     def is_valid(self) -> bool:
