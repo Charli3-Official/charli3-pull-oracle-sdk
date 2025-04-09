@@ -40,7 +40,8 @@ from charli3_offchain_core.models.oracle_redeemers import (
     OdvAggregate,
 )
 from charli3_offchain_core.oracle.exceptions import (
-    StateValidationError,
+    NoPendingTransportUtxosFoundError,
+    RewardCalculationIsNotSubsidizedError,
     TransactionError,
 )
 from charli3_offchain_core.oracle.utils import (
@@ -341,6 +342,7 @@ class OracleTransactionBuilder:
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         change_address: Address | None = None,
         max_inputs: int = 10,
+        check_if_tx_fee_subsidized: bool = False,
     ) -> RewardsResult:
         """Build rewards calculation transaction with consensus processing.
 
@@ -369,7 +371,9 @@ class OracleTransactionBuilder:
                 asset_checks.filter_utxos_by_token_name(utxos, self.policy_id, "C3RT")
             )[:max_inputs]
             if not pending_transports:
-                raise StateValidationError("No pending transport UTxOs found")
+                raise NoPendingTransportUtxosFoundError(
+                    "No pending transport UTxOs found"
+                )
 
             # Find reward account
             _, reward_account_utxo = state_checks.get_reward_account_by_policy_id(
@@ -409,6 +413,11 @@ class OracleTransactionBuilder:
                 change_address=change_address,
                 signing_key=signing_key,
             )
+
+            if check_if_tx_fee_subsidized:
+                self._check_rewards_tx_fee_subsidized(
+                    tx.transaction_body.fee, pending_transports, settings_datum
+                )
 
             return RewardsResult(
                 transaction=tx,
@@ -615,3 +624,21 @@ class OracleTransactionBuilder:
         validity_start_slot = self.network_config.posix_to_slot(validity_start)
         validity_end_slot = self.network_config.posix_to_slot(validity_end)
         return validity_start_slot, validity_end_slot
+
+    def _check_rewards_tx_fee_subsidized(
+        self, tx_fee: int, pending_transports: list[UTxO], settings: OracleSettingsDatum
+    ) -> None:
+        subsidies = sum(
+            utxo.output.amount.coin
+            - settings.utxo_size_safety_buffer
+            - (
+                utxo.output.datum.datum.aggregation.rewards_amount_paid
+                if self.reward_token_hash is None and self.reward_token_name is None
+                else 0
+            )
+            for utxo in pending_transports
+        )
+        if subsidies < tx_fee:
+            raise RewardCalculationIsNotSubsidizedError(
+                "Tx fee for reward calculation is not subsidized"
+            )
