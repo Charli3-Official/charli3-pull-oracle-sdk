@@ -6,7 +6,7 @@ fees:
 multisig:
   parties:
   - c8c47610a36034aac6fc58848bdae5c278d994ff502c05455e3b3ee8
-  platform_addr: addr_test1wp653q94ze4kc7xfffgpwrfpan79m0z7x3hvfqeczhp6uug6fwg8n
+  platform_addr: addr_test1wz0r6e4za6nz2cpxmsu5m4zfv437q8sa9julre90dhh06aq8wehtc
   threshold: 1
 network:
   network: testnet
@@ -37,7 +37,7 @@ nodes:
   - feed_vkh: 4a30d28918afaf4cc797f3e6a5e78d83c18b753ec44fc4d3a2ed9863
     payment_vkh: 29561c5ab2b98230970019f4c605d3840a676cb19a0f8b75207ebc1e
   required_signatures: 9
-oracle_address: addr_test1wqvl0hxq7rs3ehnyhakjlg6r0skn2drx3du0g5htx74d6scp0f4z9
+oracle_address: addr_test1wpzqq688kq9npdmcsq837kdzzc2n6fe9wpacrz8jd7f82ggx0ce4z
 reference_script_addr: addr_test1wqnk0zrhwleqvkhcn3d3uygrsu6xupqefnxdxv6lv79l9hgag9z52
 reward_issuer_address: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
 timing:
@@ -51,6 +51,6 @@ timing:
 tokens:
   fee_token_name: '546573744333'
   fee_token_policy: d7e216e35185f9631b03abd8649d47f627f02ecc04ba770f8d77ee1a
-  oracle_policy: a4d31c4530ae6c08d564866c3973f15977a8cb4d4ebee7447b33ca46
-  platform_auth_policy: d2d0f9a98b12a8d702da8e0a1cf338fcc7a0a88649b20310dbdc8875
+  oracle_policy: 2ad72f6af51e7add27c6052d5f4d7e0f8d7fa71c3f14f9c69218f347
+  platform_auth_policy: 4cff183ec327e61b67017a8ac182f35d8c3e3bad4c66a8a9f2fca8ce
 transport_count: 4

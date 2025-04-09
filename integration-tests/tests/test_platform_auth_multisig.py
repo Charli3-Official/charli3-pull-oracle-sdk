@@ -30,6 +30,9 @@ from .test_utils import (
     wait_for_indexing,
 )
 
+TOTAL_SIGNERS = 2
+REQUIRED_SIGNERS = 2
+
 
 @pytest.mark.run(order=0)
 class TestMultisigPlatformAuth(TestBase):
@@ -59,8 +62,10 @@ class TestMultisigPlatformAuth(TestBase):
         # Set up platform keys directory
         self.platform_keys_dir = Path("./platform_keys")
 
-        # Configure multisig environment (4 total signers, requiring 2 signatures)
-        self.prepare_platform_keys(total_signers=4, required_signers=2)
+        # Configure multisig environment (2 total signers, requiring 1 signatures)
+        self.prepare_platform_keys(
+            total_signers=TOTAL_SIGNERS, required_signers=REQUIRED_SIGNERS
+        )
 
         try:
             # Initialize platform using the configuration file
@@ -351,6 +356,12 @@ class TestMultisigPlatformAuth(TestBase):
             self.config_path, {"tokens.platform_auth_policy": result.policy_id}
         )
 
+        logger.info(
+            f"Updating configuration file with new platform address: {result.platform_address}"
+        )
+        update_config_file(
+            self.config_path, {"multisig.platform_addr": str(result.platform_address)}
+        )
         logger.info(
             "Platform Auth NFT minting and configuration update completed successfully"
         )

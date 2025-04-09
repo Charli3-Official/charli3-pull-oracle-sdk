@@ -116,8 +116,8 @@ run_test "TestScaleDown"
 
 # # 8. Test multisig functionality
 run_test "TestMultisigPlatformAuth"
-# run_test "TestMultisigDeployment"
-# run_test "TestMultisigReferenceScript"
+run_test "TestMultisigDeployment"
+run_test "TestMultisigReferenceScript"
 # run_test "TestMultisigGovernance"
 
 # Stop the cluster (this will also be handled by kill_processes on EXIT)
