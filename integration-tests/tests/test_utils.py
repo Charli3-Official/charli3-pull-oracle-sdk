@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pycardano import Address, UTxO
+from pycardano import Address, AssetName, UTxO
 
 from charli3_offchain_core.platform.auth.token_finder import PlatformAuthFinder
 
@@ -93,3 +93,21 @@ async def wait_for_indexing(seconds: int = 5) -> None:
     """
     logger.info(f"Waiting {seconds} seconds for UTxOs to be indexed...")
     await asyncio.sleep(seconds)
+
+
+def find_oracle_policy_hash(utxos: list[UTxO], token_name: str) -> str:
+    """Find the policy ID containing a given token name."""
+    encoded_name = AssetName(
+        token_name.encode() if isinstance(token_name, str) else token_name
+    )
+
+    for utxo in utxos:
+        if utxo.output.amount.multi_asset:  # Has multi_asset
+            for policy_id in utxo.output.amount.multi_asset:
+                if (
+                    encoded_name in utxo.output.amount.multi_asset[policy_id]
+                    and utxo.output.amount.multi_asset[policy_id][encoded_name] >= 1
+                ):
+                    return str(policy_id)
+
+    raise ValueError(f"No UTxO with {token_name} token found")
