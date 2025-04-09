@@ -153,46 +153,10 @@ class TestMultisigReferenceScript(TestBase):
             f"Manager reference script transaction built: {reference_result.manager_tx.id}"
         )
 
-        if use_multisig:
-            # Multisig signing process for the reference script
-            logger.info("Using multisignature process for transaction signing")
-
-            # Extract the transaction
-            tx = reference_result.manager_tx
-
-            # Sign with admin key first
-            self.tx_manager.sign_tx(tx, self.admin_signing_key)
-            logger.info("Transaction signed with admin key")
-
-            # Now add signatures from platform keys up to the required threshold
-            sig_count = 0
-            for skey, _, vkh in self.platform_keys:
-                if sig_count >= self.required_signers:
-                    break
-
-                self.tx_manager.sign_tx(tx, skey)
-                vkh_hex = vkh.to_primitive().hex()
-                sig_count += 1
-                logger.info(
-                    f"Added platform signature {sig_count}/{self.required_signers} from {vkh_hex[:8]}..."
-                )
-
-            # Submit the transaction with all signatures
-            logger.info(f"Submitting transaction with {sig_count} platform signatures")
-            status, _ = await self.tx_manager.sign_and_submit(
-                tx, [], wait_confirmation=True  # Empty list since already signed
-            )
-
-            logger.info(f"Reference script transaction submission status: {status}")
-            assert (
-                status == "confirmed"
-            ), f"Reference script transaction failed with status: {status}"
-        else:
-            # Use the default submit method
-            logger.info("Using standard submit method for reference script transaction")
-            await self.orchestrator.submit_reference_script_tx(
-                reference_result, self.admin_signing_key
-            )
+        # Submit the transaction
+        await self.orchestrator.submit_reference_script_tx(
+            reference_result, self.admin_signing_key
+        )
 
         logger.info("Manager reference script transaction submitted")
 
