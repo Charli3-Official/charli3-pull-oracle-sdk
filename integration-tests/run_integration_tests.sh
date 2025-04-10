@@ -93,20 +93,21 @@ run_test "TestCreateReferenceScript"
 # 3. Run aggregate tests multiple times
 run_test "TestAggregate"
 
-# 4. Test governance functions
-# 4.1
-run_test "TestRemoveNodes"
-# 4.2
-run_test "TestAddNodes"
-# 4.3
-run_test "TestEditSettings"
-# 4.4
-run_test "TestScaleUp"
-# 4.5
-run_test "TestScaleDown"
+# 4. Test reward collection
+run_test "TestNodeCollect"
+run_test "TestPlatformCollect"
 
-# # 5. Test reward collection
-# run_test "TestNodeCollect or TestPlatformCollect"
+# 5. Test governance functions
+# 5.1
+run_test "TestRemoveNodes"
+# 5.2
+run_test "TestAddNodes"
+# 5.3
+run_test "TestEditSettings"
+# 5.4
+run_test "TestScaleUp"
+# 5.5
+run_test "TestScaleDown"
 
 # # 6. Run aggregate tests again to verify it still works after changes
 # run_test_multiple_times "TestAggregate" 1 10
