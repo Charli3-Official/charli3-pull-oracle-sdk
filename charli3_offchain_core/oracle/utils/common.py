@@ -66,7 +66,7 @@ def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) ->
             )
 
         non_expired_agg_states.sort(
-            key=lambda utxo: utxo.output.datum.price_data.get_expirity_time
+            key=lambda utxo: utxo.output.datum.price_data.get_expiration_time
         )
         return non_expired_agg_states.pop()
     except Exception as e:
