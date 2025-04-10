@@ -93,8 +93,6 @@ run_test "TestCreateReferenceScript"
 # 3. Run aggregate tests multiple times
 run_test "TestAggregate"
 
-# # 4. Test governance functions
-# run_test "TestEditSettings or TestAddNodes or TestRemoveNodes"
 # 4. Test governance functions
 # 4.1
 run_test "TestRemoveNodes"
@@ -118,9 +116,6 @@ run_test "TestOracleRemove"
 
 # # 6. Run aggregate tests again to verify it still works after changes
 # run_test_multiple_times "TestAggregate" 1 10
-
-# # 7. Test lifecycle operations
-# run_test "TestOracleClose"
 
 # # 8. Test multisig functionality
 # run_test "TestMultisigDeployment"
