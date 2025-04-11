@@ -97,6 +97,8 @@ run_test "TestAggregate"
 run_test "TestNodeCollect"
 run_test "TestPlatformCollect"
 
+# # 5. Test reward collection
+# run_test "TestNodeCollect or TestPlatformCollect"
 # 5. Test governance functions
 # 5.1
 run_test "TestRemoveNodes"
@@ -109,11 +111,14 @@ run_test "TestScaleUp"
 # 5.5
 run_test "TestScaleDown"
 
+# 6. Oracle Pause and Resume
+run_test "TestOraclePauseResume"
+
+# 10. Oracle Remove
+run_test "TestOracleRemove"
+
 # # 6. Run aggregate tests again to verify it still works after changes
 # run_test_multiple_times "TestAggregate" 1 10
-
-# # 7. Test lifecycle operations
-# run_test "TestOracleClose"
 
 # # 8. Test multisig functionality
 # run_test "TestMultisigDeployment"

@@ -41,11 +41,11 @@ oracle_address: addr_test1wqvl0hxq7rs3ehnyhakjlg6r0skn2drx3du0g5htx74d6scp0f4z9
 reference_script_addr: addr_test1wqnk0zrhwleqvkhcn3d3uygrsu6xupqefnxdxv6lv79l9hgag9z52
 reward_issuer_address: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
 timing:
-  aggregation_liveness: 600000
+  aggregation_liveness: 300000
   iqr_multiplier: 150
+  pause_period: 300000
+  reward_dismissing_period: 600000
   median_divergency_factor: 200
-  pause_period: 1800000
-  reward_dismissing_period: 3600000
   time_uncertainty_aggregation: 60000
   time_uncertainty_platform: 90000
 tokens:

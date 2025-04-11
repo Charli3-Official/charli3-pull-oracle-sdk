@@ -25,7 +25,7 @@ from ..exceptions import TransactionError, ValidationError
 
 
 async def get_script_utxos(
-    script_address: Address, tx_manager: TransactionManager
+    script_address: str | Address, tx_manager: TransactionManager
 ) -> list[UTxO]:
     """Get and validate UTxOs at script address."""
     try:
@@ -66,7 +66,7 @@ def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) ->
             )
 
         non_expired_agg_states.sort(
-            key=lambda utxo: utxo.output.datum.price_data.get_expirity_time
+            key=lambda utxo: utxo.output.datum.price_data.get_expiration_time
         )
         return non_expired_agg_states.pop()
     except Exception as e:
