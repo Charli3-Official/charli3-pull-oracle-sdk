@@ -15,7 +15,7 @@ from .base import TEST_RETRIES, TestBase
 from .test_utils import logger, wait_for_indexing
 
 
-@pytest.mark.run(order=5)
+@pytest.mark.run(order=6)
 class TestOraclePauseResume(TestBase):
     """Test oracle pause/resume."""
 
@@ -42,7 +42,7 @@ class TestOraclePauseResume(TestBase):
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.run(order=5.1)
+    @pytest.mark.run(order=6.1)
     @async_retry(tries=TEST_RETRIES, delay=5)
     async def test_oracle_pause(self) -> None:
         """Test oracle pause."""
@@ -98,7 +98,7 @@ class TestOraclePauseResume(TestBase):
         ), "Oracle pause timestamp not found after creation"
 
     @pytest.mark.asyncio
-    @pytest.mark.run(order=5.2)
+    @pytest.mark.run(order=6.2)
     @async_retry(tries=TEST_RETRIES, delay=5)
     async def test_oracle_resume(self) -> None:
         """Test oracle resume."""
