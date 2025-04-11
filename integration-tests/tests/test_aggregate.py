@@ -174,6 +174,7 @@ class TestAggregate(TestBase):
         return feeds
 
     @pytest.mark.asyncio
+    @pytest.mark.run(order=3.1)
     async def test_odv_transaction(self) -> None:
         """Test the ODV transaction with simulated node feeds."""
         logger.info("Starting ODV transaction test")
@@ -231,6 +232,7 @@ class TestAggregate(TestBase):
         logger.info("ODV transaction test completed successfully")
 
     @pytest.mark.asyncio
+    @pytest.mark.run(order=3.2)
     async def test_rewards_processing(self) -> None:
         """Test rewards calculation and distribution after ODV transaction."""
         logger.info("Starting rewards processing test")
