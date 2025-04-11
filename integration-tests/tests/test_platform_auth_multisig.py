@@ -105,20 +105,16 @@ class TestMultisigPlatformAuth(TestBase):
             required_signers: Minimum number of required signatures
         """
         if not self.platform_keys_dir.exists():
-            logger.info("Platform keys directory not found, generating test keys")
+            logger.info("Platform keys directory not found, creating")
             self.platform_keys_dir.mkdir(parents=True, exist_ok=True)
 
-            # Use a test mnemonic for reproducible key generation
-            test_mnemonic = "test test test test test test test test test test test test test test test test test test test test test test test sauce"
-            platform_keys = self.generate_platform_keys(test_mnemonic, total_signers)
+        # Use a test mnemonic for reproducible key generation
+        test_mnemonic = "test test test test test test test test test test test test test test test test test test test test test test test sauce"
+        platform_keys = self.generate_platform_keys(test_mnemonic, total_signers)
 
-            # Save generated keys with required signers configuration
-            self.save_platform_keys(
-                platform_keys, required_signers, self.platform_keys_dir
-            )
-            logger.info(f"Generated {len(platform_keys)} platform keys")
-        else:
-            logger.info(f"Using existing platform keys from {self.platform_keys_dir}")
+        # Save generated keys with required signers configuration
+        self.save_platform_keys(platform_keys, required_signers, self.platform_keys_dir)
+        logger.info(f"Generated {len(platform_keys)} platform keys")
 
         # Load platform configuration from the saved files
         (self.required_signers, self.parties) = self.load_platform_config(
