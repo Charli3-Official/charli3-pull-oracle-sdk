@@ -122,5 +122,11 @@ class TestPlatformAuth(TestBase):
         )
 
         logger.info(
+            f"Updating configuration file with new platform address: {result.platform_address}"
+        )
+        update_config_file(
+            self.config_path, {"multisig.platform_addr": str(result.platform_address)}
+        )
+        logger.info(
             "Platform Auth NFT minting and configuration update completed successfully"
         )

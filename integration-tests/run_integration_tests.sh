@@ -121,9 +121,10 @@ run_test "TestOracleRemove"
 # run_test_multiple_times "TestAggregate" 1 10
 
 # # 8. Test multisig functionality
-# run_test "TestMultisigDeployment"
-# run_test "TestMultisigReferenceScript"
-# run_test "TestMultisigGovernance"
+run_test "TestMultisigPlatformAuth"
+run_test "TestMultisigDeployment"
+run_test "TestMultisigReferenceScript"
+run_test "TestMultisigGovernance"
 
 # Stop the cluster (this will also be handled by kill_processes on EXIT)
 ./bin/devkit.sh stop
