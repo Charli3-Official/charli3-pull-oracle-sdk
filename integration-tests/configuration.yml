@@ -37,7 +37,7 @@ nodes:
   - feed_vkh: 4966131de699f3bd2d55aff6df158fcd885d06d0d6b8e8c323914bbf
     payment_vkh: 4a30d28918afaf4cc797f3e6a5e78d83c18b753ec44fc4d3a2ed9863
   required_signatures: 9
-oracle_address: addr_test1wqa4s0e83mfceqtwxpecf3vcqmzst9l4xuqn0ya4zsuf8rqfz7uu0
+oracle_address: addr_test1wqtdlj8s0ytqykqn5llhaclufwm975nvtz0n60vhg7qxu5gutf0p6
 reference_script_addr: addr_test1wqnk0zrhwleqvkhcn3d3uygrsu6xupqefnxdxv6lv79l9hgag9z52
 reward_issuer_address: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
 timing:
@@ -51,6 +51,6 @@ timing:
 tokens:
   fee_token_name: '546573744333'
   fee_token_policy: 336f96b87637276aae4742af016fadfd489a16895d82b792a08900ec
-  oracle_policy: 6c120d1e48e04991b833f3fb910c172741178c91a5eb90441c6fa5ad
+  oracle_policy: 711368b7fce5265cfaa1ce2c7cb135a7797bd784376e289295c6c5f6
   platform_auth_policy: 813d7b9a90f8354c30eaacf49e02f2d3a6c059299073ff73bf93e404
 transport_count: 4
