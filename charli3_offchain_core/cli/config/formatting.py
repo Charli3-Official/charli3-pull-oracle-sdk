@@ -68,7 +68,7 @@ def format_deployment_summary(result: Any) -> None:
         print_status("Reward Account UTxO", "Created")
         print_status(
             "Reward Transport UTxOs",
-            f"{len(result.start_result.reward_transport_utxos)} created",
+            f"{len(result.start_result.reward_account_utxos)} created",
         )
         print_status(
             "Aggregation State UTxOs",
