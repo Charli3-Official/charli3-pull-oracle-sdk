@@ -59,8 +59,9 @@ timing:
   median_divergency_factor: 200 # 20% divergency allowed when iqr=0
   utxo_size_safety_buffer: 7500000 # 7.5 ada for utxo fee buffer, if not provided settings utxo size will be used to calculate this dynamically
 
-# Number of reward transport UTxOs (minimum 4 for mainnet)
-transport_count: 4
+# Number of Reward and Aggregation State UTxOs minted during deployment
+reward_count: 1
+aggstate_count: 1
 
 # Path to Aiken blueprint file
 blueprint_path: "artifacts/plutus.json"

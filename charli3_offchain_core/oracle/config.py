@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from pycardano import Network
 
-MINIMUM_REWARD_TRANSPORT_COUNT = 3
+MINIMUM_REWARD_COUNT = 1
+MINIMUM_AGGSTATE_COUNT = 1
 
 
 @dataclass
@@ -13,7 +14,6 @@ class OracleTokenNames:
 
     core_settings: str
     reward_account: str
-    reward_transport: str
     aggstate: str
 
     @classmethod
@@ -24,7 +24,6 @@ class OracleTokenNames:
         return cls(
             core_settings="C3CS",
             reward_account="C3RA",
-            reward_transport="C3RT",
             aggstate="C3AS",
         )
 
@@ -34,7 +33,8 @@ class OracleDeploymentConfig:
     """Configuration for oracle deployment."""
 
     network: Network
-    reward_transport_count: int
+    reward_count: int
+    aggstate_count: int
     disallow_less_than_four_nodes: bool | None = None
     token_names: OracleTokenNames | None = None
 
@@ -46,12 +46,14 @@ class OracleDeploymentConfig:
         if self.disallow_less_than_four_nodes is None:
             self.disallow_less_than_four_nodes = self.network == Network.MAINNET
 
-        if self.reward_transport_count <= 0:
-            raise ValueError("Reward transport count must be greater than 0")
-
-        if self.reward_transport_count < MINIMUM_REWARD_TRANSPORT_COUNT:
+        if self.reward_count < MINIMUM_REWARD_COUNT:
             raise ValueError(
-                f"At least {MINIMUM_REWARD_TRANSPORT_COUNT} reward transport/aggstate UTxO pairs required"
+                f"Reward count must be at least {MINIMUM_REWARD_COUNT}"
+            )
+
+        if self.aggstate_count < MINIMUM_AGGSTATE_COUNT:
+            raise ValueError(
+                f"Aggstate count must be at least {MINIMUM_AGGSTATE_COUNT}"
             )
 
 

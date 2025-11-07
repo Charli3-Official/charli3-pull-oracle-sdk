@@ -5,9 +5,14 @@ from pathlib import Path
 
 import click
 import yaml
-from pycardano import ExtendedSigningKey, HDWallet, PaymentVerificationKey
+from pycardano import (
+    ExtendedSigningKey,
+    HDWallet,
+    PaymentVerificationKey,
+    VerificationKeyHash,
+)
 
-from charli3_offchain_core.cli.config import NodeConfig, NodesConfig, async_command
+from charli3_offchain_core.cli.config import NodesConfig, async_command
 
 logger = logging.getLogger(__name__)
 
@@ -121,15 +126,9 @@ def load_nodes_config(keys_dir: Path) -> NodesConfig:
     nodes = []
     for node_dir in sorted(keys_dir.glob("node_*")):
         try:
-            feed_vkh = (node_dir / "feed.vkh").read_text()
-            payment_vkh = (node_dir / "payment.vkh").read_text()
-
-            nodes.append(
-                NodeConfig(
-                    feed_vkh=feed_vkh,
-                    payment_vkh=payment_vkh,
-                )
-            )
+            feed_hex = (node_dir / "feed.vkh").read_text()
+            feed_vkh = VerificationKeyHash(bytes.fromhex(feed_hex))
+            nodes.append(feed_vkh)
         except FileNotFoundError as e:
             raise ValueError(f"Missing key files in {node_dir}") from e
 

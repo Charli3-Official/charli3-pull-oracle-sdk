@@ -1,9 +1,9 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, List
 
-from pycardano import PlutusData, VerificationKeyHash
+from pycardano import PlutusData, VerificationKeyHash, IndefiniteList
 
 from charli3_offchain_core.models.base import (
     AssetName,
@@ -39,12 +39,12 @@ class OutputReference(PlutusData):
 @dataclass
 class Nodes(PlutusData):
     """
-    Represents a map of feed VKHs to payment VKHs.
+    Represents a list of feed VKHs.
     Keys must be sorted to match Aiken's requirements.
     """
 
     CONSTR_ID = 0
-    node_map: Dict[FeedVkh, PaymentVkh]
+    node_map: IndefiniteList
 
     @classmethod
     def from_primitive(cls, data: Any) -> "Nodes":
@@ -53,23 +53,19 @@ class Nodes(PlutusData):
             data = data.value
 
         if not data:
-            return cls(node_map={})
+            return cls(node_map=IndefiniteList([]))
 
         return cls(
-            node_map={
-                VerificationKeyHash.from_primitive(
-                    k
-                ): VerificationKeyHash.from_primitive(v)
-                for k, v in data.items()
-            }
+            node_map=IndefiniteList(
+                [VerificationKeyHash.from_primitive(k) for k in data]
+            )
         )
 
-    def to_primitive(self) -> Dict[bytes, bytes]:
-        """Convert to primitive map representation."""
-        return {
-            k.to_primitive(): v.to_primitive()
-            for k, v in sorted(self.node_map.items(), key=lambda x: str(x[0]))
-        }
+    def to_primitive(self) -> list:
+        """Convert to primitive list representation."""
+        return [
+            vkh.to_primitive() for vkh in sorted(self.node_map, key=lambda x: x.payload)
+        ]
 
     @classmethod
     def empty(cls) -> "Nodes":
@@ -78,7 +74,7 @@ class Nodes(PlutusData):
         Returns:
             Nodes: A new Nodes instance with an empty map.
         """
-        return cls(node_map={})
+        return cls(node_map=IndefiniteList([]))
 
     @property
     def length(self) -> int:

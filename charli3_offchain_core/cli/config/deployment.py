@@ -20,7 +20,8 @@ class DeploymentConfig:
     fees: FeeConfig
     timing: TimingConfig
     nodes: NodesConfig
-    transport_count: int = 4
+    reward_count: int = 1
+    aggstate_count: int = 1
     multi_sig: MultisigConfig | None = None
     blueprint_path: Path = Path("artifacts/plutus.json")
     use_aiken: bool = False
@@ -38,8 +39,9 @@ class DeploymentConfig:
             fees=FeeConfig.from_dict(data.get("fees", {})),
             timing=TimingConfig.from_dict(data.get("timing", {})),
             nodes=NodesConfig.from_dict(data.get("nodes", {})),
-            transport_count=data.get("transport_count", 4),
             blueprint_path=Path(data.get("blueprint_path", "artifacts/plutus.json")),
             use_aiken=data.get("apply_arguments_with_aiken", False),
             create_reference=data.get("create_reference", True),
+            reward_count=data.get("reward_count", 1),
+            aggstate_count=data.get("aggstate_count", 1),
         )

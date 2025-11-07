@@ -26,8 +26,6 @@ from .config.network import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
-MIN_TRANSPORT_COUNT = 4
-
 
 @dataclass
 class LoadedKeys:
@@ -113,10 +111,11 @@ def load_keys_with_validation(
 
 def validate_deployment_config(config: DeploymentConfig) -> None:
     """Validate deployment configuration."""
-    if config.transport_count < MIN_TRANSPORT_COUNT:
-        raise click.ClickException(
-            f"Transport count must be at least {MIN_TRANSPORT_COUNT}"
-        )
+    if config.reward_count <= 0:
+        raise click.ClickException("Reward count must be positive")
+
+    if config.aggstate_count <= 0:
+        raise click.ClickException("AggState count must be positive")
 
     if config.timing.pause_period <= 0:
         raise click.ClickException("Pause period must be positive")

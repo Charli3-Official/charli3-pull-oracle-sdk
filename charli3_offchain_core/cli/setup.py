@@ -171,11 +171,12 @@ def setup_oracle_from_config(
     configs = {
         "script": OracleScriptConfig(
             create_manager_reference=deployment_config.create_reference,
-            reference_ada_amount=69528920,
+            reference_ada_amount=53334780,
         ),
         "deployment": OracleDeploymentConfig(
             network=deployment_config.network.network,
-            reward_transport_count=deployment_config.transport_count,
+            reward_count=deployment_config.reward_count,
+            aggstate_count=deployment_config.aggstate_count,
         ),
         "rate_token": FeeConfig(
             rate_nft=rate_token,

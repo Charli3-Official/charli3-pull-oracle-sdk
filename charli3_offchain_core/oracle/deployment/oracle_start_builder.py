@@ -22,6 +22,7 @@ from pycardano import (
     UTxO,
     Value,
     min_lovelace_post_alonzo,
+    IndefiniteList,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -186,27 +187,27 @@ class OracleStartBuilder:
             utxo_size_safety_buffer,
         )
 
-        # Create reward transport and agg state UTxOs
-        utxo_pairs = [
-            (
-                self._create_utxo_with_nft(
-                    script_address,
-                    deployment_config.token_names.reward_account,
-                    mint_policy.policy_id,
-                    RewardAccountVariant(datum=RewardAccountDatum.empty()),
-                    "other",
-                ),
-                self._create_utxo_with_nft(
-                    script_address,
-                    deployment_config.token_names.aggstate,
-                    mint_policy.policy_id,
-                    AggState(price_data=PriceData.empty()),
-                    "agg_state",
-                ),
+        # Create reward and aggregation state UTxOs
+        reward_account_utxos = [
+            self._create_utxo_with_nft(
+                script_address,
+                deployment_config.token_names.reward_account,
+                mint_policy.policy_id,
+                RewardAccountVariant(datum=RewardAccountDatum.empty()),
+                "other",
             )
-            for _ in range(deployment_config.reward_transport_count)
+            for _ in range(deployment_config.reward_count)
         ]
-        reward_account_utxos, agg_state_utxos = zip(*utxo_pairs)
+        agg_state_utxos = [
+            self._create_utxo_with_nft(
+                script_address,
+                deployment_config.token_names.aggstate,
+                mint_policy.policy_id,
+                AggState(price_data=PriceData.empty()),
+                "agg_state",
+            )
+            for _ in range(deployment_config.aggstate_count)
+        ]
 
         # Add all outputs to builder
         builder.add_output(settings_utxo)
@@ -217,7 +218,8 @@ class OracleStartBuilder:
         builder.mint = self._create_nft_mint(
             mint_policy.policy_id,
             deployment_config.token_names,
-            deployment_config.reward_transport_count,
+            reward_count=deployment_config.reward_count,
+            aggstate_count=deployment_config.aggstate_count,
         )
         builder.add_minting_script(
             script=mint_policy.contract,
@@ -273,10 +275,10 @@ class OracleStartBuilder:
         median_divergency_factor: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
-        node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
+        # node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
 
         oracle_settings = OracleSettingsDatum(
-            nodes=Nodes(node_map=node_map),
+            nodes=Nodes(node_map=IndefiniteList(nodes_config.nodes)),
             required_node_signatures_count=nodes_config.required_signatures,
             fee_info=rate_config,
             aggregation_liveness_period=aggregation_liveness_period,
@@ -349,14 +351,19 @@ class OracleStartBuilder:
         self,
         policy_id: ScriptHash,
         token_names: OracleTokenNames,
-        transport_count: int,
+        reward_count: int,
+        aggstate_count: int,
     ) -> MultiAsset:
         """Create MultiAsset for minting oracle NFTs."""
         mint_map = {
             token_names.core_settings.encode(): 1,
-            token_names.reward_account.encode(): transport_count,
-            token_names.aggstate.encode(): transport_count,
         }
+
+        if reward_count > 0:
+            mint_map[token_names.reward_account.encode()] = reward_count
+
+        if aggstate_count > 0:
+            mint_map[token_names.aggstate.encode()] = aggstate_count
 
         return MultiAsset.from_primitive({policy_id: mint_map})
 

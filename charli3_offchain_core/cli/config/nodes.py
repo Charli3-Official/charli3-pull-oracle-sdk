@@ -2,36 +2,38 @@
 
 from dataclasses import dataclass
 
+from typing import List
 from pycardano import VerificationKeyHash
 
 
 @dataclass
-class NodeConfig:
-    """Configuration for oracle node."""
-
-    feed_vkh: VerificationKeyHash
-    payment_vkh: VerificationKeyHash
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "NodeConfig":
-        """Create node config from dictionary."""
-        return cls(
-            feed_vkh=VerificationKeyHash(bytes.fromhex(data["feed_vkh"])),
-            payment_vkh=VerificationKeyHash(bytes.fromhex(data["payment_vkh"])),
-        )
-
-
-@dataclass
 class NodesConfig:
-    """Node configuration parameters."""
+    """Configuration for oracle nodes: list of feed VKHs + required signatures."""
 
     required_signatures: int
-    nodes: list[NodeConfig]
+    nodes: List[VerificationKeyHash]
 
     @classmethod
     def from_dict(cls, data: dict) -> "NodesConfig":
-        """Create nodes config from dictionary."""
-        return cls(
-            required_signatures=data["required_signatures"],
-            nodes=[NodeConfig.from_dict(node) for node in data["nodes"]],
-        )
+        """Create from dict with 'required_signatures' and 'nodes' as list of hex strings."""
+        try:
+            required = int(data["required_signatures"])
+            nodes_hex = data["nodes"]
+
+            if not isinstance(nodes_hex, list):
+                raise ValueError("'nodes' must be a list of hex strings")
+            if not all(isinstance(h, str) for h in nodes_hex):
+                raise ValueError("All nodes must be hex strings")
+            if required < 0:
+                raise ValueError("required_signatures cannot be negative")
+            if required > len(nodes_hex):
+                raise ValueError("required_signatures > number of nodes")
+
+            nodes = sorted(
+                [VerificationKeyHash(bytes.fromhex(h)) for h in nodes_hex],
+                key=lambda x: x.payload,
+            )
+            return cls(required_signatures=required, nodes=nodes)
+
+        except (KeyError, ValueError, TypeError) as e:
+            raise ValueError(f"Invalid NodesConfig: {e}") from e
