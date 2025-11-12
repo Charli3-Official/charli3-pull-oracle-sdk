@@ -7,7 +7,6 @@ from pycardano import PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.base import (
     NodeFeed,
-    PosixTime,
 )
 
 

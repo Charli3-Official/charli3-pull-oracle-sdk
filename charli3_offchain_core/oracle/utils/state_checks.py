@@ -1,7 +1,6 @@
 """Utilities for validating and managing oracle state transitions."""
 
 import logging
-import random
 from collections.abc import Sequence
 
 from pycardano import ScriptHash, UTxO

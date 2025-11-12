@@ -1,14 +1,13 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import Any, Dict, Union, List
+from typing import Any, Dict, Union
 
-from pycardano import PlutusData, VerificationKeyHash, IndefiniteList
+from pycardano import IndefiniteList, PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.base import (
     AssetName,
     FeedVkh,
-    PaymentVkh,
     PolicyId,
     PosixTime,
     PosixTimeDiff,

@@ -141,7 +141,9 @@ async def send(config: Path, wait: bool) -> None:
         if tx_status == "confirmed":
             # print_send_summary(result)  # Out of scope - uses old RewardTransport
             print_status(
-                "ODV Aggregation", f"Completed successfully. TX: {result.transaction.id}", success=True
+                "ODV Aggregation",
+                f"Completed successfully. TX: {result.transaction.id}",
+                success=True,
             )
         else:
             print_status(

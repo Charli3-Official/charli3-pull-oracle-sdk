@@ -11,6 +11,7 @@ from typing import Any
 from pycardano import (
     Address,
     ExtendedSigningKey,
+    IndefiniteList,
     MultiAsset,
     NativeScript,
     PaymentSigningKey,
@@ -22,7 +23,6 @@ from pycardano import (
     UTxO,
     Value,
     min_lovelace_post_alonzo,
-    IndefiniteList,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
