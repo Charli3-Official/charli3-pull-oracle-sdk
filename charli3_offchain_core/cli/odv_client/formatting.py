@@ -6,11 +6,10 @@ import click
 from charli3_offchain_core.cli.config.formatting import print_header, print_status
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
-    AggregateMessage,
     PriceData,
-    RewardConsensusPending,
 )
-from charli3_offchain_core.oracle.aggregate.builder import OdvResult
+from charli3_offchain_core.models.oracle_redeemers import AggregateMessage
+# from charli3_offchain_core.oracle.aggregate.builder import OdvResult  # Out of scope for now
 
 from ...constants.colors import CliColor
 
@@ -151,55 +150,56 @@ def print_footer() -> None:
     click.secho(f"└{'─' * 50}┘", fg=CliColor.SECONDARY)
 
 
-def print_send_summary(result: OdvResult) -> None:
-    """Print comprehensive summary of ODV transaction in table format."""
-    print_status(
-        "ODV aggregation completed successfully",
-        f"tx id {result.transaction.id}",
-        success=True,
-    )
-
-    print_table_header("ODV Transaction Summary")
-
-    transport_datum: RewardConsensusPending = result.transport_output.datum.datum
-    agg_datum: PriceData = result.agg_state_output.datum.price_data
-
-    # Oracle Feed Section
-    print_table_header("Oracle Feed Details")
-    print_row(
-        "Current Feed:", f"{transport_datum.aggregation.oracle_feed / 1_000_000:.6f}"
-    )
-    print_row(
-        "Node Participation:",
-        f"{len(transport_datum.aggregation.message.node_feeds_sorted_by_feed)} nodes",
-    )
-
-    # Reward Section
-    print_separator()
-    print_table_header("Reward Distribution")
-    node_count = len(transport_datum.aggregation.message.node_feeds_sorted_by_feed)
-    node_reward = transport_datum.aggregation.node_reward_price
-    total_fee = transport_datum.aggregation.rewards_amount_paid
-    platform_fee = total_fee - (node_count * node_reward)
-
-    print_row("Per Node Reward:", f"{node_reward / 1_000_000:.6f} ₳")
-    print_row("Platform Fee:", f"{platform_fee / 1_000_000:.6f} ₳")
-    print_row("Total Amount:", f"{total_fee / 1_000_000:.6f} ₳")
-
-    # Timing Section
-    print_separator()
-    print_table_header("Timing Details")
-    created_time = datetime.fromtimestamp(agg_datum.get_creation_time / 1000)
-    expiry_time = datetime.fromtimestamp(agg_datum.get_expiration_time / 1000)
-
-    print_row("Created:", created_time.strftime("%Y-%m-%d %H:%M:%S"), CliColor.DETAIL)
-    print_row("Expires:", expiry_time.strftime("%Y-%m-%d %H:%M:%S"), CliColor.DETAIL)
-
-    # Transaction Section
-    print_separator()
-    print_table_header("Transaction Details")
-    print_row(
-        "Network Fee:", f"{result.transaction.transaction_body.fee / 1_000_000:.6f} ₳"
-    )
-
-    print_footer()
+# Commented out - uses old RewardTransport architecture, out of scope for current migration
+# def print_send_summary(result: OdvResult) -> None:
+#     """Print comprehensive summary of ODV transaction in table format."""
+#     print_status(
+#         "ODV aggregation completed successfully",
+#         f"tx id {result.transaction.id}",
+#         success=True,
+#     )
+#
+#     print_table_header("ODV Transaction Summary")
+#
+#     transport_datum: RewardConsensusPending = result.transport_output.datum.datum
+#     agg_datum: PriceData = result.agg_state_output.datum.price_data
+#
+#     # Oracle Feed Section
+#     print_table_header("Oracle Feed Details")
+#     print_row(
+#         "Current Feed:", f"{transport_datum.aggregation.oracle_feed / 1_000_000:.6f}"
+#     )
+#     print_row(
+#         "Node Participation:",
+#         f"{len(transport_datum.aggregation.message.node_feeds_sorted_by_feed)} nodes",
+#     )
+#
+#     # Reward Section
+#     print_separator()
+#     print_table_header("Reward Distribution")
+#     node_count = len(transport_datum.aggregation.message.node_feeds_sorted_by_feed)
+#     node_reward = transport_datum.aggregation.node_reward_price
+#     total_fee = transport_datum.aggregation.rewards_amount_paid
+#     platform_fee = total_fee - (node_count * node_reward)
+#
+#     print_row("Per Node Reward:", f"{node_reward / 1_000_000:.6f} ₳")
+#     print_row("Platform Fee:", f"{platform_fee / 1_000_000:.6f} ₳")
+#     print_row("Total Amount:", f"{total_fee / 1_000_000:.6f} ₳")
+#
+#     # Timing Section
+#     print_separator()
+#     print_table_header("Timing Details")
+#     created_time = datetime.fromtimestamp(agg_datum.get_creation_time / 1000)
+#     expiry_time = datetime.fromtimestamp(agg_datum.get_expiration_time / 1000)
+#
+#     print_row("Created:", created_time.strftime("%Y-%m-%d %H:%M:%S"), CliColor.DETAIL)
+#     print_row("Expires:", expiry_time.strftime("%Y-%m-%d %H:%M:%S"), CliColor.DETAIL)
+#
+#     # Transaction Section
+#     print_separator()
+#     print_table_header("Transaction Details")
+#     print_row(
+#         "Network Fee:", f"{result.transaction.transaction_body.fee / 1_000_000:.6f} ₳"
+#     )
+#
+#     print_footer()
