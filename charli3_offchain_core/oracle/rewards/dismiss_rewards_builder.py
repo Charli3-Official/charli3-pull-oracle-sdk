@@ -211,10 +211,12 @@ class DismissRewardsBuilder(BaseBuilder):
         for transport in pending_transports:
             transport_datum = transport.output.datum
 
-            if not isinstance(transport_datum, RewardTransportVariant):
+            if not isinstance(transport_datum, RewardTransportVariant):  # noqa: F821
                 continue
 
-            if not isinstance(transport_datum.datum, RewardConsensusPending):
+            if not isinstance(
+                transport_datum.datum, RewardConsensusPending  # noqa: F821
+            ):
                 continue
 
             # Message creation time
@@ -334,7 +336,7 @@ def create_empty_transport(
 
     return replace(
         modified_utxo.output,
-        datum=RewardTransportVariant(datum=NoRewards()),
+        datum=RewardTransportVariant(datum=NoRewards()),  # noqa: F821
         datum_hash=None,
     )
 

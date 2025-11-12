@@ -383,11 +383,15 @@ class OracleTransactionBuilder:
 
             # Build transaction
             script_inputs = [
-                (t, Redeemer(CalculateRewards()), script_utxo)
+                (t, Redeemer(CalculateRewards()), script_utxo)  # noqa: F821
                 for t in pending_transports
             ]
             script_inputs.append(
-                (reward_account_utxo, Redeemer(CalculateRewards()), script_utxo)
+                (
+                    reward_account_utxo,
+                    Redeemer(CalculateRewards()),  # noqa: F821
+                    script_utxo,
+                )
             )
 
             tx = await self.tx_manager.build_script_tx(

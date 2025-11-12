@@ -410,7 +410,7 @@ class OracleStartBuilder:
             if os.path.exists(output_path):
                 os.remove(output_path)
 
-            subprocess.run(cmd, shell=True, check=True)
+            subprocess.run(cmd, shell=True, check=True)  # noqa: S602
 
             contracts = OracleContracts.from_blueprint(output_path)
 
