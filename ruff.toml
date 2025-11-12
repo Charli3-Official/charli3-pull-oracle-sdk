@@ -25,6 +25,8 @@ ignore = [
     "ANN401", # Allow Any
     "PLR0913", # Too many arguments to function call
     "PLR2004", # Magic number
+    "S101", #assert
+    "S311", # Allow random
 ]
 
 [lint.per-file-ignores]

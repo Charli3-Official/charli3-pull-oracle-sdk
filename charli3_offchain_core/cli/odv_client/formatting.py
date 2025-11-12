@@ -5,7 +5,11 @@ import click
 
 from charli3_offchain_core.cli.config.formatting import print_header, print_status
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
-from charli3_offchain_core.models.oracle_redeemers import AggregateMessage
+from charli3_offchain_core.models.oracle_datums import (
+    AggregateMessage,
+    PriceData,
+    RewardConsensusPending,
+)
 from charli3_offchain_core.oracle.aggregate.builder import OdvResult
 
 from ...constants.colors import CliColor
@@ -157,8 +161,8 @@ def print_send_summary(result: OdvResult) -> None:
 
     print_table_header("ODV Transaction Summary")
 
-    transport_datum = result.transport_output.datum.datum
-    agg_datum = result.agg_state_output.datum.datum
+    transport_datum: RewardConsensusPending = result.transport_output.datum.datum
+    agg_datum: PriceData = result.agg_state_output.datum.price_data
 
     # Oracle Feed Section
     print_table_header("Oracle Feed Details")
@@ -185,8 +189,8 @@ def print_send_summary(result: OdvResult) -> None:
     # Timing Section
     print_separator()
     print_table_header("Timing Details")
-    created_time = datetime.fromtimestamp(agg_datum.aggstate.created_at / 1000)
-    expiry_time = datetime.fromtimestamp(agg_datum.aggstate.expiry_timestamp / 1000)
+    created_time = datetime.fromtimestamp(agg_datum.get_creation_time / 1000)
+    expiry_time = datetime.fromtimestamp(agg_datum.get_expiration_time / 1000)
 
     print_row("Created:", created_time.strftime("%Y-%m-%d %H:%M:%S"), CliColor.DETAIL)
     print_row("Expires:", expiry_time.strftime("%Y-%m-%d %H:%M:%S"), CliColor.DETAIL)

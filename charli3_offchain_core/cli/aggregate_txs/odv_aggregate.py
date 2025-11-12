@@ -239,7 +239,7 @@ def _print_expired_aggstate(utxo: UTxO) -> None:
 
     click.echo(f"\nUTxO: {utxo.input.transaction_id}#{utxo.input.index}")
     click.echo(f"Created At: {price_data.get_creation_time}")
-    click.echo(f"Expired At: {price_data.get_expirity_time}")
+    click.echo(f"Expired At: {price_data.get_expiration_time}")
     click.echo(f"Oracle Feed: {price_data.get_price}")
 
 

@@ -9,8 +9,11 @@ This module provides utilities for:
 
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Final, TypeAlias
+
+import requests
 
 from .exceptions import NetworkConfigError, NetworkTimeError, ValidationError
 
@@ -32,6 +35,7 @@ class NetworkType(str, Enum):
     PREVIEW = "PREVIEW"
     PREPROD = "PREPROD"
     CUSTOM = "CUSTOM"
+    DEVNET = "DEVNET"
 
 
 # Network magic numbers for identification
@@ -39,6 +43,7 @@ NETWORK_MAGIC: dict[NetworkType, NetworkMagic] = {
     NetworkType.MAINNET: 764824073,
     NetworkType.PREPROD: 1,
     NetworkType.PREVIEW: 2,
+    NetworkType.DEVNET: 42,
     NetworkType.CUSTOM: 4,
 }
 
@@ -90,7 +95,17 @@ class NetworkConfig:
                               is not properly configured
         """
         try:
-            config = NETWORK_CONFIGS[network]
+            # For DevNet, always fetch the configuration dynamically
+            if network == NetworkType.DEVNET:
+                config = get_devnet_config()
+                if config is None:
+                    raise NetworkConfigError(
+                        "Failed to fetch DevNet configuration from local node. "
+                        "Ensure the node is running at localhost:10000."
+                    )
+            else:
+                config = NETWORK_CONFIGS[network]
+
             if network == NetworkType.CUSTOM:
                 validate_custom_network(config)
             return config
@@ -138,6 +153,55 @@ class NetworkConfig:
 
         ms_after_zero = posix_ms - self.zero_time
         return self.zero_slot + (ms_after_zero // self.slot_length)
+
+
+def get_devnet_config() -> NetworkConfig | None:
+    """Dynamically fetch DevNet configuration from local node.
+
+    Returns:
+        NetworkConfig for DevNet if successful, None otherwise
+
+    Raises:
+        NetworkConfigError: If unable to fetch configuration from the local node
+    """
+    try:
+        # Fetch the Shelley parameters from the local endpoint
+        response = requests.get(
+            "http://localhost:10000/local-cluster/api/admin/devnet/genesis/shelley",
+            timeout=5.0,  # Add timeout to prevent long delays
+        )
+        response.raise_for_status()  # Raise exception for non-200 status codes
+
+        shelley_params = response.json()
+
+        # Convert the systemStart to a timestamp in milliseconds
+        system_start = shelley_params.get("systemStart")
+        if not system_start:
+            raise NetworkConfigError(
+                "DevNet configuration missing systemStart parameter"
+            )
+
+        # Handle ISO format with Z for UTC timezone
+        zero_time = int(
+            datetime.fromisoformat(system_start.replace("Z", "+00:00")).timestamp()
+            * 1000
+        )
+
+        return NetworkConfig(
+            zero_time=zero_time,
+            zero_slot=0,
+            slot_length=1000,
+        )
+    except requests.RequestException as e:
+        raise NetworkConfigError(
+            f"Failed to fetch DevNet config: Connection error - {e}"
+        ) from e
+    except ValueError as e:
+        raise NetworkConfigError(f"Failed to parse DevNet config: {e}") from e
+    except KeyError as e:
+        raise NetworkConfigError(f"Missing key in DevNet config: {e}") from e
+    except Exception as e:
+        raise NetworkConfigError(f"Unexpected error fetching DevNet config: {e}") from e
 
 
 # Pre-configured network configurations
