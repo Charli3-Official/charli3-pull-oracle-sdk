@@ -226,7 +226,7 @@ class OracleSimulator:
 
         print_progress("Submitting final ODV transaction")
         status, _ = await self.ctx.tx_manager.sign_and_submit(
-            transaction,
+            result.transaction,
             [signing_key],
             wait_confirmation=True,
         )

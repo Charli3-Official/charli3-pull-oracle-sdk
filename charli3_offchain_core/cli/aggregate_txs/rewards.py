@@ -71,8 +71,7 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             change_address=change_address,
         )
 
-        # Print preview
-        print_rewards_preview(result)
+        # print_rewards_preview(result)
 
         if not click.confirm("\nProceed with reward processing?"):
             raise click.Abort()
@@ -87,8 +86,8 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
         click.echo(f"Transaction ID: {result.transaction.id}")
 
         # Display detailed results
-        if tx_status == "confirmed":
-            _print_reward_summary(result)
+        # if tx_status == "confirmed":
+        #     _print_reward_summary(result)
 
     except TransactionError as e:
         if "No pending transport UTxOs found" in str(e.__cause__):

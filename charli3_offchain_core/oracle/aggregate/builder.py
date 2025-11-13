@@ -373,21 +373,3 @@ class OracleTransactionBuilder:
         validity_start_slot = self.network_config.posix_to_slot(validity_start)
         validity_end_slot = self.network_config.posix_to_slot(validity_end)
         return validity_start_slot, validity_end_slot
-
-    def _check_rewards_tx_fee_subsidized(
-        self, tx_fee: int, pending_transports: list[UTxO], settings: OracleSettingsDatum
-    ) -> None:
-        subsidies = sum(
-            utxo.output.amount.coin
-            - settings.utxo_size_safety_buffer
-            - (
-                utxo.output.datum.datum.aggregation.rewards_amount_paid
-                if self.reward_token_hash is None and self.reward_token_name is None
-                else 0
-            )
-            for utxo in pending_transports
-        )
-        if subsidies < tx_fee:
-            raise RewardCalculationIsNotSubsidizedError(
-                "Tx fee for reward calculation is not subsidized"
-            )
