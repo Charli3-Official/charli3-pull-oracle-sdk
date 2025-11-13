@@ -143,19 +143,11 @@ def print_yaml_config(nodes_config: NodesConfig) -> None:
     config = {
         "nodes": {
             "required_signatures": nodes_config.required_signatures,
-            "nodes": [
-                {
-                    "feed_vkh": node,
-                    # "payment_vkh": node.payment_vkh,
-                }
-                for node in nodes_config.nodes
-            ],
+            "feed_vkh": [str(node) for node in nodes_config.nodes],
         }
     }
 
-    click.echo("\nConfiguration in YAML format:")
-    click.echo("---")
-    click.echo(yaml.dump(config, default_flow_style=False))
+    click.echo(yaml.dump(config, default_flow_style=False, indent=4))
 
 
 @click.command()
@@ -232,10 +224,7 @@ async def generate_node_keys_command(
         click.echo(f"\nSuccessfully generated {count} node configurations:")
         click.echo(f"- Keys saved to: {output_dir}")
         click.echo(f"- Required signatures: {nodes_config.required_signatures}")
-        for i, node in enumerate(nodes_config.nodes):
-            click.echo(f"\nNode {i}:")
-            click.echo(f"  Feed VKH: {node}")
-            # click.echo(f"  Payment VKH: {node.payment_vkh}")
+        click.echo()
 
         if print_yaml:
             print_yaml_config(nodes_config)

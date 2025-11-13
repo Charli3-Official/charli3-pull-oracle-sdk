@@ -257,6 +257,19 @@ class OracleSimulator:
             print_header("Phase 2: ODV Transaction")
             odv_result = await self.submit_odv(node_messages)
 
+            # Extract reward distribution from account output
+            rewards_dict = None
+            if odv_result.transport_output.datum:
+                try:
+                    reward_datum = odv_result.transport_output.datum.datum
+                    if hasattr(reward_datum, "nodes_to_rewards"):
+                        rewards_dict = {
+                            vkh.to_primitive().hex(): amount
+                            for vkh, amount in reward_datum.nodes_to_rewards.items()
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to extract reward distribution: {e}")
+
             print_status("Simulation", "Completed successfully", success=True)
             return SimulationResult(
                 nodes=self.nodes,
@@ -269,6 +282,7 @@ class OracleSimulator:
                     for i, msg in enumerate(node_messages.values())
                 },
                 odv_tx=str(odv_result.transaction.id),
+                rewards=rewards_dict,
             )
 
         except Exception as e:

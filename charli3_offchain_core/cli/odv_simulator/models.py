@@ -124,6 +124,7 @@ class SimulationResult:
     nodes: list[SimulatedNode]
     feeds: dict[int, dict]
     odv_tx: str
+    rewards: dict[str, int] | None = None
 
 
 class SimulationConfig(TxConfig):

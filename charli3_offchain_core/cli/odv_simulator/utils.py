@@ -46,8 +46,12 @@ def print_simulation_results(result: "SimulationResult") -> None:
         )
 
     # Show rewards
-    click.echo("\nReward Distribution Transaction:")
-    click.echo(f"ID: {result.rewards.transaction.id}")
+    click.echo("\nReward Distribution:")
+    if result.rewards:
+        for i, (vkh, amount) in enumerate(result.rewards.items()):
+            click.echo(f"Node {i} ({vkh[:16]}...): {amount} lovelace")
+    else:
+        click.echo("No rewards distributed")
 
 
 def save_simulation_results(result: "SimulationResult", output_file: str) -> None:
