@@ -1,6 +1,7 @@
 """Oracle Redeemers for Oracle smart contract and Oracle NFTs"""
 
 from dataclasses import dataclass
+from typing import Union
 
 from pycardano import PlutusData, VerificationKeyHash
 
@@ -9,60 +10,52 @@ from charli3_offchain_core.models.base import (
 )
 
 
-### Oracle NFTs
+### Oracle NFTs - Minting Redeemer variants
 @dataclass
-class MintingRedeemer(PlutusData):
-    """Types of actions for Oracle NFTs (protocol tokens)"""
-
-    CONSTR_ID = 0  # For Mint
-
-
-class Mint(MintingRedeemer):
+class Mint(PlutusData):
     """One time mint for CoreSettings and RewardAccount"""
 
     CONSTR_ID = 0
 
 
-class Scale(MintingRedeemer):
+@dataclass
+class Scale(PlutusData):
     """Scale RewardTransport and AggState UTxOs"""
 
     CONSTR_ID = 1
 
 
-class Burn(MintingRedeemer):
+@dataclass
+class Burn(PlutusData):
     """Oracle remove: all tokens are burned"""
 
     CONSTR_ID = 2
 
 
-## Reward Redeemer
+# Type alias for MintingRedeemer variants
+MintingRedeemer = Union[Mint, Scale, Burn]
+
+
+## Reward Redeemer variants
 @dataclass
-class RewardRedeemer(PlutusData):
-    """RewardRedeem"""
-
-    CONSTR_ID = 0
-
-
-class NodeCollect(RewardRedeemer):
+class NodeCollect(PlutusData):
     """Node Collect"""
 
     CONSTR_ID = 0
 
 
-class PlatformCollect(RewardRedeemer):
+@dataclass
+class PlatformCollect(PlutusData):
     """Platform Collect"""
 
     CONSTR_ID = 1
 
 
-### Oracle Manager
-@dataclass
-class OracleRedeemer(PlutusData):
-    """Types of actions for Oracle smart contract"""
-
-    CONSTR_ID = 0  # Base constructor ID
+# Type alias for RewardRedeemer variants
+RewardRedeemer = Union[NodeCollect, PlatformCollect]
 
 
+### Oracle Manager Redeemer variants
 @dataclass
 class AggregateMessage(PlutusData):
     """Represents an aggregate message from nodes"""
@@ -71,85 +64,107 @@ class AggregateMessage(PlutusData):
     node_feeds_sorted_by_feed: dict[VerificationKeyHash, NodeFeed]
 
 
-class OdvAggregate(OracleRedeemer):
+@dataclass
+class OdvAggregate(PlutusData):
     """User sends on demand validation request with oracle nodes message"""
 
     CONSTR_ID = 0
     message: AggregateMessage
 
 
-class OdvAggregateMsg(OracleRedeemer):
+@dataclass
+class OdvAggregateMsg(PlutusData):
     """Calculate reward consensus and transfer fees to reward UTxO"""
 
     CONSTR_ID = 1
 
 
-class RedeemRewards(OracleRedeemer):
+@dataclass
+class RedeemRewards(PlutusData):
     """Redeem rewards"""
 
     CONSTR_ID = 2
-
     collector: RewardRedeemer
     corresponding_out_ix: int
 
 
-class ManageSettings(OracleRedeemer):
-    """Calculate reward consensus and transfer fees to reward UTxO"""
-
-    CONSTR_ID = 3
-
-
-class ScaleDown(OracleRedeemer):
-    """Platform burns RewardTransport and AggState NFTs"""
-
-    CONSTR_ID = 4
-
-
-class DismissRewards(OracleRedeemer):
-    """Platform turns RewardTransport UTxOs with pending rewards into NoRewards"""
-
-    CONSTR_ID = 5
-
-
-## Settings Redeemer
+### Settings Redeemer variants
 @dataclass
-class SettingsRedeemer(PlutusData):
-    """Oracle Setttings Redeemer"""
-
-    CONSTR_ID = 0
-
-
-class UpdateSettings(SettingsRedeemer):
+class UpdateSettings(PlutusData):
     """Oracle platform changes consensus, timing or fee settings"""
 
     CONSTR_ID = 0
 
 
-class AddNodes(SettingsRedeemer):
+@dataclass
+class AddNodes(PlutusData):
     """Oracle platform adds new nodes"""
 
     CONSTR_ID = 1
 
 
-class DelNodes(SettingsRedeemer):
+@dataclass
+class DelNodes(PlutusData):
     """Oracle platform deletes nodes"""
 
     CONSTR_ID = 2
 
 
-class PauseOracle(SettingsRedeemer):
+@dataclass
+class PauseOracle(PlutusData):
     """Platform starts pause period"""
 
     CONSTR_ID = 3
 
 
-class ResumeOracle(SettingsRedeemer):
+@dataclass
+class ResumeOracle(PlutusData):
     """Cancel oracle pause for temporary suspension"""
 
     CONSTR_ID = 4
 
 
-class RemoveOracle(SettingsRedeemer):
+@dataclass
+class RemoveOracle(PlutusData):
     """Remove oracle and destroy all UTxOs and NFTs"""
 
     CONSTR_ID = 5
+
+
+# Type alias for SettingsRedeemer variants
+SettingsRedeemer = Union[
+    UpdateSettings, AddNodes, DelNodes, PauseOracle, ResumeOracle, RemoveOracle
+]
+
+
+@dataclass
+class ManageSettings(PlutusData):
+    """Oracle Manage Settings Redeemer"""
+
+    CONSTR_ID = 3
+    redeemer: SettingsRedeemer
+
+
+@dataclass
+class ScaleDown(PlutusData):
+    """Platform burns RewardTransport and AggState NFTs"""
+
+    CONSTR_ID = 4
+
+
+@dataclass
+class DismissRewards(PlutusData):
+    """Platform turns RewardTransport UTxOs with pending rewards into NoRewards"""
+
+    CONSTR_ID = 5
+
+
+# Type alias for OracleRedeemer variants
+OracleRedeemer = Union[
+    OdvAggregate,
+    OdvAggregateMsg,
+    RedeemRewards,
+    ManageSettings,
+    ScaleDown,
+    DismissRewards,
+]
