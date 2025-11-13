@@ -206,6 +206,9 @@ async def generate_node_keys_command(
             count=count,
         )
 
+        # Save node keys (creates the directory)
+        save_node_keys(nodes, output_dir)
+
         # Override required signatures if specified
         if required_sigs is not None:
             if required_sigs > count:
@@ -214,9 +217,6 @@ async def generate_node_keys_command(
                 )
             with (output_dir / "required_signatures").open("w") as f:
                 f.write(str(required_sigs))
-
-        # Save node keys
-        save_node_keys(nodes, output_dir)
 
         # Verify we can load the config
         nodes_config = load_nodes_config(output_dir)
