@@ -102,7 +102,7 @@ class RewardsResult:
 
         # Build distribution mapping
         distribution = {}
-        node_map_keys = list(self.in_settings.nodes.node_map.keys())
+        node_map_keys = list(self.in_settings.nodes.keys())
         for node_id in transport_datum.aggregation.message.node_feeds_sorted_by_feed:
             if node_id not in node_map_keys:
                 continue
@@ -441,7 +441,7 @@ class OracleTransactionBuilder:
             median_divergency_factor,
             in_distribution,
             node_reward_price,
-            allowed_nodes.node_map,
+            allowed_nodes,
         )
 
         return self._create_final_output(
@@ -572,7 +572,7 @@ class OracleTransactionBuilder:
     #     # Calculate rewards from transports
     #     output_amount = deepcopy(reward_account.output.amount)
     #     current_datum = reward_account.output.datum.datum
-    #     nodes = list(settings.nodes.node_map.keys())
+    #     nodes = list(settings.nodes.keys())
 
     #     # Calculate total fees and rewards
     #     total_payment_tokens = rewards.calculate_total_fees(

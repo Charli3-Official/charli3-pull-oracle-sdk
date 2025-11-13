@@ -140,7 +140,7 @@ def modified_core_utxo(
     new_nodes_dict = {
         node.feed_vkh: node.payment_vkh for node in new_nodes_config.nodes
     }
-    existing_nodes_dict = in_core_datum.nodes.node_map
+    existing_nodes_dict = in_core_datum.nodes
 
     merged_nodes = dict(
         sorted(
@@ -176,7 +176,7 @@ def modified_reward_utxo(
     new_nodes_dict = {
         node.feed_vkh: node.payment_vkh for node in new_nodes_config.nodes
     }
-    existing_nodes_dict = in_core_datum.nodes.node_map
+    existing_nodes_dict = in_core_datum.nodes
 
     merged_nodes = {
         **new_nodes_dict,
@@ -322,7 +322,7 @@ def show_nodes_update_info(
 
     # Validate and return result
     return print_validation_rules(
-        new_node_count=out_core_datum.nodes.length,
+        new_node_count=len(out_core_datum.nodes),
         new_signatures_count=new_signatures_count,
         has_new_nodes=bool(new_nodes),
         has_deleted_nodes=bool(deleted_nodes),
@@ -331,7 +331,7 @@ def show_nodes_update_info(
 
 def print_current_state(datum: OracleSettingsDatum) -> None:
     """Display current nodes and signature requirements."""
-    print_nodes_table(datum.nodes.node_map, is_current=True)
+    print_nodes_table(datum.nodes, is_current=True)
     print_required_signatories(datum.required_node_signatures_count, is_current=True)
 
 
@@ -341,8 +341,8 @@ def get_deleted_nodes(
     """Calculate nodes that will be deleted."""
     return [
         feed_vkh
-        for feed_vkh in in_datum.nodes.node_map.keys()
-        if feed_vkh not in out_datum.nodes.node_map
+        for feed_vkh in in_datum.nodes.keys()
+        if feed_vkh not in out_datum.nodes
     ]
 
 
@@ -352,8 +352,8 @@ def get_new_nodes(
     """Calculate new nodes to be added."""
     return {
         feed_vkh: payment_vkh
-        for feed_vkh, payment_vkh in out_datum.nodes.node_map.items()
-        if feed_vkh not in in_datum.nodes.node_map
+        for feed_vkh, payment_vkh in out_datum.nodes.items()
+        if feed_vkh not in in_datum.nodes
     }
 
 

@@ -391,7 +391,7 @@ def modified_core_utxo(
 
     filtered_nodes = {
         feed: payment
-        for feed, payment in core_datum.nodes.node_map.items()
+        for feed, payment in core_datum.nodes.items()
         if payment not in nodes_to_remove
     }
 
@@ -423,7 +423,7 @@ def modified_reward_utxo(
 ) -> UTxO | None:
     modified_utxo = deepcopy(reward_utxo)
 
-    existing_nodes = list(core_datum.nodes.node_map.values())
+    existing_nodes = list(core_datum.nodes.values())
 
     # Create initial distribution mapping
     distribution: dict[VerificationKeyHash, int] = dict(
@@ -633,12 +633,12 @@ def show_nodes_update_info(
         display_signature_change(current_signatures, new_signatures_count)
 
     has_valid_nodes = all_valid_nodes(
-        config_nodes_to_remove, in_core_datum.nodes.node_map
+        config_nodes_to_remove, in_core_datum.nodes
     )
 
     # Validate and return result
     return print_validation_rules(
-        new_node_count=out_core_datum.nodes.length,
+        new_node_count=len(out_core_datum.nodes),
         new_signatures_count=new_signatures_count,
         has_deleted_nodes=bool(nodes_to_remove),
         has_added_nodes=bool(added_nodes),
@@ -654,9 +654,9 @@ def get_added_nodes(
     Returns a dict mapping feed VKH to payment VKH for nodes present in out_datum
     but not in in_datum (i.e., newly added nodes).
     """
-    added_feed_vkhs = set(out_datum.nodes.node_map) - set(in_datum.nodes.node_map)
+    added_feed_vkhs = set(out_datum.nodes) - set(in_datum.nodes)
     return {
-        feed_vkh: out_datum.nodes.node_map[feed_vkh] for feed_vkh in added_feed_vkhs
+        feed_vkh: out_datum.nodes[feed_vkh] for feed_vkh in added_feed_vkhs
     }
 
 
@@ -668,9 +668,9 @@ def get_remove_nodes(
     Returns a dict mapping feed VKH to payment VKH for nodes present in in_datum
     but not in out_datum (i.e., nodes being removed).
     """
-    removed_feed_vkhs = set(in_datum.nodes.node_map) - set(out_datum.nodes.node_map)
+    removed_feed_vkhs = set(in_datum.nodes) - set(out_datum.nodes)
     return {
-        feed_vkh: in_datum.nodes.node_map[feed_vkh] for feed_vkh in removed_feed_vkhs
+        feed_vkh: in_datum.nodes[feed_vkh] for feed_vkh in removed_feed_vkhs
     }
 
 
@@ -752,7 +752,7 @@ def reward_distribution(
     reward_datum: RewardAccountDatum,
 ) -> tuple[dict[VerificationKeyHash, int], int]:
 
-    existing_nodes = list(core_datum.nodes.node_map.values())
+    existing_nodes = list(core_datum.nodes.values())
 
     # Create initial distribution mapping
     distribution = dict(zip(existing_nodes, reward_datum.nodes_to_rewards))

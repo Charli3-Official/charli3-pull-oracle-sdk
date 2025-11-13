@@ -81,7 +81,7 @@ class TestMultisigGovernance(GovernanceBase):
         # Ensure it doesn't exceed the total number of nodes
         new_threshold = min(
             current_datum.required_node_signatures_count - 1,
-            current_datum.nodes.length,
+            len(current_datum.nodes),
         )
 
         logger.info(

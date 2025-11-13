@@ -277,10 +277,8 @@ class OracleStartBuilder:
         median_divergency_factor: int,
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
-        # node_map = {node.feed_vkh: node.payment_vkh for node in nodes_config.nodes}
-
         oracle_settings = OracleSettingsDatum(
-            nodes=Nodes(node_map=IndefiniteList(nodes_config.nodes)),
+            nodes=Nodes(nodes_config.nodes),
             required_node_signatures_count=nodes_config.required_signatures,
             fee_info=rate_config,
             aggregation_liveness_period=aggregation_liveness_period,

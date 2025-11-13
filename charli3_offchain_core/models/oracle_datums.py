@@ -35,49 +35,7 @@ class OutputReference(PlutusData):
     index: int
 
 
-@dataclass
-class Nodes(PlutusData):
-    """
-    Represents a list of feed VKHs.
-    Keys must be sorted to match Aiken's requirements.
-    """
-
-    CONSTR_ID = 0
-    node_map: IndefiniteList
-
-    @classmethod
-    def from_primitive(cls, data: Any) -> "Nodes":
-        """Create Nodes from primitive data."""
-        while hasattr(data, "value"):
-            data = data.value
-
-        if not data:
-            return cls(node_map=IndefiniteList([]))
-
-        return cls(
-            node_map=IndefiniteList(
-                [VerificationKeyHash.from_primitive(k) for k in data]
-            )
-        )
-
-    def to_primitive(self) -> list:
-        """Convert to primitive list representation."""
-        return [
-            vkh.to_primitive() for vkh in sorted(self.node_map, key=lambda x: x.payload)
-        ]
-
-    @classmethod
-    def empty(cls) -> "Nodes":
-        """
-        Creates an empty Nodes instance with an empty node_map.
-        Returns:
-            Nodes: A new Nodes instance with an empty map.
-        """
-        return cls(node_map=IndefiniteList([]))
-
-    @property
-    def length(self) -> int:
-        return len(self.node_map)
+Nodes = IndefiniteList
 
 
 @dataclass
@@ -179,7 +137,7 @@ class OracleSettingsDatum(PlutusData):
 
     def __post_init__(self) -> None:
         if (
-            len(self.nodes.node_map) < self.required_node_signatures_count
+            len(self.nodes) < self.required_node_signatures_count
             or self.required_node_signatures_count <= 0
         ):
             raise ValueError("Oracle Settings Validator: Must not break multisig")

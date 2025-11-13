@@ -50,7 +50,7 @@ async def validate_is_node_registered(
         if is_oracle_paused(settings_datum):
             raise ValueError("Oracle is currently paused")
 
-        if node_vkh not in settings_datum.nodes.node_map:
+        if node_vkh not in settings_datum.nodes:
             raise ValueError(f"Node {node_vkh} not registered")
         return True, settings_datum
     except Exception as e:
