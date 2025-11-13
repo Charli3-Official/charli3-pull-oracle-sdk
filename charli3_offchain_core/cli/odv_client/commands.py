@@ -15,7 +15,7 @@ from charli3_offchain_core.cli.odv_client.formatting import (
     print_aggregate_summary,
     print_collection_stats,
     print_node_messages,
-    print_send_summary,
+    # print_send_summary,  # Out of scope - commented out
     print_signature_status,
 )
 from charli3_offchain_core.client.odv import ODVClient
@@ -139,7 +139,12 @@ async def send(config: Path, wait: bool) -> None:
         )
 
         if tx_status == "confirmed":
-            print_send_summary(result)
+            # print_send_summary(result)  # Out of scope - uses old RewardTransport
+            print_status(
+                "ODV Aggregation",
+                f"Completed successfully. TX: {result.transaction.id}",
+                success=True,
+            )
         else:
             print_status(
                 "Transaction Submission",

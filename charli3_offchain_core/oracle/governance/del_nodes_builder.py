@@ -96,6 +96,7 @@ class DelNodesBuilder(BaseBuilder):
         reward_issuer_addr: Address | None = None,
         escrow_address: Address | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
+        test_mode: bool = False,
     ) -> GovernanceTxResult:
         """Builds a governance transaction for updating node configurations.
 
@@ -196,7 +197,9 @@ class DelNodesBuilder(BaseBuilder):
                 payment_distribution,
                 reward_token,
                 self.MIN_UTXO_VALUE,
+                test_mode,
             )
+
             # Build the transaction
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
@@ -592,6 +595,7 @@ def show_nodes_update_info(
     payment_distribution: dict[VerificationKeyHash, int],
     reward_token: NoDatum | SomeAsset,
     min_utxo_value: int,
+    test_mode: bool = False,
 ) -> bool:
     """
     Displays information about the changes that will be made to the nodes.
@@ -614,7 +618,7 @@ def show_nodes_update_info(
         return False
 
     # Display changes
-    if nodes_to_remove:
+    if nodes_to_remove and not test_mode:
         click.secho("\n", nl=True)
         print_nodes_table(
             nodes_to_remove,
@@ -703,6 +707,7 @@ def confirm_node_updates(
     payment_distribution: dict[VerificationKeyHash, int],
     reward_token: NoDatum | SomeAsset,
     min_utxo_value: int,
+    test_mode: bool = False,
 ) -> bool:
     """
     Validate and confirm node updates with the user.
@@ -725,13 +730,14 @@ def confirm_node_updates(
         payment_distribution,
         reward_token,
         min_utxo_value,
+        test_mode,
     )
     if not changes_valid:
         logger.warning("Validation failed for delete nodes")
         raise RemoveNodesValidationError("Removing nodes validation failed")
 
     # Get user confirmation
-    if not print_confirmation_message_prompt(
+    if not test_mode and not print_confirmation_message_prompt(
         "Do you want to continue with the detected changes?"
     ):
         logger.info("User cancelled operation: Delete Nodes")

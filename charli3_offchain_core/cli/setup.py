@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -304,14 +305,32 @@ def apply_spend_params_with_aiken_compiler(
         with open("aiken.toml", "w") as f:
             f.write(aiken_toml_content)
 
-        cmd = f'aiken blueprint apply -i {blueprint_path.name} -v {validator_name} -o {output_file} "{cbor_hex}"'
-
         output_path = artifact_path / output_file
 
         if os.path.exists(output_path):
             os.remove(output_path)
 
-        subprocess.run(cmd, shell=True, check=True)
+        # Use shutil.which to get the full path to aiken executable
+        aiken_path = shutil.which("aiken")
+        if not aiken_path:
+            raise FileNotFoundError("aiken executable not found in PATH")
+
+        subprocess.run(  # noqa: S603
+            [
+                aiken_path,
+                "blueprint",
+                "apply",
+                "-i",
+                blueprint_path.name,
+                "-v",
+                validator_name,
+                "-o",
+                output_file,
+                cbor_hex,
+            ],
+            check=True,
+            capture_output=True,
+        )
 
         contracts = OracleContracts.from_blueprint(output_path)
 

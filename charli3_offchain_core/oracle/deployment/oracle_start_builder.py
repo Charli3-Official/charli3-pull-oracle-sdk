@@ -56,6 +56,7 @@ class StartTransactionResult:
     """Result of oracle start transaction"""
 
     transaction: Transaction
+    minting_policy_id: str
     settings_utxo: TransactionOutput
     reward_account_utxos: list[TransactionOutput]
     agg_state_utxos: list[TransactionOutput]
@@ -235,6 +236,7 @@ class OracleStartBuilder:
 
         return StartTransactionResult(
             transaction=tx,
+            minting_policy_id=mint_policy.policy_id,
             settings_utxo=settings_utxo,
             reward_account_utxos=list(reward_account_utxos),
             agg_state_utxos=list(agg_state_utxos),
@@ -408,7 +410,7 @@ class OracleStartBuilder:
             if os.path.exists(output_path):
                 os.remove(output_path)
 
-            subprocess.run(cmd, shell=True, check=True)
+            subprocess.run(cmd, shell=True, check=True)  # noqa: S602
 
             contracts = OracleContracts.from_blueprint(output_path)
 

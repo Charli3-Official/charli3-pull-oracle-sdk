@@ -77,7 +77,7 @@ class RemoveBuilder(BaseBuilder):
                 validity_start_slot
             )
 
-            empty_transports = filter_empty_transports(
+            empty_transports = filter_empty_transports(  # noqa: F821
                 filter_utxos_by_token_name(
                     utxos, policy_hash, self.TOKEN_REWARD_TRANSPORT
                 )

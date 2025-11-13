@@ -38,7 +38,7 @@ def generate_node_keys(
 
     for i in range(start_index, start_index + count):
         # Derive feed keys
-        feed_hdwallet = hdwallet.derive_from_path(f"m/1852'/1815'/0'/0/{i}")
+        feed_hdwallet = hdwallet.derive_from_path(f"m/4343'/1815'/0'/0/{i}")
         feed_signing_key = ExtendedSigningKey.from_hdwallet(feed_hdwallet)
         feed_verification_key = PaymentVerificationKey.from_primitive(
             feed_hdwallet.public_key
@@ -46,7 +46,7 @@ def generate_node_keys(
         feed_vkh = feed_verification_key.hash()
 
         # Derive payment keys
-        payment_hdwallet = hdwallet.derive_from_path(f"m/1852'/1815'/0'/2/{i}")
+        payment_hdwallet = hdwallet.derive_from_path(f"m/1852'/1815'/0'/0/{i}")
         payment_signing_key = ExtendedSigningKey.from_hdwallet(payment_hdwallet)
         payment_verification_key = PaymentVerificationKey.from_primitive(
             payment_hdwallet.public_key

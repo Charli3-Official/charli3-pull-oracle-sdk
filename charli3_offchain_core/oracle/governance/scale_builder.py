@@ -120,7 +120,7 @@ class OracleScaleBuilder:
                             {self.policy_id.payload: {transport_name.encode(): 1}}
                         ),
                     ),
-                    datum=RewardTransportVariant(datum=NoRewards()),
+                    datum=RewardTransportVariant(datum=NoRewards()),  # noqa: F821
                 )
                 for _ in range(scale_amount)
             ]
@@ -210,7 +210,7 @@ class OracleScaleBuilder:
             )
 
             # Get empty transports with detailed logging
-            empty_transports = filter_empty_transports(transport_utxos)
+            empty_transports = filter_empty_transports(transport_utxos)  # noqa: F821
             logger.info(
                 "Empty transport UTxOs found: %d/%d",
                 len(empty_transports),
@@ -265,7 +265,7 @@ class OracleScaleBuilder:
                         expiry = None
                     else:
                         state_type = "Expired"
-                        expiry = datum.price_data.get_expirity_time
+                        expiry = datum.price_data.get_expiration_time
 
                     logger.info(
                         "AggState UTxO %d: TxId=%s#%d, Type=%s, Expiry=%s",

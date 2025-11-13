@@ -92,7 +92,7 @@ def filter_reward_account(utxos: Sequence[UTxO]) -> list[UTxO]:
 
 
 def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Filter UTxOs for pending reward consensus states.
+    """Filter UTxOs for pending reward consensus states, and sort by timestamp
 
     Args:
         utxos: List of UTxOs to filter
@@ -101,15 +101,20 @@ def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
         List of UTxOs with pending consensus states
     """
 
-    utxos_with_datum = convert_cbor_to_transports(utxos)
+    utxos_with_datum = convert_cbor_to_transports(utxos)  # noqa: F821
 
-    return [
+    pending_transports = [
         utxo
         for utxo in utxos_with_datum
         if utxo.output.datum
-        and isinstance(utxo.output.datum, RewardTransportVariant)
-        and isinstance(utxo.output.datum.datum, RewardConsensusPending)
+        and isinstance(utxo.output.datum, RewardTransportVariant)  # noqa: F821
+        and isinstance(utxo.output.datum.datum, RewardConsensusPending)  # noqa: F821
     ]
+    pending_transports.sort(
+        key=lambda utxo: utxo.output.datum.datum.aggregation.message.timestamp
+    )
+
+    return pending_transports
 
 
 def filter_empty_agg_states(utxos: Sequence[UTxO]) -> list[UTxO]:
@@ -309,7 +314,6 @@ def find_account_pair(
 
         # Return first pair found
         return reward_accounts[0], agg_states[0]
-
     except Exception as e:
         raise StateValidationError(f"Failed to find UTxO pair: {e}") from e
 
@@ -344,8 +348,10 @@ def can_process_rewards(
     """
     try:
         if not isinstance(
-            transport.output.datum, RewardTransportVariant
-        ) or not isinstance(transport.output.datum.datum, RewardConsensusPending):
+            transport.output.datum, RewardTransportVariant  # noqa: F821
+        ) or not isinstance(
+            transport.output.datum.datum, RewardConsensusPending  # noqa: F821
+        ):
             return False
 
         pending_data = transport.output.datum.datum
@@ -407,16 +413,18 @@ def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
         transport_variant = transport.output.datum
         agg_state_variant = agg_state.output.datum
 
-        if not isinstance(transport_variant, RewardTransportVariant):
+        if not isinstance(transport_variant, RewardTransportVariant):  # noqa: F821
             return False
         if not isinstance(agg_state_variant, AggState):
             return False
 
         # Check valid state combinations
-        transport_empty = isinstance(transport_variant.datum, NoRewards)
+        transport_empty = isinstance(transport_variant.datum, NoRewards)  # noqa: F821
         agg_state_empty = agg_state_variant.price_data.is_empty
 
-        transport_pending = isinstance(transport_variant.datum, RewardConsensusPending)
+        transport_pending = isinstance(
+            transport_variant.datum, RewardConsensusPending  # noqa: F821
+        )
         agg_state_active = not agg_state_variant.price_data.is_valid
 
         return (transport_empty and agg_state_empty) or (
