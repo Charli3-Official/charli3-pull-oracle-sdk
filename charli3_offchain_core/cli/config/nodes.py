@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 
-from typing import List
 from pycardano import VerificationKeyHash
 
 
@@ -11,7 +10,7 @@ class NodesConfig:
     """Configuration for oracle nodes: list of feed VKHs + required signatures."""
 
     required_signatures: int
-    nodes: List[VerificationKeyHash]
+    nodes: list[VerificationKeyHash]
 
     @classmethod
     def from_dict(cls, data: dict) -> "NodesConfig":

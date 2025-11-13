@@ -1,14 +1,8 @@
 """Oracle Redeemers for Oracle smart contract and Oracle NFTs"""
 
 from dataclasses import dataclass
-from typing import Dict
 
 from pycardano import PlutusData, VerificationKeyHash
-
-from charli3_offchain_core.models.base import (
-    NodeFeed,
-    PosixTime,
-)
 
 
 ### Oracle NFTs
@@ -66,22 +60,31 @@ class OracleRedeemer(PlutusData):
 
 
 @dataclass
-class AggregateMessage(PlutusData):
-    """Represents an aggregate message from nodes"""
-
-    CONSTR_ID = 0
-    node_feeds_sorted_by_feed: Dict[VerificationKeyHash, NodeFeed]  # noqa
-
-
 class OdvAggregate(OracleRedeemer):
-    """User sends on demand validation request with oracle nodes message"""
+    """User sends on demand validation request with oracle nodes message."""
 
     CONSTR_ID = 0
-    message: AggregateMessage
+    message: dict
+
+    @classmethod
+    def create_sorted(
+        cls, node_feeds: dict[VerificationKeyHash, int]
+    ) -> "OdvAggregate":
+        """Create OdvAggregate with properly sorted message.
+
+        Args:
+            node_feeds: Dictionary mapping VerificationKeyHash to node feed values
+
+        Returns:
+            OdvAggregate with message sorted by VerificationKeyHash bytes (ascending)
+        """
+        sorted_items = sorted(node_feeds.items(), key=lambda x: x[0].payload)
+        sorted_dict = dict(sorted_items)
+        return cls(message=sorted_dict)
 
 
 class OdvAggregateMsg(OracleRedeemer):
-    """Calculate reward consensus and transfer fees to reward UTxO"""
+    """Marks the AggState UTxO as spent during aggregation"""
 
     CONSTR_ID = 1
 
@@ -155,3 +158,26 @@ class RemoveOracle(SettingsRedeemer):
     """Remove oracle and destroy all UTxOs and NFTs"""
 
     CONSTR_ID = 5
+
+
+@dataclass
+class AggregateMessage:
+    """Off-chain representation of aggregate message.
+
+    This is NOT serialized to chain. When building transactions, use
+    OdvAggregate.create_sorted() to create the properly formatted redeemer.
+
+    IMPORTANT: On-chain, AggregateMessage is just Pairs<FeedVkh, NodeFeed>.
+    Count and timestamp are NOT part of the on-chain structure.
+    """
+
+    node_feeds_sorted_by_feed: dict[VerificationKeyHash, int]
+
+    def to_redeemer(self) -> OdvAggregate:
+        """Convert to properly formatted redeemer."""
+        return OdvAggregate.create_sorted(self.node_feeds_sorted_by_feed)
+
+    @property
+    def node_feeds_count(self) -> int:
+        """Calculate count from the map (not stored)."""
+        return len(self.node_feeds_sorted_by_feed)

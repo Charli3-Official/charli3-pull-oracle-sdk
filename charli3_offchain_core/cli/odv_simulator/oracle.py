@@ -22,7 +22,6 @@ from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,
     OracleTransactionBuilder,
-    RewardsResult,
 )
 from charli3_offchain_core.oracle.utils.common import build_aggregate_message
 
@@ -105,7 +104,7 @@ class OracleSimulator:
         print_progress("Preparing transaction signature request")
         tx_request = OdvTxSignatureRequest(
             node_messages=node_messages,
-            tx_cbor=tx.to_cbor_hex(),
+            tx_cbor=tx.transaction_body.to_cbor_hex(),
         )
 
         print_progress("Requesting transaction signatures from nodes")
@@ -116,80 +115,96 @@ class OracleSimulator:
 
         responses = await asyncio.gather(*tasks)
 
-        signed_txs = {}
+        signed_signatures = {}
         for node_pkh, response in zip(self.node_simulators.keys(), responses):
             if response is not None:
-                signed_txs[node_pkh] = response
+                signed_signatures[node_pkh] = response
 
         print_status(
-            "Signed Tx Responses",
-            f"Received {len(signed_txs)} node signatures",
+            "Signed Tx Signatures",
+            f"Received {len(signed_signatures)} node signatures",
             success=True,
         )
-        return signed_txs
+        return signed_signatures
 
     def attach_tx_signatures(
         self,
-        transaction: Transaction,
-        signed_txs: dict[str, Transaction],
+        original_tx: Transaction,
+        node_messages: dict[str, SignedOracleNodeMessage],
+        signed_signatures: dict[str, str],
     ) -> None:
-        """Attach collected signatures to transaction."""
-        if transaction.transaction_witness_set is None:
-            transaction.transaction_witness_set = TransactionWitnessSet()
+        """Attach collected signatures to transaction.
 
-        try:
-            transaction.transaction_witness_set.vkey_witnesses = []
+        Args:
+            original_tx: The transaction to attach signatures to
+            node_messages: Dict of node VKH -> SignedOracleNodeMessage (for verification keys)
+            signed_signatures: Dict of node VKH -> signature hex string
+        """
+        if original_tx.transaction_witness_set is None:
+            original_tx.transaction_witness_set = TransactionWitnessSet()
+        if original_tx.transaction_witness_set.vkey_witnesses is None:
+            original_tx.transaction_witness_set.vkey_witnesses = []
 
-            for vkh, signed_tx in signed_txs.items():
-                if (
-                    signed_tx.transaction_witness_set
-                    and isinstance(
-                        signed_tx.transaction_witness_set.vkey_witnesses, list
-                    )
-                    and signed_tx.transaction_witness_set.vkey_witnesses
-                ):
+        for node_vkh, signature_hex in signed_signatures.items():
+            try:
+                if node_vkh not in node_messages:
+                    logger.warning(f"No node message found for node {node_vkh[:8]}")
+                    continue
 
-                    raw_witness = signed_tx.transaction_witness_set.vkey_witnesses[0]
+                # Get verification key from the node message
+                node_message = node_messages[node_vkh]
+                verification_key = node_message.verification_key
 
-                    if vkh in self.node_simulators:
-                        node = self.node_simulators[vkh].node
-                        witness = VerificationKeyWitness(
-                            vkey=node.verification_key, signature=raw_witness
-                        )
-                        transaction.transaction_witness_set.vkey_witnesses.append(
-                            witness
-                        )
+                # Convert hex signature to bytes
+                signature_bytes = bytes.fromhex(signature_hex)
 
-            print_status(
-                "Witnesses Attachment",
-                f"{len(transaction.transaction_witness_set.vkey_witnesses)} successfully attached",
-                success=True,
-            )
+                # Create and add witness
+                witness = VerificationKeyWitness(
+                    vkey=verification_key, signature=signature_bytes
+                )
+                original_tx.transaction_witness_set.vkey_witnesses.append(witness)
+                logger.info(f"Attached witness for node {node_vkh[:8]}")
 
-        except Exception as e:
-            logger.error(f"Error attaching signatures: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Failed to create witness for node {node_vkh[:8]}: {e}")
+                raise
+
+        witness_count = len(original_tx.transaction_witness_set.vkey_witnesses)
+        print_status(
+            "Witnesses Attachment",
+            f"{witness_count} witnesses successfully attached",
+            success=True,
+        )
 
     async def submit_odv(
         self,
         node_messages: dict[str, SignedOracleNodeMessage],
         change_address: Address | None = None,
     ) -> OdvResult:
-        """Submit ODV transaction."""
+        """Submit ODV transaction.
+
+        Args:
+            node_messages: Dictionary of node messages
+            change_address: Optional change address
+
+        Returns:
+            OdvResult with transaction and outputs
+        """
         print_progress("Loading transaction keys")
         signing_key, default_change = self.ctx.load_keys()
         change_address = change_address or default_change
 
         print_progress("Building aggregate message from node responses")
+
         validity_window = self.ctx.tx_manager.calculate_validity_window(
             self.config.odv_validity_length
         )
-        aggregate_message = build_aggregate_message(
-            list(node_messages.values()), validity_window.current_time
-        )
+
+        aggregate_message = build_aggregate_message(list(node_messages.values()))
         print_status(
             "Aggregate Message",
-            f"Created with {aggregate_message.node_feeds_count} feeds and {aggregate_message.timestamp} timestamp",
+            f"Created with {aggregate_message.node_feeds_count} feeds "
+            f"(validity window timestamp: {validity_window.current_time})",
             success=True,
         )
 
@@ -202,10 +217,12 @@ class OracleSimulator:
         )
 
         print_progress("Collecting node signatures for transaction")
-        signed_txs = await self.collect_signatures(node_messages, result.transaction)
+        node_signatures = await self.collect_signatures(
+            node_messages, result.transaction
+        )
 
         print_progress("Adding node signatures to transaction")
-        self.attach_tx_signatures(result.transaction, signed_txs)
+        self.attach_tx_signatures(result.transaction, node_messages, node_signatures)
 
         print_progress("Submitting final ODV transaction")
         status, _ = await self.ctx.tx_manager.sign_and_submit(
@@ -220,33 +237,6 @@ class OracleSimulator:
         print_status("ODV Submission", "Completed successfully", success=True)
         return result
 
-    async def process_rewards(
-        self,
-        change_address: Address | None = None,
-    ) -> RewardsResult:
-        """Process rewards for pending ODV."""
-        print_progress("Loading keys for rewards processing")
-        signing_key, default_change = self.ctx.load_keys()
-        change_address = change_address or default_change
-
-        print_progress("Building rewards transaction")
-        result = await self.tx_builder.build_rewards_tx(
-            signing_key=signing_key,
-            change_address=change_address,
-        )
-
-        print_progress("Submitting rewards transaction")
-        status, _ = await self.ctx.tx_manager.sign_and_submit(
-            result.transaction,
-            [signing_key],
-            wait_confirmation=True,
-        )
-
-        if status != "confirmed":
-            raise RuntimeError(f"Rewards transaction failed: {status}")
-        print_status("Rewards Processing", "Completed successfully", success=True)
-        return result
-
     async def run_simulation(self) -> SimulationResult:
         """Run complete oracle simulation."""
         try:
@@ -256,16 +246,17 @@ class OracleSimulator:
             if not node_messages:
                 raise RuntimeError("No valid node responses received")
 
+            for i, msg in enumerate(node_messages.values()):
+                print(
+                    f"Node {i} feed: {msg.message.feed}, timestamp: {msg.message.timestamp}"
+                )
+                print(
+                    f"Node {i} VKH: {msg.verification_key.hash().to_primitive().hex()}"
+                )
+
             print_header("Phase 2: ODV Transaction")
             odv_result = await self.submit_odv(node_messages)
 
-            print_progress(
-                f"\nWaiting {self.config.simulation.wait_time} milliseconds before processing rewards"
-            )
-            await asyncio.sleep(self.config.simulation.wait_time / 1000)
-
-            print_progress("Phase 3: Rewards Processing")
-            rewards = await self.process_rewards()
             print_status("Simulation", "Completed successfully", success=True)
             return SimulationResult(
                 nodes=self.nodes,
@@ -278,7 +269,6 @@ class OracleSimulator:
                     for i, msg in enumerate(node_messages.values())
                 },
                 odv_tx=str(odv_result.transaction.id),
-                rewards=rewards,
             )
 
         except Exception as e:

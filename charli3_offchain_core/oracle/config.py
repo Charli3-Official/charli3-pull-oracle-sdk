@@ -47,9 +47,7 @@ class OracleDeploymentConfig:
             self.disallow_less_than_four_nodes = self.network == Network.MAINNET
 
         if self.reward_count < MINIMUM_REWARD_COUNT:
-            raise ValueError(
-                f"Reward count must be at least {MINIMUM_REWARD_COUNT}"
-            )
+            raise ValueError(f"Reward count must be at least {MINIMUM_REWARD_COUNT}")
 
         if self.aggstate_count < MINIMUM_AGGSTATE_COUNT:
             raise ValueError(

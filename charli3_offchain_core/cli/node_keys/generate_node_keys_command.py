@@ -145,8 +145,8 @@ def print_yaml_config(nodes_config: NodesConfig) -> None:
             "required_signatures": nodes_config.required_signatures,
             "nodes": [
                 {
-                    "feed_vkh": node.feed_vkh,
-                    "payment_vkh": node.payment_vkh,
+                    "feed_vkh": node,
+                    # "payment_vkh": node.payment_vkh,
                 }
                 for node in nodes_config.nodes
             ],
@@ -234,8 +234,8 @@ async def generate_node_keys_command(
         click.echo(f"- Required signatures: {nodes_config.required_signatures}")
         for i, node in enumerate(nodes_config.nodes):
             click.echo(f"\nNode {i}:")
-            click.echo(f"  Feed VKH: {node.feed_vkh}")
-            click.echo(f"  Payment VKH: {node.payment_vkh}")
+            click.echo(f"  Feed VKH: {node}")
+            # click.echo(f"  Payment VKH: {node.payment_vkh}")
 
         if print_yaml:
             print_yaml_config(nodes_config)

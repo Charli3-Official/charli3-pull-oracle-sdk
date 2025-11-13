@@ -1,14 +1,13 @@
 """Oracle datums for the oracle core contract"""
 
 from dataclasses import dataclass
-from typing import Any, Dict, Union, List
+from typing import Any, Dict, Union
 
-from pycardano import PlutusData, VerificationKeyHash, IndefiniteList
+from pycardano import IndefiniteList, PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.base import (
     AssetName,
     FeedVkh,
-    PaymentVkh,
     PolicyId,
     PosixTime,
     PosixTimeDiff,
@@ -80,6 +79,16 @@ class Nodes(PlutusData):
     def length(self) -> int:
         return len(self.node_map)
 
+    def as_mapping(self) -> dict:
+        """Convert node_map to a dict mapping each VKH to itself.
+
+        This is used by reward distribution logic which expects a dict.
+
+        Returns:
+            dict: Dictionary mapping each VerificationKeyHash to itself
+        """
+        return {vkh: vkh for vkh in self.node_map}
+
 
 @dataclass
 class RewardPrices(PlutusData):
@@ -103,7 +112,6 @@ class Asset(PlutusData):
     name: AssetName
 
     def __post_init__(self) -> None:
-        # Add validation for policy_id length (28 bytes for Cardano)
         if len(self.policy_id) != 28:
             raise ValueError("Policy ID must be 28 bytes long")
 
@@ -147,7 +155,6 @@ class OracleConfiguration(PlutusData):
     fee_token: Union[SomeAsset, NoDatum]
 
     def __post_init__(self) -> None:
-        # Add validation for platform_auth_nft length (28 bytes for Cardano)
         if len(self.platform_auth_nft) != 28:
             raise ValueError("Policy ID must be 28 bytes long")
 
@@ -173,9 +180,9 @@ class OracleSettingsDatum(PlutusData):
     aggregation_liveness_period: PosixTimeDiff
     time_uncertainty_aggregation: PosixTimeDiff
     time_uncertainty_platform: PosixTimeDiff
-    iqr_fence_multiplier: int  # Percent
-    median_divergency_factor: int  # Permille
-    utxo_size_safety_buffer: int  # Lovelace
+    iqr_fence_multiplier: int
+    median_divergency_factor: int
+    utxo_size_safety_buffer: int
     pause_period_started_at: Union[SomePosixTime, NoDatum]
 
     def __post_init__(self) -> None:
@@ -341,7 +348,6 @@ class OracleDatum(PlutusData):
     1. AggState
     2. OracleSettingsVariant
     3. RewardAccountVariant
-    4. RewardTransportVariant
     """
 
     variant: AggState | RewardAccountVariant | OracleSettingsVariant
