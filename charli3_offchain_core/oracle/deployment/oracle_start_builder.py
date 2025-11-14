@@ -278,7 +278,7 @@ class OracleStartBuilder:
     ) -> OracleSettingsVariant:
         """Create settings datum with initial configuration."""
         oracle_settings = OracleSettingsDatum(
-            nodes=Nodes(nodes_config.nodes),
+            nodes=Nodes(node_map=IndefiniteList(nodes_config.nodes)),
             required_node_signatures_count=nodes_config.required_signatures,
             fee_info=rate_config,
             aggregation_liveness_period=aggregation_liveness_period,
@@ -413,7 +413,6 @@ class OracleStartBuilder:
             contracts = OracleContracts.from_blueprint(output_path)
 
             os.remove(output_file)
-            os.remove("aiken.toml")
 
             return contracts.mint
         finally:

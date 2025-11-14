@@ -9,6 +9,7 @@ from pycardano import (
     Address,
     AssetName,
     ExtendedSigningKey,
+    IndefiniteList,
     MultiAsset,
     NativeScript,
     Network,
@@ -389,11 +390,11 @@ def modified_core_utxo(
 ) -> UTxO:
     modified_utxo = deepcopy(core_utxo)
 
-    filtered_nodes = {
-        feed: payment
-        for feed, payment in core_datum.nodes.items()
-        if payment not in nodes_to_remove
-    }
+    filtered_nodes = IndefiniteList([
+        vkh
+        for vkh in core_datum.nodes
+        if vkh not in nodes_to_remove
+    ])
 
     new_datum = replace(
         core_datum,
@@ -632,9 +633,7 @@ def show_nodes_update_info(
         print_required_signatories(new_signatures_count, is_current=False)
         display_signature_change(current_signatures, new_signatures_count)
 
-    has_valid_nodes = all_valid_nodes(
-        config_nodes_to_remove, in_core_datum.nodes
-    )
+    has_valid_nodes = all_valid_nodes(config_nodes_to_remove, in_core_datum.nodes)
 
     # Validate and return result
     return print_validation_rules(
@@ -655,9 +654,7 @@ def get_added_nodes(
     but not in in_datum (i.e., newly added nodes).
     """
     added_feed_vkhs = set(out_datum.nodes) - set(in_datum.nodes)
-    return {
-        feed_vkh: out_datum.nodes[feed_vkh] for feed_vkh in added_feed_vkhs
-    }
+    return {feed_vkh: out_datum.nodes[feed_vkh] for feed_vkh in added_feed_vkhs}
 
 
 def get_remove_nodes(
@@ -669,9 +666,7 @@ def get_remove_nodes(
     but not in out_datum (i.e., nodes being removed).
     """
     removed_feed_vkhs = set(in_datum.nodes) - set(out_datum.nodes)
-    return {
-        feed_vkh: in_datum.nodes[feed_vkh] for feed_vkh in removed_feed_vkhs
-    }
+    return {feed_vkh: in_datum.nodes[feed_vkh] for feed_vkh in removed_feed_vkhs}
 
 
 def all_valid_nodes(

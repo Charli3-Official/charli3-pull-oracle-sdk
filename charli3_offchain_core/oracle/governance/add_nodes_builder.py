@@ -7,6 +7,7 @@ import click
 from pycardano import (
     Address,
     ExtendedSigningKey,
+    IndefiniteList,
     NativeScript,
     PaymentSigningKey,
     Redeemer,
@@ -137,19 +138,13 @@ def modified_core_utxo(
     new_nodes_config: NodesConfig,
 ) -> UTxO:
 
-    new_nodes_dict = {
-        node.feed_vkh: node.payment_vkh for node in new_nodes_config.nodes
-    }
-    existing_nodes_dict = in_core_datum.nodes
-
-    merged_nodes = dict(
-        sorted(
-            {**new_nodes_dict, **existing_nodes_dict}.items(), key=lambda x: str(x[0])
-        )
-    )
+    # Merge new nodes with existing nodes
+    existing_vkhs = set(in_core_datum.nodes)
+    new_vkhs = set(new_nodes_config.nodes)
+    merged_vkhs = sorted(existing_vkhs | new_vkhs, key=lambda x: x.payload)
 
     new_datum = OracleSettingsDatum(
-        nodes=Nodes(node_map=merged_nodes),
+        nodes=Nodes(node_map=IndefiniteList(merged_vkhs)),
         required_node_signatures_count=new_nodes_config.required_signatures,
         fee_info=in_core_datum.fee_info,
         aggregation_liveness_period=in_core_datum.aggregation_liveness_period,
@@ -173,24 +168,18 @@ def modified_reward_utxo(
     in_core_datum: OracleSettingsDatum,
 ) -> UTxO:
 
-    new_nodes_dict = {
-        node.feed_vkh: node.payment_vkh for node in new_nodes_config.nodes
-    }
-    existing_nodes_dict = in_core_datum.nodes
+    # Merge new nodes with existing nodes
+    existing_vkhs = list(in_core_datum.nodes)
+    new_vkhs = list(new_nodes_config.nodes)
+    merged_vkhs = sorted(set(existing_vkhs) | set(new_vkhs), key=lambda x: x.payload)
 
-    merged_nodes = {
-        **new_nodes_dict,
-        **existing_nodes_dict,
-    }  # Existing nodes take precedence
-
-    sorted_feed_vkhs = sorted(merged_nodes.keys(), key=str)
+    sorted_feed_vkhs = merged_vkhs
 
     out_distribution = []
 
     for feed_vkh in sorted_feed_vkhs:
-        if feed_vkh in existing_nodes_dict:
-
-            old_position = sorted(existing_nodes_dict.keys(), key=str).index(feed_vkh)
+        if feed_vkh in existing_vkhs:
+            old_position = existing_vkhs.index(feed_vkh)
             reward = (
                 in_reward_datum.nodes_to_rewards[old_position]
                 if old_position < len(in_reward_datum.nodes_to_rewards)

@@ -288,6 +288,7 @@ def apply_spend_params_with_aiken_compiler(
     output_file = "tmp_oracle_manager.json"
     validator_name = "oracle_manager"
 
+    print(blueprint_path.name)
     original_dir = os.getcwd()
     try:
         project_root = Path(__file__).parent.parent.parent
@@ -335,7 +336,6 @@ def apply_spend_params_with_aiken_compiler(
         contracts = OracleContracts.from_blueprint(output_path)
 
         os.remove(output_file)
-        os.remove("aiken.toml")
 
         return contracts
     finally:

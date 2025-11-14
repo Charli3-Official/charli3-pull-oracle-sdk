@@ -7,7 +7,7 @@ import click
 
 from charli3_offchain_core.oracle.aggregate.builder import (
     OracleTransactionBuilder,
-    RewardsResult,
+    # RewardsResult,
 )
 from charli3_offchain_core.oracle.exceptions import TransactionError
 
@@ -71,8 +71,7 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             change_address=change_address,
         )
 
-        # Print preview
-        print_rewards_preview(result)
+        # print_rewards_preview(result)
 
         if not click.confirm("\nProceed with reward processing?"):
             raise click.Abort()
@@ -87,8 +86,8 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
         click.echo(f"Transaction ID: {result.transaction.id}")
 
         # Display detailed results
-        if tx_status == "confirmed":
-            _print_reward_summary(result)
+        # if tx_status == "confirmed":
+        #     _print_reward_summary(result)
 
     except TransactionError as e:
         if "No pending transport UTxOs found" in str(e.__cause__):
@@ -103,54 +102,54 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
         raise click.ClickException(str(e)) from e
 
 
-def print_rewards_preview(result: RewardsResult) -> None:
-    """Print detailed preview of rewards processing."""
-    click.echo("\nReward Processing Details:")
-    click.echo("-" * 40)
+# def print_rewards_preview(result: RewardsResult) -> None:
+#     """Print detailed preview of rewards processing."""
+#     click.echo("\nReward Processing Details:")
+#     click.echo("-" * 40)
 
-    # Print summary
-    click.echo(f"Transports to Process: {len(result.pending_transports)}")
-    total_rewards = sum(result.reward_distribution.values())
-    click.echo(f"Total Node Rewards: {total_rewards}")
-    click.echo(f"Platform Fee: {result.platform_fee}")
-    click.echo(f"Total Distribution: {result.total_distributed}")
+#     # Print summary
+#     click.echo(f"Transports to Process: {len(result.pending_transports)}")
+#     total_rewards = sum(result.reward_distribution.values())
+#     click.echo(f"Total Node Rewards: {total_rewards}")
+#     click.echo(f"Platform Fee: {result.platform_fee}")
+#     click.echo(f"Total Distribution: {result.total_distributed}")
 
-    # Print transport details
-    for detail in result.transport_details:
-        click.echo(f"\nTransport {detail['tx_hash']}#{detail['index']}:")
-        click.echo(f"  Oracle Feed: {detail['oracle_feed']}")
-        click.echo(f"  Participating Nodes: {detail['node_count']}")
-        click.echo(f"  Reward per Node: {detail['reward_per_node']}")
-        click.echo(f"  Platform Fee: {detail['platform_fee']}")
-        click.echo(f"  Total Amount: {detail['total_amount']}")
-        click.echo(f"  Timestamp: {detail['timestamp']}")
+#     # Print transport details
+#     for detail in result.transport_details:
+#         click.echo(f"\nTransport {detail['tx_hash']}#{detail['index']}:")
+#         click.echo(f"  Oracle Feed: {detail['oracle_feed']}")
+#         click.echo(f"  Participating Nodes: {detail['node_count']}")
+#         click.echo(f"  Reward per Node: {detail['reward_per_node']}")
+#         click.echo(f"  Platform Fee: {detail['platform_fee']}")
+#         click.echo(f"  Total Amount: {detail['total_amount']}")
+#         click.echo(f"  Timestamp: {detail['timestamp']}")
 
-        if logger.isEnabledFor(logging.DEBUG):
-            click.echo("\n  Node Feeds:")
-            for node_vkh, feed in detail["node_feeds"].items():
-                click.echo(f"    {node_vkh}: {feed}")
+#         if logger.isEnabledFor(logging.DEBUG):
+#             click.echo("\n  Node Feeds:")
+#             for node_vkh, feed in detail["node_feeds"].items():
+#                 click.echo(f"    {node_vkh}: {feed}")
 
-    # Print reward distribution
-    if result.reward_distribution:
-        click.echo("\nProposed Reward Distribution:")
-        click.echo("-" * 40)
-        for node_vkh, amount in result.reward_distribution.items():
-            click.echo(f"  {node_vkh}: {amount}")
+#     # Print reward distribution
+#     if result.reward_distribution:
+#         click.echo("\nProposed Reward Distribution:")
+#         click.echo("-" * 40)
+#         for node_vkh, amount in result.reward_distribution.items():
+#             click.echo(f"  {node_vkh}: {amount}")
 
 
-def _print_reward_summary(result: RewardsResult) -> None:
-    """Print final reward processing summary."""
-    click.echo("\nReward Processing Summary:")
-    click.echo("-" * 40)
-    click.echo(f"Transaction ID: {result.transaction.id}")
-    click.echo(f"Processed Transports: {len(result.pending_transports)}")
+# def _print_reward_summary(result: RewardsResult) -> None:
+#     """Print final reward processing summary."""
+#     click.echo("\nReward Processing Summary:")
+#     click.echo("-" * 40)
+#     click.echo(f"Transaction ID: {result.transaction.id}")
+#     click.echo(f"Processed Transports: {len(result.pending_transports)}")
 
-    total_rewards = sum(result.reward_distribution.values())
-    click.echo(f"Total Node Rewards: {total_rewards}")
-    click.echo(f"Platform Fee: {result.platform_fee}")
-    click.echo(f"Total Distribution: {result.total_distributed}")
+#     total_rewards = sum(result.reward_distribution.values())
+#     click.echo(f"Total Node Rewards: {total_rewards}")
+#     click.echo(f"Platform Fee: {result.platform_fee}")
+#     click.echo(f"Total Distribution: {result.total_distributed}")
 
-    if result.reward_distribution:
-        click.echo("\nFinal Reward Distribution:")
-        for node_vkh, amount in result.reward_distribution.items():
-            click.echo(f"  {node_vkh}: {amount}")
+#     if result.reward_distribution:
+#         click.echo("\nFinal Reward Distribution:")
+#         for node_vkh, amount in result.reward_distribution.items():
+#             click.echo(f"  {node_vkh}: {amount}")
