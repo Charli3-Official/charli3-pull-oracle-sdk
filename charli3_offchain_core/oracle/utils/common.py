@@ -141,7 +141,15 @@ def build_aggregate_message(nodes_messages: list) -> AggregateMessage:
 
         feeds[vkh] = msg.message.feed
 
-    sorted_feeds = dict(sorted(feeds.items(), key=lambda x: x[0].payload))
+    # Sort by feed value first, then by VKH when feed values are equal
+    # This ensures nodes with same feed value are in ascending VKH order
+    sorted_feeds = dict(sorted(feeds.items(), key=lambda x: (x[1], x[0].payload)))
+
+    print("\n=== SORTED FEEDS ORDER ===")
+    for i, (vkh, feed) in enumerate(sorted_feeds.items()):
+        print(f"{i+1}. {vkh.to_primitive().hex()}: feed={feed}")
+    print("=========================\n")
+
     return AggregateMessage(node_feeds_sorted_by_feed=sorted_feeds)
 
 

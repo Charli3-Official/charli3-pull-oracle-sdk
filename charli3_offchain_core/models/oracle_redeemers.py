@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pycardano import PlutusData, VerificationKeyHash
+from pycardano import IndefiniteList, PlutusData, VerificationKeyHash
 
 
 ### Oracle NFTs
@@ -64,23 +64,26 @@ class OdvAggregate(OracleRedeemer):
     """User sends on demand validation request with oracle nodes message."""
 
     CONSTR_ID = 0
-    message: dict
+    message: dict  # Map of VKH -> feed_value (serializes as CBOR Map)
 
     @classmethod
     def create_sorted(
         cls, node_feeds: dict[VerificationKeyHash, int]
     ) -> "OdvAggregate":
-        """Create OdvAggregate with properly sorted message.
+        """Create OdvAggregate with message in the provided order.
 
         Args:
             node_feeds: Dictionary mapping VerificationKeyHash to node feed values
+                       MUST be pre-sorted by (feed_value, VKH) as required by validator
 
         Returns:
-            OdvAggregate with message sorted by VerificationKeyHash bytes (ascending)
+            OdvAggregate with message as dict (serializes as CBOR Map)
+
+        WARNING: PyCardano may use canonical CBOR encoding which re-orders Map keys.
         """
-        sorted_items = sorted(node_feeds.items(), key=lambda x: x[0].payload)
-        sorted_dict = dict(sorted_items)
-        return cls(message=sorted_dict)
+        # Keep as dict - pycardano serializes this as CBOR Map
+        # Python 3.7+ dicts preserve insertion order, but CBOR canonical encoding may re-order
+        return cls(message=node_feeds)
 
 
 class OdvAggregateMsg(OracleRedeemer):
