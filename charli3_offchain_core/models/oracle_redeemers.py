@@ -64,7 +64,7 @@ class OdvAggregate(OracleRedeemer):
     """User sends on demand validation request with oracle nodes message."""
 
     CONSTR_ID = 0
-    message: dict  # Map of VKH -> feed_value (serializes as CBOR Map)
+    message: dict  # Map of VKH -> feed_value
 
     @classmethod
     def create_sorted(
@@ -79,10 +79,7 @@ class OdvAggregate(OracleRedeemer):
         Returns:
             OdvAggregate with message as dict (serializes as CBOR Map)
 
-        WARNING: PyCardano may use canonical CBOR encoding which re-orders Map keys.
         """
-        # Keep as dict - pycardano serializes this as CBOR Map
-        # Python 3.7+ dicts preserve insertion order, but CBOR canonical encoding may re-order
         return cls(message=node_feeds)
 
 

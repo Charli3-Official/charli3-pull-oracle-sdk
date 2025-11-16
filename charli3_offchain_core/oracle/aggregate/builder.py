@@ -168,7 +168,9 @@ class OracleTransactionBuilder:
             # sorted by (feed_value, VKH) from build_aggregate_message
             sorted_feeds = message.node_feeds_sorted_by_feed
 
-            logger.debug("Using %d node feeds in correct (feed, VKH) order", len(sorted_feeds))
+            logger.debug(
+                "Using %d node feeds in correct (feed, VKH) order", len(sorted_feeds)
+            )
 
             # Calculate median using sorted feeds
             feeds = list(sorted_feeds.values())
@@ -232,7 +234,7 @@ class OracleTransactionBuilder:
             except Exception as e:
                 logger.warning("Failed to dump redeemer CBOR: %s", e)
 
-            required_signers = list(sorted_feeds.keys())
+            required_signers = sorted(sorted_feeds.keys(), key=lambda vkh: vkh.payload)
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
                     (account, account_redeemer, script_utxo),
