@@ -3,15 +3,15 @@
 import math
 from fractions import Fraction
 
-from pycardano import Asset, AssetName, IndefiniteList, ScriptHash, UTxO, Value
+from pycardano import Asset, AssetName, ScriptHash, UTxO, Value
 
-from charli3_offchain_core.models.base import FeedVkh, NodeFeed, PaymentVkh
+from charli3_offchain_core.models.base import FeedVkh, NodeFeed
 from charli3_offchain_core.models.oracle_datums import (
     IQR_APPLICABILITY_THRESHOLD,
     AggState,
+    Nodes,
     RewardAccountDatum,
     RewardPrices,
-    Nodes,
 )
 from charli3_offchain_core.models.oracle_redeemers import AggregateMessage
 from charli3_offchain_core.oracle.exceptions import DistributionError
@@ -96,7 +96,9 @@ def calculate_reward_distribution(
             out_distribution[feed_vkh] = in_amount + reward
 
         # Sort by VKH in ascending order before returning
-        sorted_distribution = dict(sorted(out_distribution.items(), key=lambda x: x[0].payload))
+        sorted_distribution = dict(
+            sorted(out_distribution.items(), key=lambda x: x[0].payload)
+        )
         return sorted_distribution
 
     except Exception as e:

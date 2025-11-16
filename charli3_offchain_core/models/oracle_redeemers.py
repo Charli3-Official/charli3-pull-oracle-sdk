@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pycardano import IndefiniteList, PlutusData, VerificationKeyHash
+from pycardano import PlutusData, VerificationKeyHash
 
 
 ### Oracle NFTs
