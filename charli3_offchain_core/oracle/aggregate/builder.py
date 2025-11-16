@@ -218,11 +218,6 @@ class OracleTransactionBuilder:
                 liveness_period=settings_datum.aggregation_liveness_period,
             )
 
-            print("\n=== SORTED_FEEDS ORDER BEFORE REDEEMER ===")
-            for i, (vkh, feed) in enumerate(sorted_feeds.items(), 1):
-                print(f"{i}. {vkh.to_primitive().hex()}: feed={feed}")
-            print("==========================================\n")
-
             account_redeemer = Redeemer(OdvAggregate.create_sorted(sorted_feeds))
             aggstate_redeemer = Redeemer(OdvAggregateMsg())
 
@@ -351,9 +346,6 @@ class OracleTransactionBuilder:
         Returns:
             TransactionOutput: The final transaction output
         """
-        print("KKKKKKKKKKKKKKKKKK")
-        print(nodes_to_rewards)
-        print("KKKKKKKKKKKKKKKKKK")
         return TransactionOutput(
             address=self.script_address,
             amount=account_output.amount,
