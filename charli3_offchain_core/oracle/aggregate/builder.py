@@ -124,9 +124,10 @@ class OracleTransactionBuilder:
                     f"  {node_vkh.to_primitive().hex()} ({len(node_vkh.payload)} bytes)"
                 )
 
-            print("\nYour message nodes:")
-            for vkh in message.node_feeds_sorted_by_feed.keys():
-                print(f"  {vkh.to_primitive().hex()} ({len(vkh.payload)} bytes)")
+            print("\nYour message nodes (in order they will be sent):")
+            for i, vkh in enumerate(message.node_feeds_sorted_by_feed.keys(), 1):
+                feed_value = message.node_feeds_sorted_by_feed[vkh]
+                print(f"  {i}. {vkh.to_primitive().hex()} (feed={feed_value})")
             script_utxo = common.get_reference_script_utxo(utxos)
 
             reference_inputs = {settings_utxo}
@@ -163,14 +164,13 @@ class OracleTransactionBuilder:
                 utxos, self.policy_id, current_time
             )
 
-            sorted_feeds = dict(
-                sorted(
-                    message.node_feeds_sorted_by_feed.items(),
-                    key=lambda x: x[0].payload,
-                )
-            )
+            # Don't re-sort! message.node_feeds_sorted_by_feed is already correctly
+            # sorted by (feed_value, VKH) from build_aggregate_message
+            sorted_feeds = message.node_feeds_sorted_by_feed
 
-            logger.debug("Sorted %d node feeds by VKH bytes", len(sorted_feeds))
+            logger.debug(
+                "Using %d node feeds in correct (feed, VKH) order", len(sorted_feeds)
+            )
 
             # Calculate median using sorted feeds
             feeds = list(sorted_feeds.values())
@@ -229,7 +229,7 @@ class OracleTransactionBuilder:
             except Exception as e:
                 logger.warning("Failed to dump redeemer CBOR: %s", e)
 
-            required_signers = list(sorted_feeds.keys())
+            required_signers = sorted(sorted_feeds.keys(), key=lambda vkh: vkh.payload)
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
                     (account, account_redeemer, script_utxo),
@@ -267,7 +267,13 @@ class OracleTransactionBuilder:
     ) -> TransactionOutput:
         account_output = deepcopy(account.output)
         self._add_reward_to_output(account_output, minimum_fee)
-        in_distribution = account_output.datum.datum.nodes_to_rewards
+
+        # Ensure in_distribution is sorted by VKH in ascending order
+        raw_in_distribution = account_output.datum.datum.nodes_to_rewards
+        in_distribution = dict(
+            sorted(raw_in_distribution.items(), key=lambda x: x[0].payload)
+        )
+
         message = AggregateMessage(node_feeds_sorted_by_feed=sorted_node_feeds)
 
         out_nodes_to_rewards = rewards.calculate_reward_distribution(
