@@ -3,12 +3,13 @@
 import math
 from fractions import Fraction
 
-from pycardano import Asset, AssetName, IndefiniteList, ScriptHash, UTxO, Value
+from pycardano import Asset, AssetName, ScriptHash, UTxO, Value
 
-from charli3_offchain_core.models.base import FeedVkh, NodeFeed, PaymentVkh
+from charli3_offchain_core.models.base import FeedVkh, NodeFeed
 from charli3_offchain_core.models.oracle_datums import (
     IQR_APPLICABILITY_THRESHOLD,
     AggState,
+    Nodes,
     RewardAccountDatum,
     RewardPrices,
 )
@@ -75,9 +76,7 @@ def calculate_reward_distribution(
     median_divergency_factor: int,
     in_distribution: dict[FeedVkh, int],
     node_reward_price: int,
-    nodes: (
-        dict[FeedVkh, PaymentVkh] | list[FeedVkh] | IndefiniteList
-    ),  # Accept multiple types
+    nodes: Nodes,
 ) -> dict[FeedVkh, int]:
     """Calculate node rewards from transport UTxOs."""
     try:
@@ -89,17 +88,18 @@ def calculate_reward_distribution(
             median_divergency_factor,
         )
 
-        if hasattr(nodes, "keys"):
-            node_keys = set(nodes.keys())
-        else:
-            node_keys = set(nodes)
+        node_keys = set(nodes)
 
         for feed_vkh in node_keys:
             reward = node_reward_price if feed_vkh in rewarded_feed_nodes else 0
             in_amount = in_distribution.get(feed_vkh, 0)
             out_distribution[feed_vkh] = in_amount + reward
 
-        return out_distribution
+        # Sort by VKH in ascending order before returning
+        sorted_distribution = dict(
+            sorted(out_distribution.items(), key=lambda x: x[0].payload)
+        )
+        return sorted_distribution
 
     except Exception as e:
         raise DistributionError(f"Failed to calculate node rewards: {e}") from e

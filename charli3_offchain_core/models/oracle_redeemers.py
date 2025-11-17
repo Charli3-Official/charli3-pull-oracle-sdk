@@ -57,23 +57,23 @@ class OdvAggregate(PlutusData):
     """User sends on demand validation request with oracle nodes message"""
 
     CONSTR_ID = 0
-    message: dict
+    message: dict  # Map of VKH -> feed_value
 
     @classmethod
     def create_sorted(
         cls, node_feeds: dict[VerificationKeyHash, int]
     ) -> "OdvAggregate":
-        """Create OdvAggregate with properly sorted message.
+        """Create OdvAggregate with message in the provided order.
 
         Args:
             node_feeds: Dictionary mapping VerificationKeyHash to node feed values
+                       MUST be pre-sorted by (feed_value, VKH) as required by validator
 
         Returns:
-            OdvAggregate with message sorted by VerificationKeyHash bytes (ascending)
+            OdvAggregate with message as dict (serializes as CBOR Map)
+
         """
-        sorted_items = sorted(node_feeds.items(), key=lambda x: x[0].payload)
-        sorted_dict = dict(sorted_items)
-        return cls(message=sorted_dict)
+        return cls(message=node_feeds)
 
 
 @dataclass
