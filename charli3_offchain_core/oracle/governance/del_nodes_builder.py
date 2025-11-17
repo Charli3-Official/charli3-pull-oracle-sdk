@@ -48,10 +48,6 @@ from charli3_offchain_core.models.oracle_redeemers import (
     DelNodes,
     ManageSettings,
 )
-from charli3_offchain_core.models.reward_escrow import (
-    PlutusFullAddress,
-    RewardEscrowDatum,
-)
 from charli3_offchain_core.oracle.exceptions import (
     RemoveNodesCancelled,
     RemoveNodesValidationError,
@@ -93,11 +89,6 @@ class DelNodesBuilder(BaseBuilder):
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         new_nodes_config: NodesConfig,
         reward_token: NoDatum | SomeAsset,
-        network: Network,
-        auth_policy_id: PolicyId,
-        reward_dismissing_period_length: PosixTimeDiff,
-        reward_issuer_addr: Address | None = None,
-        escrow_address: Address | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
         test_mode: bool = False,
     ) -> GovernanceTxResult:
@@ -115,11 +106,6 @@ class DelNodesBuilder(BaseBuilder):
             signing_key: Key used to sign the transaction (can be payment or extended)
             new_nodes_config: New configuration for the nodes being updated
             reward_token: Token used for rewards, can be NoDatum or a specific asset
-            network: Network configuration (testnet/mainnet) for the transaction
-            auth_policy_id: Policy ID used for authorization validation
-            reward_dismissing_period_length: Time period after which rewards can be dismissed
-            reward_issuer_addr: Optional address authorized to issue rewards
-            escrow_address: Optional address for holding funds in escrow
             required_signers: Optional list of additional verification key hashes required to sign
 
         Returns:
