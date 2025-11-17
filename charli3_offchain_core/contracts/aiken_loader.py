@@ -130,4 +130,3 @@ class OracleContracts:
         return self.mint.apply_parameter(
             NftsConfiguration(tx_ref, config, oracle_script_hash.to_primitive())
         )
-

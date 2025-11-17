@@ -7,7 +7,7 @@ import pytest
 from pycardano import Address, ScriptHash, UTxO
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
-from charli3_offchain_core.cli.config.nodes import  NodesConfig
+from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.cli.governance import setup_management_from_config
 from charli3_offchain_core.contracts.aiken_loader import RewardEscrowContract
 from charli3_offchain_core.models.oracle_datums import (

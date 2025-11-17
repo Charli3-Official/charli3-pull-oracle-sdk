@@ -7,24 +7,17 @@ from dataclasses import dataclass, replace
 import click
 from pycardano import (
     Address,
-    AssetName,
     ExtendedSigningKey,
     IndefiniteList,
-    MultiAsset,
     NativeScript,
-    Network,
     PaymentSigningKey,
     Redeemer,
     ScriptHash,
-    TransactionOutput,
     UTxO,
-    Value,
     VerificationKeyHash,
 )
 from tabulate import tabulate
 
-from charli3_offchain_core.blockchain.chain_query import ChainQuery
-from charli3_offchain_core.blockchain.network import NetworkConfig
 from charli3_offchain_core.cli.config.formatting import (
     CliColor,
     print_confirmation_message_prompt,
@@ -33,15 +26,11 @@ from charli3_offchain_core.cli.config.formatting import (
     print_title,
 )
 from charli3_offchain_core.cli.config.nodes import NodesConfig
-from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     Nodes,
     OracleSettingsDatum,
     OracleSettingsVariant,
-    PolicyId,
-    RewardAccountDatum,
-    RewardAccountVariant,
     SomeAsset,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
@@ -58,7 +47,6 @@ from charli3_offchain_core.oracle.utils.common import (
 )
 from charli3_offchain_core.oracle.utils.state_checks import (
     get_oracle_settings_by_policy_id,
-    get_reward_account_by_policy_id,
 )
 
 from .base import BaseBuilder, GovernanceTxResult
