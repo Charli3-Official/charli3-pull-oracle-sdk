@@ -143,19 +143,11 @@ def print_yaml_config(nodes_config: NodesConfig) -> None:
     config = {
         "nodes": {
             "required_signatures": nodes_config.required_signatures,
-            "nodes": [
-                {
-                    "feed_vkh": node.feed_vkh,
-                    "payment_vkh": node.payment_vkh,
-                }
-                for node in nodes_config.nodes
-            ],
+            "feed_vkh": [str(node) for node in nodes_config.nodes],
         }
     }
 
-    click.echo("\nConfiguration in YAML format:")
-    click.echo("---")
-    click.echo(yaml.dump(config, default_flow_style=False))
+    click.echo(yaml.dump(config, default_flow_style=False, indent=4))
 
 
 @click.command()
@@ -214,6 +206,9 @@ async def generate_node_keys_command(
             count=count,
         )
 
+        # Save node keys (creates the directory)
+        save_node_keys(nodes, output_dir)
+
         # Override required signatures if specified
         if required_sigs is not None:
             if required_sigs > count:
@@ -223,19 +218,13 @@ async def generate_node_keys_command(
             with (output_dir / "required_signatures").open("w") as f:
                 f.write(str(required_sigs))
 
-        # Save node keys
-        save_node_keys(nodes, output_dir)
-
         # Verify we can load the config
         nodes_config = load_nodes_config(output_dir)
 
         click.echo(f"\nSuccessfully generated {count} node configurations:")
         click.echo(f"- Keys saved to: {output_dir}")
         click.echo(f"- Required signatures: {nodes_config.required_signatures}")
-        for i, node in enumerate(nodes_config.nodes):
-            click.echo(f"\nNode {i}:")
-            click.echo(f"  Feed VKH: {node.feed_vkh}")
-            click.echo(f"  Payment VKH: {node.payment_vkh}")
+        click.echo()
 
         if print_yaml:
             print_yaml_config(nodes_config)

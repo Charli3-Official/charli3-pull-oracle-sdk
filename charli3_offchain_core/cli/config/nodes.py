@@ -17,7 +17,7 @@ class NodesConfig:
         """Create from dict with 'required_signatures' and 'nodes' as list of hex strings."""
         try:
             required = int(data["required_signatures"])
-            nodes_hex = data["nodes"]
+            nodes_hex = data["feed_vkh"]
 
             if not isinstance(nodes_hex, list):
                 raise ValueError("'nodes' must be a list of hex strings")

@@ -13,8 +13,6 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
-from charli3_offchain_core.models.base import PosixTime
-from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     SomeAsset,
@@ -92,40 +90,26 @@ def get_reference_script_utxo(utxos: list[UTxO]) -> UTxO:
     raise ValidationError("No reference script UTxO found")
 
 
-def build_aggregate_message(
-    nodes_messages: list[SignedOracleNodeMessage],
-    timestamp: PosixTime,
-) -> AggregateMessage:
-    """Build aggregate message from node messages and timestamp.
-
-    Args:
-        nodes_messages: List of signed oracle messages from nodes
-        timestamp: POSIX timestamp in milliseconds
-
-    Returns:
-        AggregateMessage with sorted feeds and provided timestamp
-
-    Raises:
-        ValueError: If no messages provided or signature validation fails
-    """
+def build_aggregate_message(nodes_messages: list) -> AggregateMessage:
     if not nodes_messages:
         raise ValueError("No node messages provided")
 
     for msg in nodes_messages:
-        try:
-            msg.validate_signature()
-        except ValueError as e:
-            raise ValueError(f"Invalid message signature: {e}") from e
+        msg.validate_signature()
 
-    feeds = {msg.verification_key.hash(): msg.message.feed for msg in nodes_messages}
+    feeds = {}
+    for msg in nodes_messages:
+        vkh = msg.verification_key.hash()
+        print(f"VKH length: {len(vkh.payload)} bytes (should be 28)")
+        print(f"VKH hex: {vkh.to_primitive().hex()}")
+
+        feeds[vkh] = msg.message.feed
+
+    # Sort ONLY by feed value (ascending order)
+    # VKH order does not matter - check_nodes_multisig handles unsorted VKHs
 
     sorted_feeds = dict(sorted(feeds.items(), key=lambda x: x[1]))
-
-    return AggregateMessage(
-        node_feeds_sorted_by_feed=sorted_feeds,
-        node_feeds_count=len(sorted_feeds),
-        timestamp=timestamp,
-    )
+    return AggregateMessage(node_feeds_sorted_by_feed=sorted_feeds)
 
 
 def try_parse_datum(datum: RawPlutusData, datum_class: Any) -> Any:

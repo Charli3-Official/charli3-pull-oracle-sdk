@@ -415,7 +415,6 @@ class OracleStartBuilder:
             contracts = OracleContracts.from_blueprint(output_path)
 
             os.remove(output_file)
-            os.remove("aiken.toml")
 
             return contracts.mint
         finally:

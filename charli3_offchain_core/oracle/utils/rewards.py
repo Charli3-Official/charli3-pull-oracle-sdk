@@ -5,10 +5,11 @@ from fractions import Fraction
 
 from pycardano import Asset, AssetName, ScriptHash, UTxO, Value
 
-from charli3_offchain_core.models.base import FeedVkh, NodeFeed, PaymentVkh
+from charli3_offchain_core.models.base import FeedVkh, NodeFeed
 from charli3_offchain_core.models.oracle_datums import (
     IQR_APPLICABILITY_THRESHOLD,
     AggState,
+    Nodes,
     RewardAccountDatum,
     RewardPrices,
 )
@@ -40,13 +41,42 @@ def scale_rewards_by_rate(reward_prices: RewardPrices, rate_datum: AggState) -> 
     reward_prices.platform_fee = convert_reward(reward_prices.platform_fee)
 
 
+# def calculate_reward_distribution(
+#     message: AggregateMessage,
+#     iqr_fence_multiplier: int,
+#     median_divergency_factor: int,
+#     in_distribution: dict[FeedVkh, int],
+#     node_reward_price: int,
+#     nodes: dict[FeedVkh, PaymentVkh],
+# ) -> dict[FeedVkh, int]:
+#     """Calculate node rewards from transport UTxOs."""
+#     try:
+#         out_distribution = {}
+
+#         rewarded_feed_nodes = consensus_by_iqr_and_divergency(
+#             message.node_feeds_sorted_by_feed,
+#             iqr_fence_multiplier,
+#             median_divergency_factor,
+#         )
+
+#         for feed_vkh in set(nodes.keys()):
+#             reward = node_reward_price if feed_vkh in rewarded_feed_nodes else 0
+#             in_amount = in_distribution.get(feed_vkh, 0)
+#             out_distribution[feed_vkh] = in_amount + reward
+
+#         return out_distribution
+
+#     except Exception as e:
+#         raise DistributionError(f"Failed to calculate node rewards: {e}") from e
+
+
 def calculate_reward_distribution(
     message: AggregateMessage,
     iqr_fence_multiplier: int,
     median_divergency_factor: int,
     in_distribution: dict[FeedVkh, int],
     node_reward_price: int,
-    nodes: dict[FeedVkh, PaymentVkh],
+    nodes: Nodes,
 ) -> dict[FeedVkh, int]:
     """Calculate node rewards from transport UTxOs."""
     try:
@@ -58,12 +88,18 @@ def calculate_reward_distribution(
             median_divergency_factor,
         )
 
-        for feed_vkh in set(nodes.keys()):
+        node_keys = set(nodes)
+
+        for feed_vkh in node_keys:
             reward = node_reward_price if feed_vkh in rewarded_feed_nodes else 0
             in_amount = in_distribution.get(feed_vkh, 0)
             out_distribution[feed_vkh] = in_amount + reward
 
-        return out_distribution
+        # Sort by VKH in ascending order before returning
+        sorted_distribution = dict(
+            sorted(out_distribution.items(), key=lambda x: x[0].payload)
+        )
+        return sorted_distribution
 
     except Exception as e:
         raise DistributionError(f"Failed to calculate node rewards: {e}") from e
