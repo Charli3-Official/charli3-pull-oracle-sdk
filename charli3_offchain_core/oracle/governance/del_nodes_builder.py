@@ -189,7 +189,7 @@ def modified_core_utxo(
     modified_utxo = deepcopy(core_utxo)
 
     filtered_nodes = IndefiniteList(
-        [vkh for vkh in core_datum.nodes if vkh not in nodes_to_remove]
+        [vkh for vkh in core_datum.nodes.node_map if vkh not in nodes_to_remove]
     )
 
     new_datum = replace(
@@ -359,7 +359,7 @@ def show_nodes_update_info(
 
     # Validate and return result
     return print_validation_rules(
-        new_node_count=len(out_core_datum.nodes),
+        new_node_count=len(out_core_datum.nodes.node_map),
         new_signatures_count=new_signatures_count,
         has_deleted_nodes=bool(nodes_to_remove),
         has_added_nodes=bool(added_nodes),
@@ -375,7 +375,7 @@ def get_added_nodes(
     Returns a feed VKH list for nodes present in out_datum
     but not in in_datum (i.e., newly added nodes).
     """
-    added_feed_vkhs = set(out_datum.nodes) - set(in_datum.nodes)
+    added_feed_vkhs = set(out_datum.nodes.node_map) - set(in_datum.nodes.node_map)
     return list(added_feed_vkhs)
 
 
@@ -387,16 +387,16 @@ def get_remove_nodes(
     Returns a feed VKH list for nodes present in in_datum
     but not in out_datum (i.e., nodes being removed).
     """
-    removed_feed_vkhs = set(in_datum.nodes) - set(out_datum.nodes)
+    removed_feed_vkhs = set(in_datum.nodes.node_map) - set(out_datum.nodes.node_map)
     return list(removed_feed_vkhs)
 
 
 def all_valid_nodes(
     nodes_to_remove: set[VerificationKeyHash],
-    in_nodes: list[VerificationKeyHash],
+    in_nodes: Nodes,
 ) -> bool:
     """Verify that all nodes marked for removal exist in the current contract"""
-    return all(node in in_nodes for node in nodes_to_remove)
+    return all(node in in_nodes.node_map for node in nodes_to_remove)
 
 
 def display_signature_change(current: int, new: int) -> None:
