@@ -45,6 +45,10 @@ class Nodes(PlutusData):
     CONSTR_ID = 0
     node_map: IndefiniteList
 
+    def __post_init__(self) -> None:
+        if len(self.node_map) != len({*self.node_map}):
+            raise ValueError("Oracle Nodes Validator: Must not have duplicates")
+
     @classmethod
     def from_primitive(cls, data: Any) -> "Nodes":
         """Create Nodes from primitive data."""
@@ -56,7 +60,10 @@ class Nodes(PlutusData):
 
         return cls(
             node_map=IndefiniteList(
-                [VerificationKeyHash.from_primitive(k) for k in data]
+                sorted(
+                    [VerificationKeyHash.from_primitive(k) for k in data],
+                    key=lambda x: x.payload,
+                )
             )
         )
 
