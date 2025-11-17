@@ -91,7 +91,11 @@ async def add_nodes(config: Path, output: Path | None) -> None:
             )
             return
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Add nodes failed: {result.error}")
+            if result.error:
+                raise click.ClickException(
+                    f"Add nodes failed: {result.error}"
+                ) from result.error
+            raise click.ClickException("Add nodes failed: unknown error")
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt(
