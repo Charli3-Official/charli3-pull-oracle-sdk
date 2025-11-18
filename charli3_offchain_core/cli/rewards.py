@@ -147,9 +147,15 @@ async def node_collect(config: Path, output: Path | None) -> None:
     type=click.Path(path_type=Path),
     help="Output file for transaction data",
 )
+@click.option(
+    "--batch-size",
+    type=int,
+    default=10,
+    help="Maximum number of reward accounts to process",
+)
 @click.command()
 @async_command
-async def platform_collect(config: Path, output: Path | None) -> None:
+async def platform_collect(config: Path, output: Path | None, batch_size: int) -> None:
     """Platform Withdrawal Transaction"""
     try:
         print_header("Platform Collect")
@@ -191,6 +197,7 @@ async def platform_collect(config: Path, output: Path | None) -> None:
             tokens=management_config.tokens,
             loaded_key=loaded_key,
             network=management_config.network.network,
+            max_inputs=batch_size,
         )
 
         if isinstance(result.error, NoRewardsAvailableError):

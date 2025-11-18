@@ -148,6 +148,7 @@ class RewardOrchestrator:
         tokens: TokenConfig,
         loaded_key: LoadedKeys,
         network: Network,
+        max_inputs: int = 10,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> RewardOrchestratorResult:
         if not oracle_policy:
@@ -169,6 +170,7 @@ class RewardOrchestrator:
             reward_token=reward_token,
             loaded_key=loaded_key,
             network=network,
+            max_inputs=max_inputs,
             required_signers=required_signers,
         )
 
