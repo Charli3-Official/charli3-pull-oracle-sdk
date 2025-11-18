@@ -257,7 +257,7 @@ class DismissRewardsBuilder(BaseBuilder):
             logger.info(f"Start tx validation: {start_slot}")
             # Check if the dismissal period has passed and the validity start transaction can begin.
             if expiration_time <= start_slot:
-                logger.info(f"Account is eligible for dismissal")
+                logger.info("Account is eligible for dismissal")
                 eligible_accounts.append(account)
             else:
                 logger.info(
