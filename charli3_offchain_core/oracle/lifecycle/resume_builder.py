@@ -18,12 +18,12 @@ from charli3_offchain_core.models.oracle_datums import (
 )
 from charli3_offchain_core.models.oracle_redeemers import ManageSettings, ResumeOracle
 from charli3_offchain_core.oracle.exceptions import PauseError
+from charli3_offchain_core.oracle.lifecycle.base import BaseBuilder, LifecycleTxResult
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
     get_oracle_settings_by_policy_id,
     is_oracle_paused,
 )
-from charli3_offchain_core.oracle.lifecycle.base import BaseBuilder, LifecycleTxResult
 
 
 class ResumeBuilder(BaseBuilder):

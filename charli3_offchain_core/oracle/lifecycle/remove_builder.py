@@ -18,17 +18,18 @@ from charli3_offchain_core.blockchain.transactions import (
     TransactionConfig,
     TransactionManager,
 )
-from charli3_offchain_core.models.oracle_redeemers import Burn, ManageSettings, RemoveOracle
+from charli3_offchain_core.models.oracle_redeemers import (
+    Burn,
+    ManageSettings,
+    RemoveOracle,
+)
 from charli3_offchain_core.oracle.exceptions import PauseError
-from charli3_offchain_core.oracle.utils.asset_checks import filter_utxos_by_token_name
+from charli3_offchain_core.oracle.lifecycle.base import BaseBuilder, LifecycleTxResult
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
-    filter_valid_agg_states,
     get_oracle_settings_by_policy_id,
-    get_reward_account_by_policy_id,
     is_oracle_paused,
 )
-from charli3_offchain_core.oracle.lifecycle.base import BaseBuilder, LifecycleTxResult
 
 
 class RemoveBuilder(BaseBuilder):
@@ -72,10 +73,8 @@ class RemoveBuilder(BaseBuilder):
                 settings_datum.time_uncertainty_platform // 1000
             )
 
-            burn_value = (
-                self._calculate_burn_tokens(
-                    policy_hash=policy_hash,
-                )
+            burn_value = self._calculate_burn_tokens(
+                policy_hash=policy_hash,
             )
 
             ada_collect_utxo = self._collect_ada_from_utxos(
@@ -88,7 +87,6 @@ class RemoveBuilder(BaseBuilder):
             script_inputs = [
                 (settings_utxo, self.REDEEMER, script_utxo),
                 (platform_utxo, None, platform_script),
-
             ]
 
             tx = await self.tx_manager.build_script_tx(
