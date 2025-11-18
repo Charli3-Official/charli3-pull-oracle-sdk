@@ -1,5 +1,8 @@
 """Remove oracle transaction builder."""
 
+import time
+from datetime import datetime, timezone
+
 from pycardano import (
     Address,
     Asset,
@@ -18,12 +21,13 @@ from charli3_offchain_core.blockchain.transactions import (
     TransactionConfig,
     TransactionManager,
 )
+from charli3_offchain_core.models.oracle_datums import OracleSettingsDatum
 from charli3_offchain_core.models.oracle_redeemers import (
     Burn,
     ManageSettings,
     RemoveOracle,
 )
-from charli3_offchain_core.oracle.exceptions import PauseError
+from charli3_offchain_core.oracle.exceptions import PauseError, ValidationError
 from charli3_offchain_core.oracle.lifecycle.base import BaseBuilder, LifecycleTxResult
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
@@ -52,6 +56,7 @@ class RemoveBuilder(BaseBuilder):
         utxos: list[UTxO],
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        pause_period: int,
     ) -> LifecycleTxResult:
         """Build transaction to remove oracle and burn NFTs."""
         self.tx_manager = TransactionManager(
@@ -61,8 +66,7 @@ class RemoveBuilder(BaseBuilder):
             settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
                 utxos, policy_hash
             )
-            if not is_oracle_paused(settings_datum):
-                raise PauseError("Pause period has not started")
+            self._raise_for_status(settings_datum, pause_period)
 
             script_utxo = get_reference_script_utxo(utxos)
             minting_script = await self.chain_query.get_plutus_script(policy_hash)
@@ -105,7 +109,7 @@ class RemoveBuilder(BaseBuilder):
             return LifecycleTxResult(transaction=tx, settings_utxo=None)
 
         except Exception as e:
-            raise ValueError(f"Failed to build remove transaction: {e}") from e
+            raise ValidationError(f"Failed to build remove transaction: {e}") from e
 
     def _calculate_burn_tokens(
         self,
@@ -125,3 +129,16 @@ class RemoveBuilder(BaseBuilder):
         """return utxo output with collected amount from all to be consumed utxos."""
         ada_collected = sum(utxo.output.amount.coin for utxo in utxos)
         return TransactionOutput(address=change_address, amount=ada_collected)
+
+    def _raise_for_status(
+        self, settings_datum: OracleSettingsDatum, pause_period: int
+    ) -> None:
+        """Raise errors if conditions for removal not met"""
+        if not is_oracle_paused(settings_datum):
+            raise PauseError("Pause period has not started")
+        current_ts = round(time.time_ns() * 1e-6)
+        pause_period_end = settings_datum.pause_period_started_at.value + pause_period
+        if current_ts < pause_period_end:
+            raise PauseError(
+                f"Pause period has not ended yet, wait till {datetime.fromtimestamp(pause_period_end, tz=timezone.utc)}"
+            )

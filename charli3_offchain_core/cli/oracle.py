@@ -414,7 +414,7 @@ async def remove(config: Path, output: Path | None) -> None:
         print_header("Oracle Remove")
         (
             management_config,
-            _,
+            oracle_conf,
             loaded_key,
             oracle_addresses,
             chain_query,
@@ -446,6 +446,7 @@ async def remove(config: Path, output: Path | None) -> None:
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
             signing_key=loaded_key.payment_sk,
+            pause_period=oracle_conf.pause_period_length,
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:
