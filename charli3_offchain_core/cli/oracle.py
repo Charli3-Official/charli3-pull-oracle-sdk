@@ -403,23 +403,18 @@ async def resume(config: Path, output: Path | None) -> None:
     help="Path to deployment configuration YAML",
 )
 @click.option(
-    "--pair-count",
-    type=int,
-    help="Number of AggregationState + RewardTransport token pairs to burn (defaults to all available pairs)",
-)
-@click.option(
     "--output",
     type=click.Path(path_type=Path),
     help="Output file for transaction data",
 )
 @async_command
-async def remove(config: Path, output: Path | None, pair_count: int | None) -> None:
+async def remove(config: Path, output: Path | None) -> None:
     """Remove an oracle instance permanently using configuration file."""
     try:
         print_header("Oracle Remove")
         (
             management_config,
-            _,
+            oracle_conf,
             loaded_key,
             oracle_addresses,
             chain_query,
@@ -449,13 +444,15 @@ async def remove(config: Path, output: Path | None, pair_count: int | None) -> N
             oracle_policy=management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
-            pair_count=pair_count,
             change_address=oracle_addresses.admin_address,
             signing_key=loaded_key.payment_sk,
+            pause_period=oracle_conf.pause_period_length,
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Remove failed: {result.error}")
+            raise click.ClickException(
+                f"Remove failed: {result.error}"
+            ) from result.error
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt(
