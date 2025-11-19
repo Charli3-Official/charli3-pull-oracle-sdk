@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 )
 @click.command()
 @async_command
-async def add_nodes(config: Path, output: Path | None) -> None:
+async def add_nodes(config: Path, output: Path | None) -> None:  # noqa: C901
     """Add the nodes' PKHs to an Oracle instance"""
     try:
         print_header("Add Nodes")
@@ -327,10 +327,16 @@ async def update_settings(config: Path, output: Path | None) -> None:
     help="Path to deployment configuration YAML",
 )
 @click.option(
-    "--amount",
+    "--reward-accounts",
     type=int,
-    required=True,
-    help="Amount of UTxO pairs to scale up",
+    default=0,
+    help="Number of RewardAccount UTxOs to create (default 0)",
+)
+@click.option(
+    "--aggstates",
+    type=int,
+    default=0,
+    help="Number of AggState UTxOs to create (default 0)",
 )
 @click.option(
     "--output",
@@ -339,9 +345,16 @@ async def update_settings(config: Path, output: Path | None) -> None:
 )
 @click.command()
 @async_command
-async def scale_up(config: Path, amount: int, output: Path | None) -> None:
-    """Scale up ODV capacity by creating new UTxO pairs"""
+async def scale_up(
+    config: Path, reward_accounts: int, aggstates: int, output: Path | None
+) -> None:
+    """Scale up ODV capacity by creating new RewardAccount and/or AggState UTxOs"""
     try:
+        if reward_accounts == 0 and aggstates == 0:
+            raise click.ClickException(
+                "At least one of --reward-accounts or --aggstates must be specified"
+            )
+
         print_header("Scale Up ODV Capacity")
 
         (
@@ -376,7 +389,8 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
 
         result = await orchestrator.scale_up_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
-            scale_amount=amount,
+            reward_account_count=reward_accounts,
+            aggstate_count=aggstates,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
@@ -430,10 +444,16 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
     help="Path to deployment configuration YAML",
 )
 @click.option(
-    "--amount",
+    "--reward-accounts",
     type=int,
-    required=True,
-    help="Amount of UTxO pairs to scale down",
+    default=0,
+    help="Number of empty RewardAccount UTxOs to remove (default 0)",
+)
+@click.option(
+    "--aggstates",
+    type=int,
+    default=0,
+    help="Number of empty/expired AggState UTxOs to remove (default 0)",
 )
 @click.option(
     "--output",
@@ -442,9 +462,16 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
 )
 @click.command()
 @async_command
-async def scale_down(config: Path, amount: int, output: Path | None) -> None:
-    """Scale down ODV capacity by removing UTxO pairs"""
+async def scale_down(
+    config: Path, reward_accounts: int, aggstates: int, output: Path | None
+) -> None:
+    """Scale down ODV capacity by removing RewardAccount and/or AggState UTxOs"""
     try:
+        if reward_accounts == 0 and aggstates == 0:
+            raise click.ClickException(
+                "At least one of --reward-accounts or --aggstates must be specified"
+            )
+
         print_header("Scale Down ODV Capacity")
 
         (
@@ -479,7 +506,8 @@ async def scale_down(config: Path, amount: int, output: Path | None) -> None:
 
         result = await orchestrator.scale_down_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
-            scale_amount=amount,
+            reward_account_count=reward_accounts,
+            aggstate_count=aggstates,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,

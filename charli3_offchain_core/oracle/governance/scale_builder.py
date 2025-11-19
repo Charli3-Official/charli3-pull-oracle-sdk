@@ -22,6 +22,8 @@ from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     PriceData,
+    RewardAccountDatum,
+    RewardAccountVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     Scale,
@@ -36,6 +38,7 @@ from charli3_offchain_core.oracle.utils.asset_checks import (
 )
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
+    convert_cbor_to_reward_accounts,
     filter_valid_agg_states,
     get_oracle_settings_by_policy_id,
 )
@@ -48,7 +51,7 @@ class ScaleUpResult:
     """Result of scale up transaction."""
 
     transaction: Transaction
-    new_transport_outputs: list[TransactionOutput]
+    new_reward_account_outputs: list[TransactionOutput]
     new_agg_state_outputs: list[TransactionOutput]
 
 
@@ -57,7 +60,7 @@ class ScaleDownResult:
     """Result of scale down transaction."""
 
     transaction: Transaction
-    removed_transport_utxos: list[UTxO]
+    removed_reward_account_utxos: list[UTxO]
     removed_agg_state_utxos: list[UTxO]
 
 
@@ -92,13 +95,35 @@ class OracleScaleBuilder:
         utxos: list[UTxO],
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        scale_amount: int,
+        reward_account_count: int = 0,
+        aggstate_count: int = 0,
         required_signers: list[VerificationKeyHash] | None = None,
-        transport_name: str = "C3RT",
+        reward_account_name: str = "C3RA",
         aggstate_name: str = "C3AS",
     ) -> ScaleUpResult:
-        """Build transaction to increase ODV capacity by creating new UTxO pairs."""
+        """Build transaction to increase ODV capacity by creating new RewardAccount and/or AggState UTxOs.
+
+        Args:
+            platform_utxo: Platform authentication UTxO
+            platform_script: Platform script
+            utxos: All script UTxOs
+            change_address: Address for change
+            signing_key: Signing key
+            reward_account_count: Number of RewardAccount UTxOs to create (default 0)
+            aggstate_count: Number of AggState UTxOs to create (default 0)
+            required_signers: Optional required signers
+            reward_account_name: Token name for reward accounts (default "C3RA")
+            aggstate_name: Token name for agg states (default "C3AS")
+
+        Returns:
+            ScaleUpResult with transaction and created outputs
+        """
         try:
+            if reward_account_count == 0 and aggstate_count == 0:
+                raise ValueError(
+                    "At least one of reward_account_count or aggstate_count must be greater than 0"
+                )
+
             script_utxo = get_reference_script_utxo(utxos)
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
@@ -109,22 +134,28 @@ class OracleScaleBuilder:
             logger.info(
                 "Using standard min ADA amount: %s lovelace", self._standard_min_ada
             )
+            logger.info(
+                "Creating %d RewardAccount and %d AggState UTxOs",
+                reward_account_count,
+                aggstate_count,
+            )
 
-            # Create new empty outputs
-            new_transport_outputs = [
+            # Create new empty RewardAccount outputs
+            new_reward_account_outputs = [
                 TransactionOutput(
                     address=self.script_address,
                     amount=Value(
                         coin=self._standard_min_ada,
                         multi_asset=MultiAsset.from_primitive(
-                            {self.policy_id.payload: {transport_name.encode(): 1}}
+                            {self.policy_id.payload: {reward_account_name.encode(): 1}}
                         ),
                     ),
-                    datum=RewardTransportVariant(datum=NoRewards()),  # noqa: F821
+                    datum=RewardAccountVariant(datum=RewardAccountDatum.empty()),
                 )
-                for _ in range(scale_amount)
+                for _ in range(reward_account_count)
             ]
 
+            # Create new empty AggState outputs
             new_agg_state_outputs = [
                 TransactionOutput(
                     address=self.script_address,
@@ -136,17 +167,21 @@ class OracleScaleBuilder:
                     ),
                     datum=AggState(price_data=PriceData.empty()),
                 )
-                for _ in range(scale_amount)
+                for _ in range(aggstate_count)
             ]
 
             # Get minting script
             nft_minting_script = await self.tx_manager.chain_query.get_plutus_script(
                 self.policy_id
             )
-            mint_map = {
-                transport_name.encode(): scale_amount,
-                aggstate_name.encode(): scale_amount,
-            }
+
+            # Build mint map with only non-zero amounts
+            mint_map = {}
+            if reward_account_count > 0:
+                mint_map[reward_account_name.encode()] = reward_account_count
+            if aggstate_count > 0:
+                mint_map[aggstate_name.encode()] = aggstate_count
+
             mint = MultiAsset.from_primitive({self.policy_id.payload: mint_map})
 
             # Build transaction using TransactionManager
@@ -155,7 +190,7 @@ class OracleScaleBuilder:
                     (platform_utxo, None, platform_script),
                 ],
                 script_outputs=[
-                    *new_transport_outputs,
+                    *new_reward_account_outputs,
                     *new_agg_state_outputs,
                     platform_utxo.output,
                 ],
@@ -170,28 +205,50 @@ class OracleScaleBuilder:
 
             return ScaleUpResult(
                 transaction=tx,
-                new_transport_outputs=new_transport_outputs,
+                new_reward_account_outputs=new_reward_account_outputs,
                 new_agg_state_outputs=new_agg_state_outputs,
             )
 
         except Exception as e:
             raise ScalingError(f"Failed to build scale up transaction: {e}") from e
 
-    async def build_scale_down_tx(
+    async def build_scale_down_tx(  # noqa: C901
         self,
         platform_utxo: UTxO,
         platform_script: NativeScript,
         utxos: list[UTxO],
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        scale_amount: int,
+        reward_account_count: int = 0,
+        aggstate_count: int = 0,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> ScaleDownResult:
-        """Build transaction to decrease ODV capacity by removing UTxO pairs."""
+        """Build transaction to decrease ODV capacity by removing RewardAccount and/or AggState UTxOs.
+
+        Args:
+            platform_utxo: Platform authentication UTxO
+            platform_script: Platform script
+            utxos: All script UTxOs
+            change_address: Address for change
+            signing_key: Signing key
+            reward_account_count: Number of empty RewardAccount UTxOs to remove (default 0)
+            aggstate_count: Number of empty/expired AggState UTxOs to remove (default 0)
+            required_signers: Optional required signers
+
+        Returns:
+            ScaleDownResult with transaction and removed UTxOs
+        """
         try:
+            if reward_account_count == 0 and aggstate_count == 0:
+                raise ValueError(
+                    "At least one of reward_account_count or aggstate_count must be greater than 0"
+                )
+
             # Log initial parameters
             logger.info(
-                "Starting scale down transaction build for %d pairs", scale_amount
+                "Starting scale down transaction build for %d RewardAccount(s) and %d AggState(s)",
+                reward_account_count,
+                aggstate_count,
             )
 
             script_utxo = get_reference_script_utxo(utxos)
@@ -200,21 +257,28 @@ class OracleScaleBuilder:
                 raise ValueError("Reference script UTxO not found")
 
             # Find and log UTxOs to remove
-            transport_utxos = filter_utxos_by_token_name(utxos, self.policy_id, "C3RT")
+            reward_account_utxos = filter_utxos_by_token_name(
+                utxos, self.policy_id, "C3RA"
+            )
             aggstate_utxos = filter_utxos_by_token_name(utxos, self.policy_id, "C3AS")
 
             logger.info(
-                "Found UTxOs - Total Transports: %d, Total AggStates: %d",
-                len(transport_utxos),
+                "Found UTxOs - Total RewardAccounts: %d, Total AggStates: %d",
+                len(reward_account_utxos),
                 len(aggstate_utxos),
             )
 
-            # Get empty transports with detailed logging
-            empty_transports = filter_empty_transports(transport_utxos)  # noqa: F821
+            # Convert CBOR to RewardAccountDatum objects and get empty reward accounts
+            all_reward_accounts = convert_cbor_to_reward_accounts(reward_account_utxos)
+            empty_reward_accounts = [
+                utxo
+                for utxo in all_reward_accounts
+                if utxo.output.datum.datum.length == 0
+            ]
             logger.info(
-                "Empty transport UTxOs found: %d/%d",
-                len(empty_transports),
-                scale_amount,
+                "Empty RewardAccount UTxOs found: %d (need %d)",
+                len(empty_reward_accounts),
+                reward_account_count,
             )
 
             # Get current time for filtering expired agg states
@@ -225,32 +289,52 @@ class OracleScaleBuilder:
                 aggstate_utxos, current_time
             )
             logger.info(
-                "Valid AggState UTxOs found: %d/%d",
+                "Valid AggState UTxOs found: %d (need %d)",
                 len(expired_and_empty_agg_states),
-                scale_amount,
+                aggstate_count,
             )
 
+            # Validate we have enough UTxOs to remove
             if (
-                len(empty_transports) < scale_amount
-                or len(expired_and_empty_agg_states) < scale_amount
+                reward_account_count > 0
+                and len(empty_reward_accounts) < reward_account_count
             ):
                 error_msg = (
-                    f"Insufficient empty UTxOs for scaling down. "
-                    f"Found {len(empty_transports)} empty transports and "
-                    f"{len(expired_and_empty_agg_states)} expired agg states, "
-                    f"need {scale_amount} of each"
+                    f"Insufficient empty RewardAccount UTxOs for scaling down. "
+                    f"Found {len(empty_reward_accounts)} empty reward accounts, "
+                    f"need {reward_account_count}"
+                )
+                logger.error(error_msg)
+                raise StateValidationError(error_msg)
+
+            if (
+                aggstate_count > 0
+                and len(expired_and_empty_agg_states) < aggstate_count
+            ):
+                error_msg = (
+                    f"Insufficient empty/expired AggState UTxOs for scaling down. "
+                    f"Found {len(expired_and_empty_agg_states)} valid agg states, "
+                    f"need {aggstate_count}"
                 )
                 logger.error(error_msg)
                 raise StateValidationError(error_msg)
 
             # Select the specific UTxOs to use
-            selected_transports = empty_transports[:scale_amount]
-            selected_agg_states = expired_and_empty_agg_states[:scale_amount]
+            selected_reward_accounts = (
+                empty_reward_accounts[:reward_account_count]
+                if reward_account_count > 0
+                else []
+            )
+            selected_agg_states = (
+                expired_and_empty_agg_states[:aggstate_count]
+                if aggstate_count > 0
+                else []
+            )
 
-            # Log transport UTxO details
-            for i, utxo in enumerate(selected_transports):
+            # Log RewardAccount UTxO details
+            for i, utxo in enumerate(selected_reward_accounts):
                 logger.info(
-                    "Transport UTxO %d: TxId=%s#%d",
+                    "RewardAccount UTxO %d: TxId=%s#%d (empty)",
                     i + 1,
                     utxo.input.transaction_id,
                     utxo.input.index,
@@ -281,17 +365,19 @@ class OracleScaleBuilder:
                 self.policy_id
             )
 
-            # Add burning
-            mint_map = {
-                b"C3RT": -scale_amount,
-                b"C3AS": -scale_amount,
-            }
+            # Build burn map with only non-zero amounts (negative for burning)
+            mint_map = {}
+            if reward_account_count > 0:
+                mint_map[b"C3RA"] = -reward_account_count
+            if aggstate_count > 0:
+                mint_map[b"C3AS"] = -aggstate_count
+
             mint = MultiAsset.from_primitive({self.policy_id.payload: mint_map})
 
             # Prepare script inputs
             script_inputs = [
                 (utxo, Redeemer(ScaleDown()), script_utxo)
-                for utxo in (selected_transports + selected_agg_states)
+                for utxo in (selected_reward_accounts + selected_agg_states)
             ]
 
             # Build transaction using TransactionManager
@@ -308,7 +394,7 @@ class OracleScaleBuilder:
 
             return ScaleDownResult(
                 transaction=tx,
-                removed_transport_utxos=selected_transports,
+                removed_reward_account_utxos=selected_reward_accounts,
                 removed_agg_state_utxos=selected_agg_states,
             )
 

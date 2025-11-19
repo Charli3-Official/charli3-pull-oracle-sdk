@@ -231,14 +231,29 @@ class GovernanceOrchestrator:
     async def scale_up_oracle(
         self,
         oracle_policy: str,
-        scale_amount: int,
         platform_utxo: UTxO,
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        reward_account_count: int = 0,
+        aggstate_count: int = 0,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> GovernanceResult:
-        """Scale up oracle ODV capacity."""
+        """Scale up oracle ODV capacity.
+
+        Args:
+            oracle_policy: Oracle policy ID
+            platform_utxo: Platform authentication UTxO
+            platform_script: Platform script
+            change_address: Address for change
+            signing_key: Signing key
+            reward_account_count: Number of RewardAccount UTxOs to create (default 0)
+            aggstate_count: Number of AggState UTxOs to create (default 0)
+            required_signers: Optional required signers
+
+        Returns:
+            GovernanceResult with transaction status
+        """
         try:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
             policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
@@ -256,7 +271,8 @@ class GovernanceOrchestrator:
                     utxos=utxos,
                     change_address=change_address,
                     signing_key=signing_key,
-                    scale_amount=scale_amount,
+                    reward_account_count=reward_account_count,
+                    aggstate_count=aggstate_count,
                     required_signers=required_signers,
                 )
             except (ScalingError, StateValidationError) as e:
@@ -277,16 +293,35 @@ class GovernanceOrchestrator:
     async def scale_down_oracle(
         self,
         oracle_policy: str,
-        scale_amount: int,
         platform_utxo: UTxO,
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        reward_account_count: int = 0,
+        aggstate_count: int = 0,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> GovernanceResult:
-        """Scale down oracle ODV capacity."""
+        """Scale down oracle ODV capacity.
+
+        Args:
+            oracle_policy: Oracle policy ID
+            platform_utxo: Platform authentication UTxO
+            platform_script: Platform script
+            change_address: Address for change
+            signing_key: Signing key
+            reward_account_count: Number of empty RewardAccount UTxOs to remove (default 0)
+            aggstate_count: Number of empty/expired AggState UTxOs to remove (default 0)
+            required_signers: Optional required signers
+
+        Returns:
+            GovernanceResult with transaction status
+        """
         try:
-            logger.info("Starting scale down operation for %d UTxO pairs", scale_amount)
+            logger.info(
+                "Starting scale down operation for %d RewardAccount(s) and %d AggState(s)",
+                reward_account_count,
+                aggstate_count,
+            )
 
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
             logger.info("Found %d total UTxOs at script address", len(utxos))
@@ -306,13 +341,14 @@ class GovernanceOrchestrator:
                     utxos=utxos,
                     change_address=change_address,
                     signing_key=signing_key,
-                    scale_amount=scale_amount,
+                    reward_account_count=reward_account_count,
+                    aggstate_count=aggstate_count,
                     required_signers=required_signers,
                 )
                 logger.info(
                     "Successfully built scale down transaction. "
-                    "Removed %d transport UTxOs and %d AggState UTxOs",
-                    len(result.removed_transport_utxos),
+                    "Removed %d RewardAccount UTxOs and %d AggState UTxOs",
+                    len(result.removed_reward_account_utxos),
                     len(result.removed_agg_state_utxos),
                 )
 
