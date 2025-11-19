@@ -450,7 +450,9 @@ async def remove(config: Path, output: Path | None) -> None:
         )
 
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Remove failed: {result.error}")
+            raise click.ClickException(
+                f"Remove failed: {result.error}"
+            ) from result.error
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt(

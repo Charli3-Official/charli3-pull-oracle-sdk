@@ -140,5 +140,5 @@ class RemoveBuilder(BaseBuilder):
         pause_period_end = settings_datum.pause_period_started_at.value + pause_period
         if current_ts < pause_period_end:
             raise PauseError(
-                f"Pause period has not ended yet, wait till {datetime.fromtimestamp(pause_period_end, tz=timezone.utc)}"
+                f"Pause period has not ended yet, wait till {datetime.fromtimestamp(pause_period_end / 1000, tz=timezone.utc)}"
             )
