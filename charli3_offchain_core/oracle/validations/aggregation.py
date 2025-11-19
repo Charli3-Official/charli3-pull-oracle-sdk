@@ -11,8 +11,17 @@ from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     OracleSettingsDatum,
-    RewardConsensusPending,
-    RewardTransportVariant,
+    RewardAccountVariant,
+)
+from charli3_offchain_core.oracle.exceptions import (
+    AggregationError,
+    DataError,
+    NFTError,
+    NodeNotRegisteredError,
+    NodeValidationError,
+    SignatureError,
+    StateValidationError,
+    TimestampError,
 )
 from charli3_offchain_core.oracle.utils.calc_methods import median
 from charli3_offchain_core.oracle.utils.common import get_script_utxos, try_parse_datum
@@ -30,8 +39,8 @@ def validate_timestamp(tx_validity: dict[str, PosixTime], timestamp: PosixTime) 
     end = tx_validity.end if hasattr(tx_validity, "end") else tx_validity["end"]
 
     if not start <= timestamp <= end:
-        raise ValueError(
-            f"Timestamp {timestamp} outside validity interval " f"[{start}, {end}]"
+        raise TimestampError(
+            f"Timestamp {timestamp} outside validity interval [{start}, {end}]"
         )
 
 
@@ -45,30 +54,32 @@ async def validate_is_node_registered(
             utxos, ScriptHash(bytes.fromhex(policy_id))
         )
         if settings_utxo is None:
-            raise ValueError("Oracle settings not found")
+            raise StateValidationError("Oracle settings not found")
 
         if is_oracle_paused(settings_datum):
-            raise ValueError("Oracle is currently paused")
+            raise StateValidationError("Oracle is currently paused")
 
         if node_vkh not in settings_datum.nodes.node_map:
-            raise ValueError(f"Node {node_vkh} not registered")
+            raise NodeNotRegisteredError(f"Node {node_vkh} not registered")
         return True, settings_datum
     except Exception as e:
-        raise ValueError(f"Node registration validation error: {e!s}") from e
+        if isinstance(e, (StateValidationError | NodeNotRegisteredError)):
+            raise
+        raise NodeValidationError(f"Node registration validation error: {e!s}") from e
 
 
 def validate_node_message_signatures(
     node_messages: list[dict[str, Any]]
 ) -> list[SignedOracleNodeMessage]:
     """Validates signatures of node messages and returns list of serialized responses."""
-    signed_messages = []
+    signed_messages: list[SignedOracleNodeMessage] = []
     try:
         for node_message in node_messages:
             signed_message = SignedOracleNodeMessage.model_validate(node_message)
             signed_messages.append(signed_message)
         return signed_messages
     except Exception as e:
-        raise ValueError(f"Signature validation error: {e!s}") from e
+        raise SignatureError(f"Signature validation error: {e!s}") from e
 
 
 def validate_policy_id_in_messages(node_messages: list[SignedOracleNodeMessage]) -> str:
@@ -76,65 +87,67 @@ def validate_policy_id_in_messages(node_messages: list[SignedOracleNodeMessage])
     policy_ids = {data.message.oracle_nft_policy_id for data in node_messages}
     if len(policy_ids) == 1:
         return bytes.hex(policy_ids.pop())
-    raise ValueError("Mismatch in oracle_nft_policy_id across messages") from None
+    raise NFTError("Mismatch in oracle_nft_policy_id across messages") from None
 
 
 def validate_node_updates_and_aggregation_median(
-    signed_messages: list[SignedOracleNodeMessage],
-    transport_datum: RewardConsensusPending,
+    signed_messages: list[SignedOracleNodeMessage], aggstate_datum: AggState
 ) -> bool:
-    """Validates median calculation against node messages and returns success status."""
+    """Validates median calculation from signed messages against AggState datum."""
     try:
-        aggregation = transport_datum.aggregation
-        node_feeds = aggregation.message.node_feeds_sorted_by_feed
+        if not isinstance(aggstate_datum, AggState):
+            raise DataError("Provided datum is not of type AggState")
 
-        feeds = []
-        for signed_msg in signed_messages:
-            vkh = signed_msg.verification_key.hash()
-            if vkh not in node_feeds:
-                raise ValueError(f"Node {vkh} message not in aggregation")
+        if (
+            aggstate_datum is None
+            or not hasattr(aggstate_datum, "price_data")
+            or not aggstate_datum.price_data.has_required_fields
+        ):
+            raise DataError("Invalid or missing AggState price data")
 
-            tx_feed = node_feeds[vkh]
-            msg_feed = signed_msg.message.feed
-
-            if tx_feed != msg_feed:
-                raise ValueError(
-                    f"Feed mismatch for node {vkh}: {tx_feed} vs {msg_feed}"
-                )
-
-            feeds.append(tx_feed)
+        feeds = [msg.message.feed for msg in signed_messages]
+        if not feeds:
+            raise AggregationError("No feeds provided in signed messages")
 
         calculated_median = median(feeds, len(feeds))
-        if calculated_median != aggregation.oracle_feed:
-            raise ValueError(
-                f"Median mismatch: {calculated_median} vs {aggregation.oracle_feed}"
+        datum_value = aggstate_datum.price_data.get_price
+        if calculated_median != datum_value:
+            raise AggregationError(
+                f"Median mismatch: {calculated_median} vs {datum_value}"
             )
 
         return True
+
     except Exception as e:
-        raise ValueError(f"Median validation error: {e!s}") from e
+        if isinstance(e, (DataError | AggregationError)):
+            raise
+        raise AggregationError(f"Median validation error: {e!s}") from e
 
 
 def validate_transaction_datums(
     tx: Transaction, oracle_addr: str
-) -> tuple[RewardTransportVariant, AggState]:
-    """Extracts and validates reward transport and aggregation state datums from transaction outputs."""
-    transport_datum: RewardTransportVariant | None = None
-    agg_state_datum: AggState | None = None
+) -> tuple[RewardAccountVariant, AggState]:
+    """Extracts and validates reward account and aggregation state datums from transaction outputs."""
+    reward_account_datum: RewardAccountVariant | None = None
+    aggstate_datum: AggState | None = None
 
     for output in tx.transaction_body.outputs:
         if str(output.address) != oracle_addr or not output.datum:
             continue
 
-        if transport_datum is None:
-            transport_datum = try_parse_datum(output.datum, RewardTransportVariant)
-        if agg_state_datum is None:
-            agg_state_datum = try_parse_datum(output.datum, AggState)
+        if reward_account_datum is None:
+            reward_account_datum = try_parse_datum(output.datum, RewardAccountVariant)
+        if aggstate_datum is None:
+            aggstate_datum = try_parse_datum(output.datum, AggState)
 
-        if transport_datum and agg_state_datum:
+        if reward_account_datum and aggstate_datum:
             break
 
-    if not transport_datum or not agg_state_datum:
-        raise ValueError("Missing or invalid transaction datums")
+    if not aggstate_datum:
+        raise DataError("Missing or invalid AggState datum in transaction outputs")
+    if not reward_account_datum:
+        raise DataError(
+            "Missing or invalid RewardAccountVariant in transaction outputs"
+        )
 
-    return transport_datum, agg_state_datum
+    return reward_account_datum, aggstate_datum
