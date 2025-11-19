@@ -38,7 +38,7 @@ from charli3_offchain_core.oracle.utils.asset_checks import (
 )
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
-    filter_reward_accounts,
+    convert_cbor_to_reward_accounts,
     filter_valid_agg_states,
     get_oracle_settings_by_policy_id,
 )
@@ -268,8 +268,8 @@ class OracleScaleBuilder:
                 len(aggstate_utxos),
             )
 
-            # Get empty reward accounts with detailed logging
-            all_reward_accounts = filter_reward_accounts(reward_account_utxos)
+            # Convert CBOR to RewardAccountDatum objects and get empty reward accounts
+            all_reward_accounts = convert_cbor_to_reward_accounts(reward_account_utxos)
             empty_reward_accounts = [
                 utxo
                 for utxo in all_reward_accounts
