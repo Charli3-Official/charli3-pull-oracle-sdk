@@ -273,12 +273,12 @@ async def platform_collect(config: Path, output: Path | None) -> None:
     "--batch-size",
     type=int,
     default=10,
-    help="Maximum number of transports to process",
+    help="Maximum number of reward accounts to process",
 )
 @click.command()
 @async_command
 async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) -> None:
-    """Clear all rewards transport UTxO"""
+    """Dismiss rewards from reward account UTxOs"""
     try:
         print_header("Dismiss Rewrads")
         (
@@ -324,7 +324,7 @@ async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) ->
         )
 
         if isinstance(result.error, NoPendingTransportsFoundError):
-            user_message = "No transport rewards UTxOs available for claiming"
+            user_message = "No reward account UTxOs available for dismissing"
             print_status(result.status, user_message, success=True)
             return
 
