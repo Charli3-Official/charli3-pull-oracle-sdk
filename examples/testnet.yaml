@@ -84,7 +84,7 @@ reference_script_addr: "addr_test1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6
 reward_issuer_address: "addr_test1qzdxknm0t7f06vv02cqqfwumffzz654hw5u3kegkl2vy9g873avcs4c3gyqwcdr8gqklupyusvuz3wx2pdldrd65t0hq4gm9pg"
 
 nodes:
-  nodes:
+  feed_vkh:
     - 007df380aef26e44739db3f4fe67d8137446e630dab3df16d9fbddc5
     - b296714efefe2d991bb7eb002b48b024d1a152691c6fe9e0f76511c5
     - 018ab1dd5f33ca2e0ae6ccb694ea379d841bf5f4d2d5756452a2117d

@@ -25,8 +25,8 @@ class NodesConfig:
                 raise ValueError("All nodes must be hex strings")
             if required < 0:
                 raise ValueError("required_signatures cannot be negative")
-            if required > len(nodes_hex):
-                raise ValueError("required_signatures > number of nodes")
+            if len(nodes_hex) != len({*nodes_hex}):
+                raise ValueError("Must not have duplicate nodes")
 
             nodes = sorted(
                 [VerificationKeyHash(bytes.fromhex(h)) for h in nodes_hex],

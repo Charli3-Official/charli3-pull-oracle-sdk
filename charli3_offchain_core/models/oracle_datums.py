@@ -45,6 +45,10 @@ class Nodes(PlutusData):
     CONSTR_ID = 0
     node_map: IndefiniteList
 
+    def __post_init__(self) -> None:
+        if len(self.node_map) != len({*self.node_map}):
+            raise ValueError("Oracle Nodes Validator: Must not have duplicates")
+
     @classmethod
     def from_primitive(cls, data: Any) -> "Nodes":
         """Create Nodes from primitive data."""
@@ -56,7 +60,10 @@ class Nodes(PlutusData):
 
         return cls(
             node_map=IndefiniteList(
-                [VerificationKeyHash.from_primitive(k) for k in data]
+                sorted(
+                    [VerificationKeyHash.from_primitive(k) for k in data],
+                    key=lambda x: x.payload,
+                )
             )
         )
 
@@ -88,6 +95,22 @@ class Nodes(PlutusData):
             dict: Dictionary mapping each VerificationKeyHash to itself
         """
         return {vkh: vkh for vkh in self.node_map}
+
+    def __len__(self) -> int:
+        """Return the number of nodes."""
+        return len(self.node_map)
+
+    def __iter__(self):
+        """Iterate over node map."""
+        return iter(self.node_map)
+
+    def items(self):
+        """Return items as (vkh, vkh) pairs for dict-like access."""
+        return ((vkh, vkh) for vkh in self.node_map)
+
+    def values(self):
+        """Return node VKHs as values."""
+        return iter(self.node_map)
 
 
 @dataclass
@@ -187,7 +210,7 @@ class OracleSettingsDatum(PlutusData):
 
     def __post_init__(self) -> None:
         if (
-            len(self.nodes.node_map) < self.required_node_signatures_count
+            self.nodes.length < self.required_node_signatures_count
             or self.required_node_signatures_count <= 0
         ):
             raise ValueError("Oracle Settings Validator: Must not break multisig")

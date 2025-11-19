@@ -157,7 +157,7 @@ class TestNodeCollect(TestBase):
                 )
 
                 # Check if our node is registered
-                registered_nodes = list(settings_datum.nodes.node_map.keys())
+                registered_nodes = list(settings_datum.nodes.keys())
                 node_feed_vkh = node_feed_vkey.hash()
                 logger.info(f"Node feed VKH: {node_feed_vkh}")
 
@@ -215,7 +215,7 @@ class TestNodeCollect(TestBase):
                 )
 
                 # Create LoadedKeys with node keys for testing
-                payment_vkh = settings_datum.nodes.node_map[node_feed_vkh]
+                payment_vkh = settings_datum.nodes[node_feed_vkh]
                 payment_address = Address(
                     payment_part=payment_vkh,
                     network=self.NETWORK,
@@ -330,7 +330,7 @@ class TestNodeCollect(TestBase):
         )
 
         # Find the index of our node in the nodes list
-        registered_nodes = list(settings_datum.nodes.node_map.keys())
+        registered_nodes = list(settings_datum.nodes.keys())
         node_index = registered_nodes.index(node_feed_vkh)
 
         # 1. Verify rewards were zeroed out in the reward account

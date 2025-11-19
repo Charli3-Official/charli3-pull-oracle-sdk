@@ -8,7 +8,6 @@ from pycardano import (
     Address,
     ExtendedSigningKey,
     NativeScript,
-    Network,
     PaymentSigningKey,
     ScriptHash,
     Transaction,
@@ -22,7 +21,6 @@ from charli3_offchain_core.cli.config.nodes import NodesConfig
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
-from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import OracleConfiguration
 from charli3_offchain_core.oracle.exceptions import (
     AddingNodesError,
@@ -126,10 +124,6 @@ class GovernanceOrchestrator:
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         tokens: TokenConfig,
-        reward_dismissing_period_length: PosixTimeDiff,
-        network: Network,
-        reward_issuer_addr: Address | None = None,
-        escrow_address: Address | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
         test_mode: bool = False,
     ) -> GovernanceResult:
@@ -144,10 +138,6 @@ class GovernanceOrchestrator:
             change_address: Address for change
             signing_key: Signing key for the transaction
             tokens: Token configuration
-            reward_dismissing_period_length: Period length for reward dismissal
-            network: Network configuration
-            reward_issuer_addr: Optional reward issuer address
-            escrow_address: Optional escrow address
             required_signers: Optional list of required signers
 
         Returns:
@@ -155,7 +145,6 @@ class GovernanceOrchestrator:
         """
         try:
 
-            auth_policy_id = bytes.fromhex(tokens.platform_auth_policy)
             oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
 
             contract_utxos = await get_script_utxos(
@@ -177,11 +166,6 @@ class GovernanceOrchestrator:
                     signing_key=signing_key,
                     new_nodes_config=new_nodes_config,
                     reward_token=reward_token,
-                    network=network,
-                    auth_policy_id=auth_policy_id,
-                    reward_dismissing_period_length=reward_dismissing_period_length,
-                    reward_issuer_addr=reward_issuer_addr,
-                    escrow_address=escrow_address,
                     required_signers=required_signers,
                     test_mode=test_mode,
                 )

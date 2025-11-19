@@ -1,4 +1,4 @@
-"""Add Nodes transaction builder. """
+"""Add Nodes transaction builder."""
 
 import logging
 from typing import Any
@@ -7,6 +7,7 @@ import click
 from pycardano import (
     Address,
     ExtendedSigningKey,
+    IndefiniteList,
     NativeScript,
     PaymentSigningKey,
     Redeemer,
@@ -27,11 +28,10 @@ from charli3_offchain_core.models.oracle_datums import (
     Nodes,
     OracleSettingsDatum,
     OracleSettingsVariant,
-    RewardAccountDatum,
-    RewardAccountVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     AddNodes,
+    ManageSettings,
 )
 from charli3_offchain_core.oracle.exceptions import (
     AddNodesCancelled,
@@ -40,7 +40,6 @@ from charli3_offchain_core.oracle.exceptions import (
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
     get_oracle_settings_by_policy_id,
-    get_reward_account_by_policy_id,
 )
 
 from .base import BaseBuilder, GovernanceTxResult
@@ -49,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 class AddNodesBuilder(BaseBuilder):
+    REDEEMER = Redeemer(ManageSettings(redeemer=AddNodes()))
     FEE_BUFFER = 10_000
 
     async def build_tx(
@@ -68,9 +68,6 @@ class AddNodesBuilder(BaseBuilder):
             in_core_datum, in_core_utxo = get_oracle_settings_by_policy_id(
                 utxos, policy_hash
             )
-            in_reward_account_datum, in_reward_account_utxo = (
-                get_reward_account_by_policy_id(utxos, policy_hash)
-            )
 
             script_utxo = get_reference_script_utxo(utxos)
 
@@ -83,12 +80,6 @@ class AddNodesBuilder(BaseBuilder):
                     in_core_utxo,
                     in_core_datum,
                     new_nodes_config,
-                )
-                out_reward_account_utxo = modified_reward_utxo(
-                    in_reward_account_utxo,
-                    in_reward_account_datum,
-                    new_nodes_config,
-                    in_core_datum,
                 )
                 try:
                     confirm_node_updates(
@@ -105,13 +96,11 @@ class AddNodesBuilder(BaseBuilder):
 
                 tx = await self.tx_manager.build_script_tx(
                     script_inputs=[
-                        (in_reward_account_utxo, Redeemer(AddNodes()), script_utxo),
-                        (in_core_utxo, Redeemer(AddNodes()), script_utxo),
+                        (in_core_utxo, self.REDEEMER, script_utxo),
                         (platform_utxo, None, platform_script),
                     ],
                     script_outputs=[
                         out_core_utxo.output,
-                        out_reward_account_utxo.output,
                         platform_utxo.output,
                     ],
                     fee_buffer=self.FEE_BUFFER,
@@ -129,6 +118,7 @@ class AddNodesBuilder(BaseBuilder):
         except Exception as e:
             error_msg = f"Unexpected error building add nodes transaction: {e}"
             logger.error(error_msg)
+            raise
 
 
 def modified_core_utxo(
@@ -137,19 +127,13 @@ def modified_core_utxo(
     new_nodes_config: NodesConfig,
 ) -> UTxO:
 
-    new_nodes_dict = {
-        node.feed_vkh: node.payment_vkh for node in new_nodes_config.nodes
-    }
-    existing_nodes_dict = in_core_datum.nodes.node_map
-
-    merged_nodes = dict(
-        sorted(
-            {**new_nodes_dict, **existing_nodes_dict}.items(), key=lambda x: str(x[0])
-        )
-    )
+    # Merge new nodes with existing nodes
+    existing_vkhs = set(in_core_datum.nodes)
+    new_vkhs = set(new_nodes_config.nodes)
+    merged_vkhs = sorted(existing_vkhs | new_vkhs, key=lambda x: x.payload)
 
     new_datum = OracleSettingsDatum(
-        nodes=Nodes(node_map=merged_nodes),
+        nodes=Nodes(node_map=IndefiniteList(merged_vkhs)),
         required_node_signatures_count=new_nodes_config.required_signatures,
         fee_info=in_core_datum.fee_info,
         aggregation_liveness_period=in_core_datum.aggregation_liveness_period,
@@ -166,48 +150,8 @@ def modified_core_utxo(
     return in_core_utxo
 
 
-def modified_reward_utxo(
-    in_reward_utxo: UTxO,
-    in_reward_datum: RewardAccountDatum,
-    new_nodes_config: NodesConfig,
-    in_core_datum: OracleSettingsDatum,
-) -> UTxO:
-
-    new_nodes_dict = {
-        node.feed_vkh: node.payment_vkh for node in new_nodes_config.nodes
-    }
-    existing_nodes_dict = in_core_datum.nodes.node_map
-
-    merged_nodes = {
-        **new_nodes_dict,
-        **existing_nodes_dict,
-    }  # Existing nodes take precedence
-
-    sorted_feed_vkhs = sorted(merged_nodes.keys(), key=str)
-
-    out_distribution = []
-
-    for feed_vkh in sorted_feed_vkhs:
-        if feed_vkh in existing_nodes_dict:
-
-            old_position = sorted(existing_nodes_dict.keys(), key=str).index(feed_vkh)
-            reward = (
-                in_reward_datum.nodes_to_rewards[old_position]
-                if old_position < len(in_reward_datum.nodes_to_rewards)
-                else 0
-            )
-            out_distribution.append(reward)
-        else:
-            out_distribution.append(0)
-
-    new_datum = RewardAccountDatum(nodes_to_rewards=out_distribution)
-    in_reward_utxo.output.datum = RewardAccountVariant(new_datum)
-    in_reward_utxo.output.datum_hash = None
-    return in_reward_utxo
-
-
 def print_nodes_table(
-    node_map: dict[VerificationKeyHash, VerificationKeyHash],
+    node_map: list[VerificationKeyHash],
     success: bool = True,
     is_current: bool = True,
 ) -> None:
@@ -219,11 +163,8 @@ def print_nodes_table(
     # header = f" {title} ".center(header_length, "=")
     print_title(title)
 
-    headers = ["Node #", "Feed Verification Key Hash", "Payment Verification Key Hash"]
-    table_data = [
-        [f"{i}", feed_vkh, payment_vkh]
-        for i, (feed_vkh, payment_vkh) in enumerate(node_map.items(), 1)
-    ]
+    headers = ["Node #", "Feed Verification Key Hash"]
+    table_data = [[f"{i}", feed_vkh] for i, feed_vkh in enumerate(node_map, 1)]
 
     # click.secho(header, fg=color)
     table = tabulate(
@@ -322,7 +263,7 @@ def show_nodes_update_info(
 
     # Validate and return result
     return print_validation_rules(
-        new_node_count=out_core_datum.nodes.length,
+        new_node_count=len(out_core_datum.nodes),
         new_signatures_count=new_signatures_count,
         has_new_nodes=bool(new_nodes),
         has_deleted_nodes=bool(deleted_nodes),
@@ -331,7 +272,7 @@ def show_nodes_update_info(
 
 def print_current_state(datum: OracleSettingsDatum) -> None:
     """Display current nodes and signature requirements."""
-    print_nodes_table(datum.nodes.node_map, is_current=True)
+    print_nodes_table(datum.nodes, is_current=True)
     print_required_signatories(datum.required_node_signatures_count, is_current=True)
 
 
@@ -339,22 +280,14 @@ def get_deleted_nodes(
     in_datum: OracleSettingsDatum, out_datum: OracleSettingsDatum
 ) -> list:
     """Calculate nodes that will be deleted."""
-    return [
-        feed_vkh
-        for feed_vkh in in_datum.nodes.node_map.keys()
-        if feed_vkh not in out_datum.nodes.node_map
-    ]
+    return [feed_vkh for feed_vkh in in_datum.nodes if feed_vkh not in out_datum.nodes]
 
 
 def get_new_nodes(
     in_datum: OracleSettingsDatum, out_datum: OracleSettingsDatum
-) -> dict:
+) -> list[VerificationKeyHash]:
     """Calculate new nodes to be added."""
-    return {
-        feed_vkh: payment_vkh
-        for feed_vkh, payment_vkh in out_datum.nodes.node_map.items()
-        if feed_vkh not in in_datum.nodes.node_map
-    }
+    return [feed_vkh for feed_vkh in out_datum.nodes if feed_vkh not in in_datum.nodes]
 
 
 def display_signature_change(current: int, new: int) -> None:

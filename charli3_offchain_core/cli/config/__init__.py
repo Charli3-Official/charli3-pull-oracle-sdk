@@ -1,6 +1,5 @@
 """ Configuration classes for the CLI. """
 
-from .escrow import EscrowConfig
 from .keys import WalletConfig
 from .management import ManagementConfig
 from .multisig import MultisigConfig

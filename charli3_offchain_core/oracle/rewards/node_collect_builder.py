@@ -161,7 +161,7 @@ class NodeCollectBuilder(BaseBuilder):
     ) -> tuple[UTxO, int]:
 
         node_rewards = in_reward_datum.nodes_to_rewards
-        payment_vkhs = list(settings.nodes.node_map.values())
+        payment_vkhs = list(settings.nodes.values())
 
         try:
             node_index = payment_vkhs.index(node_to_redeem)

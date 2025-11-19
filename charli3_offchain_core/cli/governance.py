@@ -6,7 +6,6 @@ from pathlib import Path
 
 import click
 
-from charli3_offchain_core.cli.config.escrow import EscrowConfig
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.oracle.governance.orchestrator import GovernanceOrchestrator
 
@@ -91,7 +90,11 @@ async def add_nodes(config: Path, output: Path | None) -> None:
             )
             return
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Add nodes failed: {result.error}")
+            if result.error:
+                raise click.ClickException(
+                    f"Add nodes failed: {result.error}"
+                ) from result.error
+            raise click.ClickException("Add nodes failed: unknown error")
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt(
@@ -141,7 +144,7 @@ async def del_nodes(config: Path, output: Path | None) -> None:
         print_header("Delete Nodes")
         (
             management_config,
-            oracle_configuration,
+            _,
             loaded_key,
             oracle_addresses,
             chain_query,
@@ -149,7 +152,6 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             platform_auth_finder,
         ) = setup_management_from_config(config)
 
-        escrow_config = EscrowConfig.from_yaml(config)
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
             platform_address=oracle_addresses.platform_address,
@@ -177,10 +179,6 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
             tokens=management_config.tokens,
-            reward_dismissing_period_length=oracle_configuration.reward_dismissing_period_length,
-            network=management_config.network.network,
-            reward_issuer_addr=escrow_config.reward_issuer_addr,
-            escrow_address=escrow_config.reference_script_addr,
             signing_key=loaded_key.payment_sk,
         )
         if result.status == ProcessStatus.CANCELLED_BY_USER:

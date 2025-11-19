@@ -125,7 +125,6 @@ def main() -> None:
         fee_token=SomeAsset(
             asset=Asset(policy_id=bytes.fromhex("00" * 28), name=b"TOKEN"),
         ),
-        reward_escrow_script_hash=bytes.fromhex("00" * 28),
     )
 
     # Create sample UTxO ref and script hash for mint policy
