@@ -46,7 +46,6 @@ class RemoveBuilder(BaseBuilder):
     TOKEN_CORE_SETTINGS = "C3CS"  # noqa
     TOKEN_REWARD_ACCOUNT = "C3RA"  # noqa
     TOKEN_AGG_STATE = "C3AS"  # noqa
-    TOKEN_REWARD_TRANSPORT = "C3RT"  # noqa
 
     async def build_tx(
         self,

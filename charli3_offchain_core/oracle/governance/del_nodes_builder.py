@@ -119,7 +119,7 @@ class DelNodesBuilder(BaseBuilder):
             script_utxo = get_reference_script_utxo(contract_utxos)
 
             # Nodes to remove
-            nodes_to_remove = {node for node in new_nodes_config.nodes}
+            nodes_to_remove = {node for node in new_nodes_config.nodes}  # noqa
 
             # Modified Core Settings: removed `Nodes`
             out_core_utxo = modified_core_utxo(

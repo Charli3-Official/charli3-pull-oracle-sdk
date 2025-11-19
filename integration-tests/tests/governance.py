@@ -92,7 +92,7 @@ class GovernanceBase:
             ) = setup_result
 
             # Initialize escrow configuration and governance orchestrator
-            self.escrow_config = EscrowConfig.from_yaml(self.config_path)
+            self.escrow_config = EscrowConfig.from_yaml(self.config_path)  # noqa
             self.governance_orchestrator = GovernanceOrchestrator(
                 chain_query=self.chain_query,
                 tx_manager=self.tx_manager,
@@ -107,7 +107,7 @@ class GovernanceBase:
 
     def prepare_nodes_for_removal(
         self, nodes_config: NodesConfig, count_to_remove: int
-    ) -> tuple[int, list[NodeConfig]]:
+    ) -> tuple[int, list[NodeConfig]]:  # noqa
         """Prepare a list of nodes for removal testing.
 
         Creates a subset of nodes from the original configuration that will be
@@ -147,7 +147,7 @@ class GovernanceBase:
             NodesConfig: A new nodes configuration with the selected nodes
         """
         new_nodes = [
-            NodeConfig(node_config.payment_vkh, node_config.feed_vkh)
+            NodeConfig(node_config.payment_vkh, node_config.feed_vkh)  # noqa
             for node_config in nodes_config.nodes[:count_to_add]
         ]
 

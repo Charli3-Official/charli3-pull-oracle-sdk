@@ -91,32 +91,6 @@ def filter_reward_account(utxos: Sequence[UTxO]) -> list[UTxO]:
     ]
 
 
-def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Filter UTxOs for pending reward consensus states, and sort by timestamp
-
-    Args:
-        utxos: List of UTxOs to filter
-
-    Returns:
-        List of UTxOs with pending consensus states
-    """
-
-    utxos_with_datum = convert_cbor_to_transports(utxos)  # noqa: F821
-
-    pending_transports = [
-        utxo
-        for utxo in utxos_with_datum
-        if utxo.output.datum
-        and isinstance(utxo.output.datum, RewardTransportVariant)  # noqa: F821
-        and isinstance(utxo.output.datum.datum, RewardConsensusPending)  # noqa: F821
-    ]
-    pending_transports.sort(
-        key=lambda utxo: utxo.output.datum.datum.aggregation.message.timestamp
-    )
-
-    return pending_transports
-
-
 def filter_empty_agg_states(utxos: Sequence[UTxO]) -> list[UTxO]:
     """Filter UTxOs for empty aggregation states.
 
@@ -330,39 +304,6 @@ def is_oracle_paused(settings: OracleSettingsDatum) -> bool:
     return not isinstance(settings.pause_period_started_at, NoDatum)
 
 
-def can_process_rewards(
-    transport: UTxO, current_time: int, liveness_period: int
-) -> bool:
-    """Check if rewards can be processed for transport UTxO.
-
-    Args:
-        transport: Transport UTxO to check
-        current_time: Current time in milliseconds
-        liveness_period: Liveness period duration
-
-    Returns:
-        bool: True if rewards can be processed
-
-    Raises:
-        StateValidationError: If validation fails
-    """
-    try:
-        if not isinstance(
-            transport.output.datum, RewardTransportVariant  # noqa: F821
-        ) or not isinstance(
-            transport.output.datum.datum, RewardConsensusPending  # noqa: F821
-        ):
-            return False
-
-        pending_data = transport.output.datum.datum
-        message_time = pending_data.message.timestamp
-
-        return current_time >= message_time + liveness_period
-
-    except Exception as e:
-        raise StateValidationError(f"Failed to validate reward processing: {e}") from e
-
-
 def validate_datum_transition(
     current_datum: OracleDatum,
     next_datum: OracleDatum,
@@ -392,44 +333,3 @@ def validate_datum_transition(
 
     except Exception as e:
         raise StateValidationError(f"Failed to validate datum transition: {e}") from e
-
-
-def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
-    """Validate transport and agg state form a valid pair.
-
-    Args:
-        transport: Transport UTxO
-        agg_state: Aggregation state UTxO
-
-    Returns:
-        bool: True if UTxOs form valid pair
-
-    Raises:
-        StateValidationError: If validation fails
-    """
-    try:
-
-        # Validate state combinations
-        transport_variant = transport.output.datum
-        agg_state_variant = agg_state.output.datum
-
-        if not isinstance(transport_variant, RewardTransportVariant):  # noqa: F821
-            return False
-        if not isinstance(agg_state_variant, AggState):
-            return False
-
-        # Check valid state combinations
-        transport_empty = isinstance(transport_variant.datum, NoRewards)  # noqa: F821
-        agg_state_empty = agg_state_variant.price_data.is_empty
-
-        transport_pending = isinstance(
-            transport_variant.datum, RewardConsensusPending  # noqa: F821
-        )
-        agg_state_active = not agg_state_variant.price_data.is_valid
-
-        return (transport_empty and agg_state_empty) or (
-            transport_pending and agg_state_active
-        )
-
-    except Exception as e:
-        raise StateValidationError(f"Failed to validate UTxO pair: {e}") from e
