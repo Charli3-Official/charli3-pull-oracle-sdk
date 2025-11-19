@@ -1,5 +1,6 @@
 """Oracle datums for the oracle core contract"""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Dict, Union
 
@@ -100,15 +101,15 @@ class Nodes(PlutusData):
         """Return the number of nodes."""
         return len(self.node_map)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         """Iterate over node map."""
         return iter(self.node_map)
 
-    def items(self):
+    def items(self) -> Iterator[tuple[VerificationKeyHash, VerificationKeyHash]]:
         """Return items as (vkh, vkh) pairs for dict-like access."""
         return ((vkh, vkh) for vkh in self.node_map)
 
-    def values(self):
+    def values(self) -> Iterator:
         """Return node VKHs as values."""
         return iter(self.node_map)
 

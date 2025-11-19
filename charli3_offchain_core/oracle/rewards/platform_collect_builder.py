@@ -33,7 +33,6 @@ from charli3_offchain_core.models.oracle_datums import (
     RewardAccountDatum,
     SomeAsset,
 )
-from charli3_offchain_core.models.oracle_datums import RewardAccountVariant
 from charli3_offchain_core.models.oracle_redeemers import (
     PlatformCollect,
     RedeemRewards,
