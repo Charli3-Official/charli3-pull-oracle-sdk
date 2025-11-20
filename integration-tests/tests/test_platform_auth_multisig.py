@@ -62,6 +62,15 @@ class TestMultisigPlatformAuth(TestBase):
         # Set up platform keys directory
         self.platform_keys_dir = Path("./platform_keys")
 
+        # Clean up existing platform keys directory to ensure a fresh start
+        if self.platform_keys_dir.exists():
+            import shutil
+
+            shutil.rmtree(self.platform_keys_dir)
+            logger.info(
+                f"Removed existing platform keys directory: {self.platform_keys_dir}"
+            )
+
         # Configure multisig environment (2 total signers, requiring 1 signatures)
         self.prepare_platform_keys(
             total_signers=TOTAL_SIGNERS, required_signers=REQUIRED_SIGNERS
