@@ -113,10 +113,10 @@ run_test "TestEditSettings"
 # run_test "TestScaleDown"
 
 # 6. Oracle Pause and Resume
-# run_test "TestOraclePauseResume"
+run_test "TestOraclePauseResume"
 
 # 10. Oracle Remove
-# run_test "TestOracleRemove"
+run_test "TestOracleRemove"
 
 # # 6. Run aggregate tests again to verify it still works after changes
 # run_test_multiple_times "TestAggregate" 1 10
