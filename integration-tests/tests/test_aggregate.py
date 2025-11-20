@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pycardano import (
@@ -185,7 +186,9 @@ class TestAggregate(TestBase):
         node_messages = self.generate_simulated_feeds()
 
         # 3. Create aggregate message using core module utility
-        aggregate_message = common.build_aggregate_message(node_messages)
+        aggregate_message = common.build_aggregate_message(
+            node_messages,
+        )
 
         # 4. Calculate the expected median value
         feeds = list(aggregate_message.node_feeds_sorted_by_feed.values())
@@ -271,3 +274,69 @@ class TestAggregate(TestBase):
         ), f"Invalid expiry timestamp: {expiry} vs {current_time}"
 
         logger.info("ODV outputs verified successfully")
+
+    @async_retry(tries=TEST_RETRIES, delay=5)
+    async def verify_reward_distribution(self, rewards_result: Any) -> None:
+        """Verify that rewards are distributed correctly."""
+        logger.info("Verifying reward distribution")
+
+        # Get UTxOs at script address
+        utxos = await self.chain_query.get_utxos(self.oracle_script_address)
+
+        # Check reward account exists
+        _, reward_account_utxo = state_checks.get_reward_account_by_policy_id(
+            utxos,
+            ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
+        )
+
+        assert reward_account_utxo is not None, "Reward account UTxO not found"
+
+        # Get reward distribution
+        reward_distribution = rewards_result.reward_distribution
+        assert len(reward_distribution) > 0, "No rewards were distributed"
+
+        # Verify total reward amount
+        total_rewards = sum(reward_distribution.values())
+        assert total_rewards > 0, "Total rewards should be greater than zero"
+
+        # Check reward tokens in reward account if configured
+        if (
+            self.token_config.reward_token_policy
+            and self.token_config.reward_token_name
+        ):
+            script_hash = ScriptHash(
+                bytes.fromhex(self.token_config.reward_token_policy)
+            )
+            token_name = bytes.fromhex(self.token_config.reward_token_name)
+
+            if (
+                reward_account_utxo.output.amount.multi_asset
+                and script_hash in reward_account_utxo.output.amount.multi_asset
+                and token_name
+                in reward_account_utxo.output.amount.multi_asset[script_hash]
+            ):
+                token_amount = reward_account_utxo.output.amount.multi_asset[
+                    script_hash
+                ][token_name]
+                logger.info(f"Reward account token amount: {token_amount}")
+                assert token_amount > 0, "Token amount should be greater than zero"
+            else:
+                logger.info("No tokens found in reward account, may be using ADA")
+        else:
+            # If no tokens configured, verify ADA amount
+            logger.info(
+                f"Reward account ADA amount: {reward_account_utxo.output.amount.coin}"
+            )
+
+        # Verify the reward account datum nodes_to_rewards mapping is populated
+        reward_account_datum = reward_account_utxo.output.datum.datum
+        # nodes_to_rewards is a dict mapping FeedVkh to amount
+        assert (
+            sum(reward_account_datum.nodes_to_rewards.values()) > 0
+        ), "No rewards in nodes_to_rewards"
+
+        # Log reward distribution details
+        logger.info(f"Total rewards distributed: {total_rewards}")
+        logger.info(f"Nodes with rewards: {len(reward_distribution)}")
+
+        logger.info("Reward distribution verified successfully")
