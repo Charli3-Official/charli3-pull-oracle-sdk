@@ -128,7 +128,7 @@ class TestOracleRemove(TestBase):
             platform_script=platform_script,
             change_address=self.oracle_addresses.admin_address,
             signing_key=self.loaded_keys.payment_sk,
-            pair_count=2,
+            pause_period=self.oracle_config.pause_period_length,
         )
 
         assert (

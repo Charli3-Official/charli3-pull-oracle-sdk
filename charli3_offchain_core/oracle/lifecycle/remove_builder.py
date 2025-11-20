@@ -44,8 +44,6 @@ class RemoveBuilder(BaseBuilder):
     EXTRA_COLLATERAL = 10_000_000
 
     TOKEN_CORE_SETTINGS = "C3CS"  # noqa
-    TOKEN_REWARD_ACCOUNT = "C3RA"  # noqa
-    TOKEN_AGG_STATE = "C3AS"  # noqa
 
     async def build_tx(
         self,
