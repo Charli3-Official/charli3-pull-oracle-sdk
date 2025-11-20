@@ -43,7 +43,7 @@ class RemoveBuilder(BaseBuilder):
     FEE_BUFFER = 10_000
     EXTRA_COLLATERAL = 10_000_000
 
-    TOKEN_CORE_SETTINGS = "C3CS"
+    TOKEN_CORE_SETTINGS = "C3CS"  # noqa
 
     async def build_tx(
         self,
