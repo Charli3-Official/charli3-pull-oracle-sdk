@@ -99,13 +99,14 @@ run_test "TestCreateReferenceScript"
 
 # # 5. Test reward collection
 # run_test "TestNodeCollect or TestPlatformCollect"
+
 # 5. Test governance functions
 # 5.1
-# run_test "TestRemoveNodes"
+run_test "TestRemoveNodes"
 # 5.2
-# run_test "TestAddNodes"
+run_test "TestAddNodes"
 # 5.3
-# run_test "TestEditSettings"
+run_test "TestEditSettings"
 # 5.4
 # run_test "TestScaleUp"
 # 5.5
@@ -124,7 +125,7 @@ run_test "TestCreateReferenceScript"
 run_test "TestMultisigPlatformAuth"
 run_test "TestMultisigDeployment"
 run_test "TestMultisigReferenceScript"
-# run_test "TestMultisigGovernance"
+run_test "TestMultisigGovernance"
 
 # Stop the cluster (this will also be handled by kill_processes on EXIT)
 ./bin/devkit.sh stop
