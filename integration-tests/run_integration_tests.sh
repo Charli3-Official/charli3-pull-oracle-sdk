@@ -91,7 +91,7 @@ run_test "TestDeployment"
 run_test "TestCreateReferenceScript"
 
 # 3. Run aggregate tests multiple times
-# run_test "TestAggregate"
+run_test "TestAggregate"
 
 # 4. Test reward collection
 # run_test "TestNodeCollect"
