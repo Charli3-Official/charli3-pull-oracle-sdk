@@ -79,10 +79,10 @@ run_test_multiple_times() {
 
 # Execute tests in order
 #0. Create Platform Auth NFT
-# run_test "TestPlatformAuth"
+run_test "TestPlatformAuth"
 
 # 0.5. Create TestC3 Reward Tokens
-# run_test "TestRewardToken"
+run_test "TestRewardToken"
 
 # 1. Deploy oracle
 run_test "TestDeployment"
