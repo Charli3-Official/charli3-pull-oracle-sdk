@@ -31,14 +31,10 @@ jobs:
         run: |
           poetry install
 
-      - name: Install Aiken
-        run: |
-          curl --proto '=https' --tlsv1.2 -LsSf https://install.aiken-lang.org | sh
-
-      - name: Verify Aiken installation
-        run: |
-          export PATH="$HOME/.aiken/bin:$PATH"
-          aiken --version
+      - name: Setup Aiken
+        uses: aiken-lang/setup-aiken@v1
+        with:
+          version: v1.1.19
 
       - name: Make integration test script executable
         run: |
@@ -49,8 +45,6 @@ jobs:
       - name: Run integration tests script
         shell: bash
         working-directory: integration-tests
-        env:
-          PATH: ${{ format('{0}/.aiken/bin:{1}', env.HOME, env.PATH) }}
         run: |
           # Run the script and capture its exit code
           ./run_integration_tests.sh
