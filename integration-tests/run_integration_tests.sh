@@ -98,34 +98,37 @@ run_test "TestNodeCollect"
 run_test "TestPlatformCollect"
 
 # # 5. Test reward collection
-# run_test "TestNodeCollect or TestPlatformCollect"
+run_test "TestNodeCollect or TestPlatformCollect"
 
 # 5. Test governance functions
 # 5.1
-# run_test "TestRemoveNodes"
+run_test "TestRemoveNodes"
 # 5.2
-# run_test "TestAddNodes"
+run_test "TestAddNodes"
 # 5.3
-# run_test "TestEditSettings"
+run_test "TestEditSettings"
 # 5.4
-# run_test "TestScaleUp"
+run_test "TestScaleUp"
 # 5.5
-# run_test "TestScaleDown"
+run_test "TestScaleDown"
 
 # 6. Oracle Pause and Resume
-# run_test "TestOraclePauseResume"
+run_test "TestOraclePauseResume"
 
-# 10. Oracle Remove
-# run_test "TestOracleRemove"
+# 7. Dismiss Rewards
+run_test "TestDismissRewards"
 
-# # 6. Run aggregate tests again to verify it still works after changes
+# 8. Run aggregate tests again to verify it still works after changes
 # run_test_multiple_times "TestAggregate" 1 10
 
-# # 8. Test multisig functionality
-# run_test "TestMultisigPlatformAuth"
-# run_test "TestMultisigDeployment"
-# run_test "TestMultisigReferenceScript"
-# run_test "TestMultisigGovernance"
+# 9. Oracle Remove
+run_test "TestOracleRemove"
+
+# 10. Test multisig functionality
+run_test "TestMultisigPlatformAuth"
+run_test "TestMultisigDeployment"
+run_test "TestMultisigReferenceScript"
+run_test "TestMultisigGovernance"
 
 # Stop the cluster (this will also be handled by kill_processes on EXIT)
 ./bin/devkit.sh stop
