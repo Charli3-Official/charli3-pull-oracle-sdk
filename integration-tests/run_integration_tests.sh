@@ -108,9 +108,9 @@ run_test "TestAddNodes"
 # 5.3
 run_test "TestEditSettings"
 # 5.4
-# run_test "TestScaleUp"
+run_test "TestScaleUp"
 # 5.5
-# run_test "TestScaleDown"
+run_test "TestScaleDown"
 
 # 6. Oracle Pause and Resume
 run_test "TestOraclePauseResume"
