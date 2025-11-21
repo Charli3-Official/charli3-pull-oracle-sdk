@@ -31,6 +31,11 @@ jobs:
         run: |
           poetry install
 
+      - name: Install Aiken
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://install.aiken-lang.org | sh
+          echo "$HOME/.aiken/bin" >> $GITHUB_PATH
+
       - name: Make integration test script executable
         run: |
           chmod +x integration-tests/run_integration_tests.sh
