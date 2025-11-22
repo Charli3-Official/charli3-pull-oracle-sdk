@@ -3,13 +3,25 @@
 set -e  # Exit on any command failure
 set -x  # Print each command before executing it
 
+# Initialize test result to 0
+test_result=0
+
 # Function to kill processes
 kill_processes() {
+  # Capture the exit status of the script (or the command that triggered the trap)
+  local saved_exit_status=$?
+  
   echo "Shutting down the cluster..."
   ./bin/devkit.sh stop
 
-  # Preserve the exit code from tests
-  exit $test_result
+  # Determine the final exit code
+  # If test_result is non-zero, use it (test failure).
+  # Otherwise, use saved_exit_status (script crash or success).
+  if [ $test_result -ne 0 ]; then
+    exit $test_result
+  else
+    exit $saved_exit_status
+  fi
 }
 
 # Function to generate test node keys if they don't exist
@@ -45,10 +57,53 @@ trap 'kill_processes' SIGINT SIGTERM EXIT
 ensure_node_keys
 
 # Start the node in the background
-./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
-# Wait for the node to start
-echo "Waiting for the node to start..."
-sleep 70
+STARTUP_LOG="devkit_startup.log"
+echo "Starting environment... Logs redirected to $STARTUP_LOG"
+./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >"$STARTUP_LOG" 2>&1 &
+
+# Function to wait for a service port
+wait_for_port() {
+  local port=$1
+  local name=$2
+  local timeout=300 # 5 minutes maximum wait
+  local start_time=$(date +%s)
+
+  echo "Waiting for $name to be available on port $port..."
+
+  set +x # Disable debug output
+  while true; do
+    # Try connecting using /dev/tcp (bash built-in)
+    if (echo > /dev/tcp/127.0.0.1/$port) >/dev/null 2>&1; then
+      echo "$name is up and running on port $port (TCP connection successful)!"
+      set -x
+      break
+    fi
+
+    # Fallback: Try using curl if available (useful if /dev/tcp is restricted)
+    if command -v curl >/dev/null 2>&1; then
+      if curl -s -o /dev/null "http://127.0.0.1:$port"; then
+        echo "$name is up and running on port $port (Curl connection successful)!"
+        set -x
+        break
+      fi
+    fi
+
+    local current_time=$(date +%s)
+    if (( current_time - start_time > timeout )); then
+      echo "Timed out waiting for $name on port $port."
+      echo "--- START OF DEVKIT LOGS (LAST 50 LINES) ---"
+      tail -n 50 "$STARTUP_LOG"
+      echo "--- END OF DEVKIT LOGS ---"
+      set -x
+      exit 1
+    fi
+    sleep 1
+  done
+}
+
+# Wait for Ogmios and Kupo
+wait_for_port 1337 "Ogmios"
+wait_for_port 1442 "Kupo"
 
 # Tests
 run_test() {
@@ -139,9 +194,6 @@ run_test "TestMultisigReferenceScript"
 
 # 4.4. Test multisig governance
 run_test "TestMultisigGovernance"
-
-# Stop the cluster (this will also be handled by kill_processes on EXIT)
-./bin/devkit.sh stop
 
 # Exit with the result of the last test
 exit $test_result
