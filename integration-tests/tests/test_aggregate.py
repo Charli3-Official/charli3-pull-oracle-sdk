@@ -10,6 +10,8 @@ from pycardano import (
     PaymentExtendedSigningKey,
     PaymentVerificationKey,
     ScriptHash,
+    TransactionBuilder,
+    TransactionOutput,
     VerificationKeyHash,
 )
 
@@ -126,6 +128,35 @@ class TestAggregate(TestBase):
             except Exception as e:
                 logger.warning(f"Failed to load key from {node_dir}: {e}")
 
+    async def create_fuel_utxo(self, amount: int = 50_000_000) -> None:
+        """Create a large UTxO to ensure sufficient ADA for fees and change."""
+        logger.info(f"Creating fuel UTxO of {amount} lovelace")
+
+        builder = TransactionBuilder(self.tx_manager.chain_query.context)
+        builder.add_input_address(self.admin_address)
+
+        # Create output to self
+        builder.add_output(TransactionOutput(address=self.admin_address, amount=amount))
+
+        try:
+            tx = builder.build_and_sign(
+                [self.admin_signing_key], change_address=self.admin_address
+            )
+
+            logger.info(f"Submitting fuel creation transaction: {tx.id}")
+            status, _ = await self.tx_manager.chain_query.submit_tx(
+                tx, wait_confirmation=True
+            )
+
+            if status != "confirmed":
+                logger.warning(f"Fuel creation failed with status: {status}")
+            else:
+                logger.info("Fuel UTxO created successfully")
+                await wait_for_indexing()
+
+        except Exception as e:
+            logger.warning(f"Failed to create fuel UTxO: {e}")
+
     def generate_feed_value(self, base: int, variance: float) -> int:
         """Generate feed value with random variance."""
         import random
@@ -178,6 +209,9 @@ class TestAggregate(TestBase):
     async def test_odv_transaction(self) -> None:
         """Test the ODV transaction with simulated node feeds."""
         logger.info("Starting ODV transaction test")
+
+        # Ensure we have a good UTxO for fees
+        await self.create_fuel_utxo()
 
         # 1. Load transaction keys
         signing_key, change_address = self.admin_signing_key, self.admin_address

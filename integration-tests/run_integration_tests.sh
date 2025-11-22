@@ -78,53 +78,66 @@ run_test_multiple_times() {
 }
 
 # Execute tests in order
-#0. Create Platform Auth NFT
+
+# 1. Initial Setup & Core Components
+# 1.1. Create Platform Auth NFT
 run_test "TestPlatformAuth"
 
-# 0.5. Create TestC3 Reward Tokens
+# 1.2. Create TestC3 Reward Tokens
 run_test "TestRewardToken"
 
-# 1. Deploy oracle
+# 1.3. Deploy oracle
 run_test "TestDeployment"
 
-# 2. Create reference script
+# 1.4. Create reference script
 run_test "TestCreateReferenceScript"
 
-# 3. Run aggregate tests multiple times
+# 2. Oracle Functionality
+# 2.1. Run aggregate tests
 run_test "TestAggregate"
 
-# 4. Test reward collection
-# run_test "TestNodeCollect"
-# run_test "TestPlatformCollect"
+# 2.2. Test node reward collection
+run_test "TestNodeCollect"
 
-# # 5. Test reward collection
-# run_test "TestNodeCollect or TestPlatformCollect"
+# 2.3. Test platform reward collection
+run_test "TestPlatformCollect"
 
-# 5. Test governance functions
-# 5.1
-run_test "TestRemoveNodes"
-# 5.2
-run_test "TestAddNodes"
-# 5.3
-run_test "TestEditSettings"
-# 5.4
-run_test "TestScaleUp"
-# 5.5
-run_test "TestScaleDown"
-
-# 6. Oracle Pause and Resume
+# 2.4. Oracle Pause and Resume
 run_test "TestOraclePauseResume"
 
-# 10. Oracle Remove
+# 2.5. Oracle Remove
 run_test "TestOracleRemove"
 
-# # 6. Run aggregate tests again to verify it still works after changes
+# 2.6. Additional Aggregate Tests (Planned)
 # run_test_multiple_times "TestAggregate" 1 10
 
-# # 8. Test multisig functionality
+# 3. Governance Functions
+# 3.1. Test removing nodes
+run_test "TestRemoveNodes"
+
+# 3.2. Test adding nodes
+run_test "TestAddNodes"
+
+# 3.3. Test editing settings
+run_test "TestEditSettings"
+
+# 3.4. Test scaling up
+run_test "TestScaleUp"
+
+# 3.5. Test scaling down
+run_test "TestScaleDown"
+
+# 4. Multisig Functionality
+# 4.1. Test multisig platform auth
 run_test "TestMultisigPlatformAuth"
+
+# 4.2. Test multisig deployment
 run_test "TestMultisigDeployment"
+
+# 4.3. Test multisig reference script
 run_test "TestMultisigReferenceScript"
+
+# 4.4. Test multisig governance
 run_test "TestMultisigGovernance"
 
 # Stop the cluster (this will also be handled by kill_processes on EXIT)
