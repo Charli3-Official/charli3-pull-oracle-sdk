@@ -66,6 +66,14 @@ class TestBase:
             # Set status callback once in base class
             self.orchestrator.status_callback = format_status_update
 
+            # OVERRIDE: Increase TTL offset for integration tests
+            # This helps avoid "outside of validity interval" errors in slower CI environments
+            # Default is 180s (3 mins), increasing to 600s (10 mins)
+            self.tx_manager.config.ttl_offset = 600
+            logger.info(
+                f"Overridden ttl_offset to {self.tx_manager.config.ttl_offset} for testing"
+            )
+
             # Store important configuration details as instance attributes
             self.admin_signing_key = self.payment_sk
             self.admin_verification_key = self.payment_vk
