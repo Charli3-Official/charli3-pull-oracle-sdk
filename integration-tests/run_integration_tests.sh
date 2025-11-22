@@ -45,10 +45,42 @@ trap 'kill_processes' SIGINT SIGTERM EXIT
 ensure_node_keys
 
 # Start the node in the background
-./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
-# Wait for the node to start
-echo "Waiting for the node to start..."
-sleep 70
+STARTUP_LOG="devkit_startup.log"
+echo "Starting environment... Logs redirected to $STARTUP_LOG"
+./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >"$STARTUP_LOG" 2>&1 &
+
+# Function to wait for a service port
+wait_for_port() {
+  local port=$1
+  local name=$2
+  local timeout=300 # 5 minutes timeout
+  local start_time=$(date +%s)
+
+  echo "Waiting for $name to be available on port $port..."
+
+  set +x # Disable debug output for the loop to avoid spam
+  while true; do
+    if (echo > /dev/tcp/localhost/$port) >/dev/null 2>&1; then
+      echo "$name is up and running on port $port!"
+      set -x # Re-enable debug output
+      break
+    fi
+
+    local current_time=$(date +%s)
+    if (( current_time - start_time > timeout )); then
+      echo "Timed out waiting for $name on port $port."
+      echo "Last 50 lines of startup log:"
+      tail -n 50 "$STARTUP_LOG"
+      set -x
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+# Wait for Ogmios and Kupo
+wait_for_port 1337 "Ogmios"
+wait_for_port 1442 "Kupo"
 
 # Tests
 run_test() {
