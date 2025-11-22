@@ -57,53 +57,10 @@ trap 'kill_processes' SIGINT SIGTERM EXIT
 ensure_node_keys
 
 # Start the node in the background
-STARTUP_LOG="devkit_startup.log"
-echo "Starting environment... Logs redirected to $STARTUP_LOG"
-./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >"$STARTUP_LOG" 2>&1 &
-
-# Function to wait for a service port
-wait_for_port() {
-  local port=$1
-  local name=$2
-  local timeout=300 # 5 minutes maximum wait
-  local start_time=$(date +%s)
-
-  echo "Waiting for $name to be available on port $port..."
-
-  set +x # Disable debug output
-  while true; do
-    # Try connecting using /dev/tcp (bash built-in)
-    if (echo > /dev/tcp/127.0.0.1/$port) >/dev/null 2>&1; then
-      echo "$name is up and running on port $port (TCP connection successful)!"
-      set -x
-      break
-    fi
-
-    # Fallback: Try using curl if available (useful if /dev/tcp is restricted)
-    if command -v curl >/dev/null 2>&1; then
-      if curl -s -o /dev/null "http://127.0.0.1:$port"; then
-        echo "$name is up and running on port $port (Curl connection successful)!"
-        set -x
-        break
-      fi
-    fi
-
-    local current_time=$(date +%s)
-    if (( current_time - start_time > timeout )); then
-      echo "Timed out waiting for $name on port $port."
-      echo "--- START OF DEVKIT LOGS (LAST 50 LINES) ---"
-      tail -n 50 "$STARTUP_LOG"
-      echo "--- END OF DEVKIT LOGS ---"
-      set -x
-      exit 1
-    fi
-    sleep 1
-  done
-}
-
-# Wait for Ogmios and Kupo
-wait_for_port 1337 "Ogmios"
-wait_for_port 1442 "Kupo"
+./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
+# Wait for the node to start
+echo "Waiting for the node to start..."
+sleep 70
 
 # Tests
 run_test() {
