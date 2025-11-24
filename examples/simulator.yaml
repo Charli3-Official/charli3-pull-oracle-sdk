@@ -27,6 +27,14 @@ fee_token:
 
 odv_validity_length: 120000 # 2 minutes in ms
 
+reference_script:
+  # Will pay out utxo with reference script to this address. And lookup the script utxo at this address.
+  address: "addr..."
+  # Looking through all utxos at an address could be inefficient. Provide optional utxo reference to speed up the reference script query.
+  utxo_reference:
+    transaction_id: "4606793120f127744d2b2f3bcc265a9a91eea8693f6eee2f48287738edededed"
+    output_index: 1
+
 simulation:
   node_keys_dir: "node_keys"
   base_feed: 100
