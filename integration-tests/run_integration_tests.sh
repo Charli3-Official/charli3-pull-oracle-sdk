@@ -24,6 +24,42 @@ kill_processes() {
   fi
 }
 
+# Function to wait for Ogmios and Kupo services
+wait_for_services() {
+  echo "Waiting for Ogmios and Kupo services to be ready..."
+  local retries=60
+  local wait_time=2
+  local ogmios_ready=false
+  local kupo_ready=false
+
+  for ((i=0; i<retries; i++)); do
+    # Check Ogmios (port 1337)
+    if curl -s -f -o /dev/null http://localhost:1337/health; then
+      ogmios_ready=true
+    else
+      ogmios_ready=false
+    fi
+
+    # Check Kupo (port 1442)
+    if curl -s -f -o /dev/null http://localhost:1442/health; then
+      kupo_ready=true
+    else
+      kupo_ready=false
+    fi
+
+    if [ "$ogmios_ready" = true ] && [ "$kupo_ready" = true ]; then
+      echo "Ogmios and Kupo are ready!"
+      return 0
+    fi
+
+    echo "Waiting for services... (Ogmios: $ogmios_ready, Kupo: $kupo_ready)"
+    sleep $wait_time
+  done
+
+  echo "Timed out waiting for services."
+  exit 1
+}
+
 # Function to generate test node keys if they don't exist
 ensure_node_keys() {
   # Check if node_keys directory exists and has content
@@ -61,6 +97,7 @@ ensure_node_keys
 # Wait for the node to start
 echo "Waiting for the node to start..."
 sleep 70
+wait_for_services
 
 # Tests
 run_test() {
@@ -139,10 +176,7 @@ run_test "TestOraclePause"
 # 3.7. Oracle Resume
 run_test "TestOracleResume"
 
-# 3.8. Oracle Pause
-run_test "TestOraclePause"
-
-# 3.9. Oracle Remove
+# 3.8. Oracle Remove
 run_test "TestOracleRemove"
 
 

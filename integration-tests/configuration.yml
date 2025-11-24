@@ -44,5 +44,5 @@ timing:
 tokens:
   fee_token_name: '546573744333'
   fee_token_policy: a4cf65dba0795311ed5b9b7bf90c4777b68fe2865c2d79fa65f8d5ad
-  oracle_policy: df5470a3922da227c67cb5e8e0cc8e3684aa0abee6e8c442aaebb140
+  oracle_policy: 93da80982fd657799cb602036f30ac9acbce285c1330c7a2e176a788
   platform_auth_policy: b34cdcad68f89375f140dd7ff2d77bf8a151faefa78cef01d57a109e
