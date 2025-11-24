@@ -8,6 +8,7 @@ import click
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.governance import (
     add_nodes,
     del_nodes,
@@ -27,6 +28,9 @@ from charli3_offchain_core.cli.transaction import (
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.oracle.config import (
     OracleScriptConfig,
+)
+from charli3_offchain_core.oracle.deployment.reference_script_finder import (
+    ReferenceScriptFinder,
 )
 from charli3_offchain_core.oracle.lifecycle.orchestrator import LifecycleOrchestrator
 
@@ -503,6 +507,7 @@ async def create_reference_script(config: Path, force: bool) -> None:
         click.echo("Loading configuration...")
         deployment_config = DeploymentConfig.from_yaml(config)
         contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         # Load keys and initialize components
         keys = load_keys_with_validation(deployment_config, contracts)
@@ -519,12 +524,15 @@ async def create_reference_script(config: Path, force: bool) -> None:
         )
 
         # Check for existing script
+        ref_script_finder = ReferenceScriptFinder(
+            chain_query, contracts, ref_script_config
+        )
         if not force:
             click.echo("Checking for existing reference script...")
-            existing = await chain_query.get_utxos(addresses.script_address)
+            existing = await ref_script_finder.find_manager_reference()
             if existing:
                 click.echo(
-                    f"Found existing reference script at: {addresses.script_address}"
+                    f"Found existing reference script at: {existing.output.address}"
                 )
                 if not click.confirm("Continue with creation?"):
                     return
@@ -534,7 +542,7 @@ async def create_reference_script(config: Path, force: bool) -> None:
 
         result = await tx_manager.build_reference_script_tx(
             script=contracts.spend.contract,
-            reference_script_address=addresses.script_address,
+            reference_script_address=ref_script_finder.reference_script_address,
             admin_address=addresses.admin_address,
             signing_key=keys.payment_sk,
             reference_ada=script_config.reference_ada_amount,
