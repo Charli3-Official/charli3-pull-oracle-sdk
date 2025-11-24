@@ -59,6 +59,10 @@ class TestPlatformAuth(TestBase):
         """Test minting a Platform Auth NFT."""
         logger.info("Starting Platform Auth NFT minting test")
 
+        # Seed the environment with plenty of collateral for all subsequent tests
+        logger.info("Creating initial collateral pool for test suite...")
+        await self.create_collateral_utxos(count=20, amount=20_000_000)
+
         # Check if Platform Auth NFT already exists
         platform_utxo = await find_platform_auth_nft(
             self.platform_auth_finder,

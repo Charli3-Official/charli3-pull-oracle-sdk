@@ -60,7 +60,7 @@ ensure_node_keys
 ./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
 # Wait for the node to start
 echo "Waiting for the node to start..."
-sleep 70
+sleep 120
 
 # Tests
 run_test() {
@@ -114,13 +114,7 @@ run_test "TestNodeCollect"
 # 2.3. Test platform reward collection
 run_test "TestPlatformCollect"
 
-# 2.4. Oracle Pause and Resume
-run_test "TestOraclePauseResume"
-
-# 2.5. Oracle Remove
-run_test "TestOracleRemove"
-
-# 2.6. Additional Aggregate Tests (Planned)
+# 2.4. Additional Aggregate Tests (Planned)
 # run_test_multiple_times "TestAggregate" 1 10
 
 # 3. Governance Functions
@@ -138,6 +132,16 @@ run_test "TestScaleUp"
 
 # 3.5. Test scaling down
 run_test "TestScaleDown"
+
+# 3.6. Oracle Pause
+run_test "TestOraclePause"
+
+# 3.7. Oracle Resume
+run_test "TestOracleResume"
+
+# 3.8. Oracle Remove
+run_test "TestOracleRemove"
+
 
 # 4. Multisig Functionality
 # 4.1. Test multisig platform auth
