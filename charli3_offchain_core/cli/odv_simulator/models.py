@@ -54,8 +54,8 @@ class SimulatedNode:
         """
         try:
             # Load keys from files
-            signing_key = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
-            verification_key = PaymentVerificationKey.load(node_dir / "feed.vkey")
+            signing_key = PaymentExtendedSigningKey.load(str(node_dir / "feed.skey"))
+            verification_key = PaymentVerificationKey.load(str(node_dir / "feed.vkey"))
 
             # Load VKH values
             feed_vkh = VerificationKeyHash(

@@ -109,13 +109,11 @@ class NodeSimulator:
                 for rs in validation_tx.transaction_body.required_signers:
                     logger.info(f"    {rs.to_primitive().hex()}")
 
-            tx_body_hash = validation_tx.transaction_body.hash()
-            signature = self.node.signing_key.sign(tx_body_hash)
-
+            signature = self.node.signing_key.sign(tx_body_hash_bytes)
             signature_hex = signature.hex()
 
             logger.info(
-                f"Node {self.node.hex_feed_vkh[:8]} signed tx body hash: {tx_body_hash.hex()[:16]}..."
+                f"Node {self.node.hex_feed_vkh[:8]} signed tx body hash: {tx_body_hash_bytes.hex()[:16]}..."
             )
             return signature_hex
 
