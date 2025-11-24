@@ -534,7 +534,7 @@ async def create_reference_script(config: Path, force: bool) -> None:
 
         result = await tx_manager.build_reference_script_tx(
             script=contracts.spend.contract,
-            script_address=addresses.script_address,
+            reference_script_address=addresses.script_address,
             admin_address=addresses.admin_address,
             signing_key=keys.payment_sk,
             reference_ada=script_config.reference_ada_amount,

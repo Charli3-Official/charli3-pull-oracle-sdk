@@ -247,7 +247,7 @@ class GovernanceBase:
         logger.info("Creating Escrow reference script")
         tx_build_result = await self.tx_manager.build_reference_script_tx(
             script=escrow_script.escrow_manager.contract,
-            script_address=escrow_script_address,
+            reference_script_address=escrow_script_address,
             admin_address=self.loaded_key.address,
             signing_key=self.loaded_key.payment_sk,
             reference_ada=6107270,  # Amount of ADA to lock with the reference script

@@ -23,6 +23,7 @@ tokens:
 
 reference_script:
   # Will pay out utxo with reference script to this address. And lookup the script utxo at this address.
+  # If not provided will derive from the deployed script address.
   address: "addr..."
   # Looking through all utxos at an address could be inefficient. Provide optional utxo reference to speed up the reference script query.
   utxo_reference:

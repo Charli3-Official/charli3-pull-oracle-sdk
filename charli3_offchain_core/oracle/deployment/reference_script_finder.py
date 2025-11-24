@@ -3,9 +3,17 @@
 import logging
 
 from opshin.builder import PlutusContract
-from pycardano import Network, PlutusV3Script, UTxO
+from pycardano import (
+    Address,
+    Network,
+    PlutusV3Script,
+    TransactionId,
+    TransactionInput,
+    UTxO,
+)
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 
 logger = logging.getLogger(__name__)
@@ -14,9 +22,33 @@ logger = logging.getLogger(__name__)
 class ReferenceScriptFinder:
     """Utility for finding and validating oracle reference scripts"""
 
-    def __init__(self, chain_query: ChainQuery, contracts: OracleContracts) -> None:
+    def __init__(
+        self,
+        chain_query: ChainQuery,
+        contracts: OracleContracts,
+        ref_script_config: ReferenceScriptConfig,
+    ) -> None:
         self.chain_query = chain_query
         self.contracts = contracts
+
+        if ref_script_config.utxo_reference:
+            self.utxo_reference = TransactionInput(
+                transaction_id=TransactionId(
+                    bytes.fromhex(ref_script_config.utxo_reference.transaction_id)
+                ),
+                index=ref_script_config.utxo_reference.output_index,
+            )
+
+        script_address = (
+            self.contracts.spend.mainnet_addr
+            if self.chain_query.context.network == Network.MAINNET
+            else self.contracts.spend.testnet_addr
+        )
+        self.reference_script_address = (
+            Address.from_primitive(ref_script_config.address)
+            if ref_script_config.address
+            else script_address
+        )
 
     async def find_manager_reference(
         self,
@@ -31,15 +63,8 @@ class ReferenceScriptFinder:
             # Get script hash
             script_hash = self.contracts.spend.script_hash
 
-            # Get address based on network
-            script_address = (
-                self.contracts.spend.mainnet_addr
-                if self.chain_query.context.network == Network.MAINNET
-                else self.contracts.spend.testnet_addr
-            )
-
             # Get UTxOs at script address
-            utxos = await self.chain_query.get_utxos(script_address)
+            utxos = await self.chain_query.get_utxos(self.reference_script_address)
             reference_utxos = [utxo for utxo in utxos if utxo.output.script]
 
             if not reference_utxos:

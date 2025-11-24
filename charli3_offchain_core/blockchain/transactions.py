@@ -196,7 +196,7 @@ class TransactionManager:
     async def build_reference_script_tx(
         self,
         script: PlutusV3Script,
-        script_address: Address,
+        reference_script_address: Address,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         reference_ada: int | None = None,
@@ -208,7 +208,7 @@ class TransactionManager:
             # Create reference script output
             reference_amount = reference_ada or self.config.default_script_utxo_cost
             reference_output = TransactionOutput(
-                address=script_address, amount=reference_amount, script=script
+                address=reference_script_address, amount=reference_amount, script=script
             )
             builder.add_output(reference_output)
 
