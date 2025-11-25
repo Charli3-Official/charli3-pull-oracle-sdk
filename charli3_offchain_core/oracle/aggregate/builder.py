@@ -23,6 +23,7 @@ from charli3_offchain_core.blockchain.transactions import (
     TransactionManager,
     ValidityWindow,
 )
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.base import (
     PosixTime,
 )
@@ -70,6 +71,7 @@ class OracleTransactionBuilder:
         tx_manager: TransactionManager,
         script_address: Address,
         policy_id: ScriptHash,
+        ref_script_config: ReferenceScriptConfig,
         reward_token_hash: ScriptHash | None = None,
         reward_token_name: AssetName | None = None,
     ) -> None:
@@ -83,6 +85,7 @@ class OracleTransactionBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
+        self.ref_script_config = ref_script_config
         self.reward_token_hash = reward_token_hash
         self.reward_token_name = reward_token_name
         self.network_config = self.tx_manager.chain_query.config.network_config
@@ -128,7 +131,11 @@ class OracleTransactionBuilder:
             for i, vkh in enumerate(message.node_feeds_sorted_by_feed.keys(), 1):
                 feed_value = message.node_feeds_sorted_by_feed[vkh]
                 print(f"  {i}. {vkh.to_primitive().hex()} (feed={feed_value})")
-            script_utxo = common.get_reference_script_utxo(utxos)
+            script_utxo = await common.get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                self.ref_script_config,
+                self.script_address,
+            )
 
             reference_inputs = {settings_utxo}
 

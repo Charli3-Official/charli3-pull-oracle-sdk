@@ -1,4 +1,4 @@
-""" Common utility functions for oracle operations. """
+"""Common utility functions for oracle operations."""
 
 import time
 from typing import Any
@@ -9,10 +9,12 @@ from pycardano import (
     RawPlutusData,
     ScriptHash,
     UTxO,
+    plutus_script_hash,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     SomeAsset,
@@ -71,23 +73,47 @@ def get_fee_rate_reference_utxo(chain_query: ChainQuery, rate_nft: SomeAsset) ->
         raise TransactionError(f"Failed to get fee rate UTxOs: {e}") from e
 
 
-def get_reference_script_utxo(utxos: list[UTxO]) -> UTxO:
+async def get_reference_script_utxo(
+    chain_query: ChainQuery,
+    ref_script_config: ReferenceScriptConfig,
+    script_address: Address | str,
+) -> UTxO:
     """Find reference script UTxO.
 
-    Args:
-        utxos: List of UTxOs to search
-
-    Returns:
-        UTxO: Reference script UTxO
-
     Raises:
-        StateValidationError: If no reference script UTxO is found
+        ValidationError: If no reference script UTxO is found
     """
-    for utxo in utxos:
-        if utxo.output.script:
-            return utxo
 
-    raise ValidationError("No reference script UTxO found")
+    try:
+        if isinstance(script_address, str):
+            script_address = Address.from_primitive(script_address)
+
+        reference_script_address = (
+            Address.from_primitive(ref_script_config.address)
+            if ref_script_config.address
+            else script_address
+        )
+
+        # Get script hash
+        script_hash = script_address.payment_part
+
+        # Get UTxOs at script address
+        utxos = await chain_query.get_utxos(reference_script_address)
+        reference_utxos = [utxo for utxo in utxos if utxo.output.script]
+
+        if not reference_utxos:
+            raise ValidationError(
+                f"No utxos with script at address {reference_script_address}"
+            )
+
+        for utxo in reference_utxos:
+            if plutus_script_hash(utxo.output.script) == script_hash:
+                return utxo
+
+        raise ValidationError(f"No matching script hash {script_hash}")
+
+    except Exception as e:  # pylint: disable=broad-except
+        raise ValidationError("No reference script UTxO found") from e
 
 
 def build_aggregate_message(nodes_messages: list) -> AggregateMessage:

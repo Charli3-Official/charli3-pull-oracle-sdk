@@ -16,6 +16,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_progress,
     print_status,
 )
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.base import TxValidityInterval
 from charli3_offchain_core.models.client import OdvFeedRequest, OdvTxSignatureRequest
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
@@ -34,7 +35,11 @@ logger = logging.getLogger(__name__)
 class OracleSimulator:
     """Orchestrates oracle simulation operations."""
 
-    def __init__(self, config: SimulationConfig) -> None:
+    def __init__(
+        self,
+        config: SimulationConfig,
+        ref_script_config: ReferenceScriptConfig,
+    ) -> None:
         """Initialize simulator with configuration."""
         self.config = config
 
@@ -62,6 +67,7 @@ class OracleSimulator:
             tx_manager=self.ctx.tx_manager,
             script_address=self.ctx.script_address,
             policy_id=self.ctx.policy_id,
+            ref_script_config=ref_script_config,
             reward_token_hash=self.ctx.reward_token_hash,
             reward_token_name=self.ctx.reward_token_name,
         )

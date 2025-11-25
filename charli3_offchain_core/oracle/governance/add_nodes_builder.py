@@ -24,6 +24,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_title,
 )
 from charli3_offchain_core.cli.config.nodes import NodesConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     Nodes,
     OracleSettingsDatum,
@@ -56,7 +57,9 @@ class AddNodesBuilder(BaseBuilder):
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: Any,
+        script_address: Address,
         utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         new_nodes_config: NodesConfig,
@@ -69,7 +72,11 @@ class AddNodesBuilder(BaseBuilder):
                 utxos, policy_hash
             )
 
-            script_utxo = get_reference_script_utxo(utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
+            )
 
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")

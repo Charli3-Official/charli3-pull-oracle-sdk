@@ -19,6 +19,7 @@ from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.base import LoadedKeys
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
@@ -66,10 +67,12 @@ class RewardOrchestrator:
         chain_query: ChainQuery,
         tx_manager: TransactionManager,
         script_address: Address | str,
+        ref_script_config: ReferenceScriptConfig,
         status_callback: Callable | None = None,
     ) -> None:
         self.chain_query = chain_query
         self.tx_manager = tx_manager
+        self.ref_script_config = ref_script_config
         self.script_address = (
             Address.from_primitive(script_address)
             if isinstance(script_address, str)
@@ -119,6 +122,8 @@ class RewardOrchestrator:
             contract_utxos=contract_utxos,
             reward_token=reward_token,
             loaded_key=loaded_key,
+            script_address=self.script_address,
+            ref_script_config=self.ref_script_config,
             network=network,
             max_inputs=max_inputs,
             required_signers=required_signers,
@@ -184,6 +189,8 @@ class RewardOrchestrator:
             contract_utxos=contract_utxos,
             reward_token=reward_token,
             loaded_key=loaded_key,
+            script_address=self.script_address,
+            ref_script_config=self.ref_script_config,
             network=network,
             max_inputs=max_inputs,
             required_signers=required_signers,
@@ -244,6 +251,8 @@ class RewardOrchestrator:
             reward_token=reward_token,
             loaded_key=loaded_key,
             network=network,
+            script_address=self.script_address,
+            ref_script_config=self.ref_script_config,
             reward_dismission_period_length=reward_dismission_period_length,
             max_inputs=max_inputs,
             required_signers=required_signers,

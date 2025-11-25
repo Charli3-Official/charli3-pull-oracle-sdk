@@ -10,6 +10,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
 )
 from charli3_offchain_core.cli.config.odv_client import OdvClientConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.config.utils import async_command
 from charli3_offchain_core.cli.odv_client.formatting import (
     print_aggregate_summary,
@@ -45,6 +46,7 @@ async def send(config: Path, wait: bool) -> None:
         print_header("ODV Send Request")
         print_progress("Loading configuration and initializing network connection")
         odv_config = OdvClientConfig.from_yaml(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
         ctx = TransactionContext(odv_config.tx_config)
 
         signing_key, change_address = ctx.load_keys()
@@ -53,6 +55,7 @@ async def send(config: Path, wait: bool) -> None:
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
+            ref_script_config=ref_script_config,
             reward_token_hash=ctx.reward_token_hash,
             reward_token_name=ctx.reward_token_name,
         )

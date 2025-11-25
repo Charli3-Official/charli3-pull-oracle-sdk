@@ -26,6 +26,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_title,
 )
 from charli3_offchain_core.cli.config.nodes import NodesConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     Nodes,
@@ -72,7 +73,9 @@ class DelNodesBuilder(BaseBuilder):
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: ScriptHash,
+        script_address: Address,
         contract_utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         new_nodes_config: NodesConfig,
@@ -116,7 +119,11 @@ class DelNodesBuilder(BaseBuilder):
             )
 
             # Contract Script
-            script_utxo = get_reference_script_utxo(contract_utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
+            )
 
             # Nodes to remove
             nodes_to_remove = {node for node in new_nodes_config.nodes}  # noqa
