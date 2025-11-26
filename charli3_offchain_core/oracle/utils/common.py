@@ -10,6 +10,8 @@ from pycardano import (
     ScriptHash,
     UTxO,
     plutus_script_hash,
+    TransactionInput,
+    TransactionId,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -96,6 +98,28 @@ async def get_reference_script_utxo(
 
         # Get script hash
         script_hash = script_address.payment_part
+
+        if ref_script_config.utxo_reference:
+            utxo_reference = TransactionInput(
+                transaction_id=TransactionId(
+                    bytes.fromhex(ref_script_config.utxo_reference.transaction_id)
+                ),
+                index=ref_script_config.utxo_reference.output_index,
+            )
+            utxo = chain_query.get_utxo_by_ref_kupo(utxo_reference)
+            if utxo is None:
+                raise ValidationError(
+                    f"No matching utxo found {ref_script_config.utxo_reference}"
+                )
+            if utxo.output.script is None:
+                raise ValidationError(
+                    f"No utxos with script by reference {ref_script_config.utxo_reference}"
+                )
+            if plutus_script_hash(utxo.output.script) == script_hash:
+                return utxo
+            raise ValidationError(
+                f"Not matching script hash {script_hash} for utxo reference {ref_script_config.utxo_reference}"
+            )
 
         # Get UTxOs at script address
         utxos = await chain_query.get_utxos(reference_script_address)
