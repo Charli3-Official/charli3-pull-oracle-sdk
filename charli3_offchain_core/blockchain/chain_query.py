@@ -24,9 +24,9 @@ from pycardano import (
     Transaction,
     TransactionBuilder,
     TransactionId,
+    TransactionInput,
     TransactionOutput,
     UTxO,
-    TransactionInput,
 )
 from pycardano.backend.kupo import KupoChainContextExtension
 
