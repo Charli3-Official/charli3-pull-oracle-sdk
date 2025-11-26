@@ -26,7 +26,9 @@ from charli3_offchain_core.cli.config.formatting import (
 from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.config.utils import async_command
 from charli3_offchain_core.cli.setup import (
+    apply_spend_params_with_aiken_compiler,
     setup_management_from_config,
+    setup_token,
 )
 from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
@@ -34,6 +36,7 @@ from charli3_offchain_core.cli.transaction import (
 )
 from charli3_offchain_core.constants.status import ProcessStatus
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
+from charli3_offchain_core.models.oracle_datums import OracleConfiguration
 from charli3_offchain_core.oracle.config import OracleScriptConfig
 from charli3_offchain_core.oracle.deployment.reference_script_finder import (
     ReferenceScriptFinder,
@@ -79,14 +82,44 @@ async def create(config: Path, force: bool) -> None:
     """Create oracle manager reference script separately."""
     try:
         # Load configuration and contracts
-        click.echo("Loading configuration...")
+        print_progress("Loading configuration...")
         deployment_config = DeploymentConfig.from_yaml(config)
-        contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
         ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
+        reward_token = setup_token(
+            deployment_config.tokens.reward_token_policy,
+            deployment_config.tokens.reward_token_name,
+        )
+
+        # Create oracle configuration
+        oracle_config = OracleConfiguration(
+            platform_auth_nft=bytes.fromhex(
+                deployment_config.tokens.platform_auth_policy
+            ),
+            pause_period_length=deployment_config.timing.pause_period,
+            reward_dismissing_period_length=deployment_config.timing.reward_dismissing_period,
+            fee_token=reward_token,
+        )
+
+        # Parameterize contracts
+        if deployment_config.use_aiken:
+            parameterized_contracts = apply_spend_params_with_aiken_compiler(
+                oracle_config, deployment_config.blueprint_path
+            )
+        else:
+            base_contracts = OracleContracts.from_blueprint(
+                deployment_config.blueprint_path
+            )
+            parameterized_contracts = OracleContracts(
+                spend=base_contracts.apply_spend_params(oracle_config),
+                mint=base_contracts.mint,
+            )
+
         # Load keys and initialize components
-        keys = load_keys_with_validation(deployment_config, contracts)
-        addresses = derive_deployment_addresses(deployment_config, contracts)
+        keys = load_keys_with_validation(deployment_config, parameterized_contracts)
+        addresses = derive_deployment_addresses(
+            deployment_config, parameterized_contracts
+        )
 
         # Initialize chain query
         chain_query = create_chain_query(deployment_config.network)
@@ -100,33 +133,34 @@ async def create(config: Path, force: bool) -> None:
 
         # Check for existing script
         ref_script_finder = ReferenceScriptFinder(
-            chain_query, contracts, ref_script_config
+            chain_query, parameterized_contracts, ref_script_config
         )
         if not force:
-            click.echo("Checking for existing reference script...")
+            print_progress("Checking for existing reference script...")
             existing = await ref_script_finder.find_manager_reference()
             if existing:
-                click.echo(
+                print_information(
                     f"Found existing reference script at: {existing.output.address}"
                 )
-                if not click.confirm("Continue with creation?"):
-                    return
+        if not click.confirm("Continue with creation?"):
+            raise click.Abort()
 
         # Create and submit transaction
-        click.echo("\nCreating reference script...")
+        print_progress("Creating reference script...")
 
         result = await tx_manager.build_reference_script_tx(
-            script=contracts.spend.contract,
+            script=parameterized_contracts.spend.contract,
             reference_script_address=ref_script_finder.reference_script_address,
             admin_address=addresses.admin_address,
             signing_key=keys.payment_sk,
             reference_ada=script_config.reference_ada_amount,
         )
 
-        status, tx = await tx_manager.sign_and_submit(result, [keys.payment_sk])
+        status, _ = await tx_manager.sign_and_submit(result, [keys.payment_sk])
         if status == "confirmed":
-            click.secho("\n✓ Reference script created successfully!", fg="green")
-            click.echo(f"Transaction: {tx.id}")
+            print_status(
+                "Reference script creation", "completed successfully", success=True
+            )
         else:
             raise click.ClickException(f"Transaction failed with status: {status}")
 

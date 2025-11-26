@@ -2,7 +2,6 @@
 
 import logging
 
-from opshin.builder import PlutusContract
 from pycardano import (
     Address,
     Network,
@@ -10,6 +9,7 @@ from pycardano import (
     TransactionId,
     TransactionInput,
     UTxO,
+    plutus_script_hash,
 )
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
@@ -65,7 +65,7 @@ class ReferenceScriptFinder:
             # Get script hash
             script_hash = self.contracts.spend.script_hash
 
-            if self.utxo_reference:
+            if self.ref_script_config.utxo_reference:
                 utxo = self.chain_query.get_utxo_by_ref_kupo(self.utxo_reference)
                 if utxo is None:
                     raise ValidationError(
@@ -115,7 +115,7 @@ class ReferenceScriptFinder:
             True if script matches target
         """
         try:
-            return PlutusContract(script).script_hash == target_hash
+            return plutus_script_hash(script) == target_hash
         except Exception as e:  # pylint: disable=broad-except
             logger.error("Error validating script: %s", e)
             return False

@@ -140,7 +140,6 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
         # Handle reference scripts
         reference_result, needs_reference = await orchestrator.handle_reference_scripts(
             script_config=configs["script"],
-            script_address=addresses.script_address,
             admin_address=addresses.admin_address,
             signing_key=payment_sk,
         )
