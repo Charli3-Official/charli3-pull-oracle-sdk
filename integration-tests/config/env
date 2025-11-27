@@ -17,6 +17,11 @@ HOST_SUBMIT_API_PORT=8090
 HOST_OGMIOS_PORT=1337
 HOST_KUPO_PORT=1442
 
+# Service Binding Configuration
+# Ensure services bind to all interfaces inside the container so they are accessible from the host
+OGMIOS_HOST=0.0.0.0
+KUPO_HOST=0.0.0.0
+
 #######################################################
 # Viewer Config - DON'T CHANGE
 #######################################################

@@ -41,6 +41,13 @@ class TestOracleRemove(TestBase):
             script_address=self.oracle_addresses.script_address,
         )
 
+        # OVERRIDE: Increase TTL offset for this test
+        # The remove transaction seems to be particularly sensitive to validity interval
+        self.lifecycle_orchestrator.tx_manager.config.ttl_offset = 600
+        logger.info(
+            f"Overridden ttl_offset to {self.lifecycle_orchestrator.tx_manager.config.ttl_offset} for TestOracleRemove"
+        )
+
     @pytest.mark.asyncio
     @pytest.mark.run(order=10.1)
     @async_retry(tries=TEST_RETRIES, delay=5)
@@ -128,7 +135,7 @@ class TestOracleRemove(TestBase):
             platform_script=platform_script,
             change_address=self.oracle_addresses.admin_address,
             signing_key=self.loaded_keys.payment_sk,
-            pair_count=2,
+            pause_period=self.oracle_config.pause_period_length,
         )
 
         assert (

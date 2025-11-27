@@ -3,13 +3,25 @@
 set -e  # Exit on any command failure
 set -x  # Print each command before executing it
 
+# Initialize test result to 0
+test_result=0
+
 # Function to kill processes
 kill_processes() {
+  # Capture the exit status of the script (or the command that triggered the trap)
+  local saved_exit_status=$?
+
   echo "Shutting down the cluster..."
   ./bin/devkit.sh stop
 
-  # Preserve the exit code from tests
-  exit $test_result
+  # Determine the final exit code
+  # If test_result is non-zero, use it (test failure).
+  # Otherwise, use saved_exit_status (script crash or success).
+  if [ $test_result -ne 0 ]; then
+    exit $test_result
+  else
+    exit $saved_exit_status
+  fi
 }
 
 # Function to generate test node keys if they don't exist
@@ -48,7 +60,7 @@ ensure_node_keys
 ./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
 # Wait for the node to start
 echo "Waiting for the node to start..."
-sleep 70
+sleep 120
 
 # Tests
 run_test() {
@@ -78,56 +90,71 @@ run_test_multiple_times() {
 }
 
 # Execute tests in order
-#0. Create Platform Auth NFT
+
+# 1. Initial Setup & Core Components
+# 1.1. Create Platform Auth NFT
 run_test "TestPlatformAuth"
 
-# 0.5. Create TestC3 Reward Tokens
+# 1.2. Create TestC3 Reward Tokens
 run_test "TestRewardToken"
 
-# 1. Deploy oracle
+# 1.3. Deploy oracle
 run_test "TestDeployment"
 
-# 2. Create reference script
+# 1.4. Create reference script
 run_test "TestCreateReferenceScript"
 
-# 3. Run aggregate tests multiple times
+# 2. Oracle Functionality
+# 2.1. Run aggregate tests
 run_test "TestAggregate"
 
-# 4. Test reward collection
+# 2.2. Test node reward collection
 run_test "TestNodeCollect"
+
+# 2.3. Test platform reward collection
 run_test "TestPlatformCollect"
 
-# # 5. Test reward collection
-# run_test "TestNodeCollect or TestPlatformCollect"
-# 5. Test governance functions
-# 5.1
-run_test "TestRemoveNodes"
-# 5.2
-run_test "TestAddNodes"
-# 5.3
-run_test "TestEditSettings"
-# 5.4
-run_test "TestScaleUp"
-# 5.5
-run_test "TestScaleDown"
-
-# 6. Oracle Pause and Resume
-run_test "TestOraclePauseResume"
-
-# 10. Oracle Remove
-run_test "TestOracleRemove"
-
-# # 6. Run aggregate tests again to verify it still works after changes
+# 2.4. Additional Aggregate Tests (Planned)
 # run_test_multiple_times "TestAggregate" 1 10
 
-# # 8. Test multisig functionality
-run_test "TestMultisigPlatformAuth"
-run_test "TestMultisigDeployment"
-run_test "TestMultisigReferenceScript"
-run_test "TestMultisigGovernance"
+# 3. Governance Functions
+# 3.1. Test removing nodes
+run_test "TestRemoveNodes"
 
-# Stop the cluster (this will also be handled by kill_processes on EXIT)
-./bin/devkit.sh stop
+# 3.2. Test adding nodes
+run_test "TestAddNodes"
+
+# 3.3. Test editing settings
+run_test "TestEditSettings"
+
+# 3.4. Test scaling up
+run_test "TestScaleUp"
+
+# 3.5. Test scaling down
+run_test "TestScaleDown"
+
+# 3.6. Oracle Pause
+run_test "TestOraclePause"
+
+# 3.7. Oracle Resume
+run_test "TestOracleResume"
+
+# 3.8. Oracle Remove
+run_test "TestOracleRemove"
+
+
+# 4. Multisig Functionality
+# 4.1. Test multisig platform auth
+run_test "TestMultisigPlatformAuth"
+
+# 4.2. Test multisig deployment
+run_test "TestMultisigDeployment"
+
+# 4.3. Test multisig reference script
+run_test "TestMultisigReferenceScript"
+
+# 4.4. Test multisig governance
+run_test "TestMultisigGovernance"
 
 # Exit with the result of the last test
 exit $test_result

@@ -555,6 +555,10 @@ class ChainQuery:
                 script_json = await asyncio.to_thread(
                     lambda: requests.get(kupo_script_url, timeout=(5, 15)).json()
                 )
+                if not isinstance(script_json, dict):
+                    raise ScriptQueryError(
+                        f"Script not found or invalid response for hash: {script_hash}"
+                    )
                 script = NativeScript.from_cbor(script_json["script"])
             if not script:
                 raise ScriptQueryError(f"Script not found for hash: {script_hash}")

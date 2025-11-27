@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 
 ENV_FILE="../config/env"
 
-source $ENV_FILE
+. $ENV_FILE
 
 echo "--------------------------------------------"
 echo "Urls"

@@ -68,7 +68,7 @@ cli)
 version)
   # Show version information
   if [ -f $CONFIG_DIR/version ]; then
-    source $CONFIG_DIR/version
+    . $CONFIG_DIR/version
     echo "DevKit Version: $tag"
     [ -n "$revision" ] && echo "Revision: $revision"
   else

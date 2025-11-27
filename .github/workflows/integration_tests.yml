@@ -1,44 +1,50 @@
-# name: Run Integration Tests
+name: Run Integration Tests
 
-# on:
-#   push:
-#     branches:
-#       - main
+on:
+  push:
+    branches:
+      - main
 
-#   pull_request:
-#     branches:
-#       - main
+  pull_request:
+    branches:
+      - main
+      - integration-tests
 
-# jobs:
-#   integration-tests:
-#     runs-on: ubuntu-latest
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
 
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-#       - name: Install poetry
-#         run: pipx install poetry
+      - name: Install poetry
+        run: pipx install poetry
 
-#       - name: Set up Python
-#         uses: actions/setup-python@v4
-#         with:
-#           python-version: "3.10"
-#           cache: "poetry"
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
 
-#       - name: Install project dependencies
-#         run: |
-#           poetry install
+      - name: Install project dependencies
+        run: |
+          poetry install
 
-#       - name: Make integration test script executable
-#         run: |
-#           chmod +x integration-tests/run_integration_tests.sh
-#           chmod +x integration-tests/bin/devkit.sh
-#           find integration-tests/scripts -type f -name "*.sh" -exec chmod +x {} \;
+      - name: Setup Aiken
+        uses: aiken-lang/setup-aiken@v1
+        with:
+          version: v1.1.19
 
-#       - name: Run integration tests script
-#         shell: bash
-#         working-directory: integration-tests
-#         run: |
-#           # Run the script and capture its exit code
-#           ./run_integration_tests.sh
+      - name: Make integration test script executable
+        run: |
+          chmod +x integration-tests/run_integration_tests.sh
+          chmod +x integration-tests/bin/devkit.sh
+          find integration-tests/scripts -type f -name "*.sh" -exec chmod +x {} \;
+
+      - name: Run integration tests script
+        shell: bash
+        working-directory: integration-tests
+        run: |
+          # Run the script and capture its exit code
+          ./run_integration_tests.sh

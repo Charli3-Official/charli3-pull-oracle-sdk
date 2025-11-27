@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pycardano import (
@@ -9,6 +10,8 @@ from pycardano import (
     PaymentExtendedSigningKey,
     PaymentVerificationKey,
     ScriptHash,
+    TransactionBuilder,
+    TransactionOutput,
     VerificationKeyHash,
 )
 
@@ -24,12 +27,9 @@ from charli3_offchain_core.models.message import (
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     PriceData,
-    RewardConsensusPending,
-    RewardTransportVariant,
 )
 from charli3_offchain_core.oracle.aggregate.builder import (
     OracleTransactionBuilder,
-    RewardsResult,
 )
 from charli3_offchain_core.oracle.utils import asset_checks, common, state_checks
 from charli3_offchain_core.oracle.utils.calc_methods import median
@@ -81,7 +81,9 @@ class TestAggregate(TestBase):
             script_address=self.oracle_script_address,
             policy_id=ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
             reward_token_hash=reward_token_hash,
-            reward_token_name=AssetName(reward_token_name),
+            reward_token_name=(
+                AssetName(reward_token_name) if reward_token_name else None
+            ),
         )
 
         logger.info("TestAggregate setup complete")
@@ -125,6 +127,35 @@ class TestAggregate(TestBase):
                 logger.info(f"Loaded node key: {feed_vkh}")
             except Exception as e:
                 logger.warning(f"Failed to load key from {node_dir}: {e}")
+
+    async def create_fuel_utxo(self, amount: int = 50_000_000) -> None:
+        """Create a large UTxO to ensure sufficient ADA for fees and change."""
+        logger.info(f"Creating fuel UTxO of {amount} lovelace")
+
+        builder = TransactionBuilder(self.tx_manager.chain_query.context)
+        builder.add_input_address(self.admin_address)
+
+        # Create output to self
+        builder.add_output(TransactionOutput(address=self.admin_address, amount=amount))
+
+        try:
+            tx = builder.build_and_sign(
+                [self.admin_signing_key], change_address=self.admin_address
+            )
+
+            logger.info(f"Submitting fuel creation transaction: {tx.id}")
+            status, _ = await self.tx_manager.chain_query.submit_tx(
+                tx, wait_confirmation=True
+            )
+
+            if status != "confirmed":
+                logger.warning(f"Fuel creation failed with status: {status}")
+            else:
+                logger.info("Fuel UTxO created successfully")
+                await wait_for_indexing()
+
+        except Exception as e:
+            logger.warning(f"Failed to create fuel UTxO: {e}")
 
     def generate_feed_value(self, base: int, variance: float) -> int:
         """Generate feed value with random variance."""
@@ -179,6 +210,9 @@ class TestAggregate(TestBase):
         """Test the ODV transaction with simulated node feeds."""
         logger.info("Starting ODV transaction test")
 
+        # Ensure we have a good UTxO for fees
+        await self.create_fuel_utxo()
+
         # 1. Load transaction keys
         signing_key, change_address = self.admin_signing_key, self.admin_address
 
@@ -188,7 +222,6 @@ class TestAggregate(TestBase):
         # 3. Create aggregate message using core module utility
         aggregate_message = common.build_aggregate_message(
             node_messages,
-            self.tx_manager.chain_query.get_current_posix_chain_time_ms(),
         )
 
         # 4. Calculate the expected median value
@@ -231,43 +264,6 @@ class TestAggregate(TestBase):
 
         logger.info("ODV transaction test completed successfully")
 
-    @pytest.mark.asyncio
-    @pytest.mark.run(order=3.2)
-    async def test_rewards_processing(self) -> None:
-        """Test rewards calculation and distribution after ODV transaction."""
-        logger.info("Starting rewards processing test")
-
-        # 1. Load keys
-        signing_key, change_address = self.admin_signing_key, self.admin_address
-
-        # 2. Build rewards transaction
-        logger.info("Building rewards transaction")
-        rewards_result = await self.odv_builder.build_rewards_tx(
-            signing_key=signing_key,
-            change_address=change_address,
-        )
-
-        # 3. Submit the transaction
-        logger.info(f"Submitting rewards transaction: {rewards_result.transaction.id}")
-        status, _ = await self.tx_manager.sign_and_submit(
-            rewards_result.transaction,
-            [signing_key],
-            wait_confirmation=True,
-        )
-
-        assert (
-            status == "confirmed"
-        ), f"Rewards transaction failed with status: {status}"
-        logger.info(f"Rewards transaction confirmed: {rewards_result.transaction.id}")
-
-        # 4. Wait for indexing
-        await wait_for_indexing(10)
-
-        # 5. Verify reward distribution is correct
-        await self.verify_reward_distribution(rewards_result)
-
-        logger.info("Rewards processing test completed successfully")
-
     @async_retry(tries=TEST_RETRIES, delay=5)
     async def verify_odv_outputs(self, expected_median: int) -> None:
         """Verify that ODV outputs are created correctly."""
@@ -275,37 +271,6 @@ class TestAggregate(TestBase):
 
         # Get UTxOs at script address
         utxos = await self.chain_query.get_utxos(self.oracle_script_address)
-
-        # Check for pending transport UTxO
-        pending_transports = state_checks.filter_pending_transports(
-            asset_checks.filter_utxos_by_token_name(
-                utxos,
-                ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-                "C3RT",
-            )
-        )
-
-        # Verify at least one pending transport exists
-        assert len(pending_transports) > 0, "No pending transport UTxOs found"
-
-        # Get the latest pending transport and check its data
-        latest_transport = pending_transports[0]
-        assert isinstance(latest_transport.output.datum, RewardTransportVariant)
-        assert isinstance(latest_transport.output.datum.datum, RewardConsensusPending)
-
-        # Verify the oracle feed value matches the expected median
-        transport_feed = latest_transport.output.datum.datum.aggregation.oracle_feed
-        assert (
-            transport_feed == expected_median
-        ), f"Median mismatch: {transport_feed} vs {expected_median}"
-
-        # Check number of node feeds in the transport matches our test nodes
-        node_feeds = (
-            latest_transport.output.datum.datum.aggregation.message.node_feeds_sorted_by_feed
-        )
-        assert len(node_feeds) == len(
-            self.node_keys
-        ), f"Node count mismatch: {len(node_feeds)} vs {len(self.node_keys)}"
 
         # Check for valid agg state UTxO
         agg_states = asset_checks.filter_utxos_by_token_name(
@@ -345,7 +310,7 @@ class TestAggregate(TestBase):
         logger.info("ODV outputs verified successfully")
 
     @async_retry(tries=TEST_RETRIES, delay=5)
-    async def verify_reward_distribution(self, rewards_result: RewardsResult) -> None:
+    async def verify_reward_distribution(self, rewards_result: Any) -> None:
         """Verify that rewards are distributed correctly."""
         logger.info("Verifying reward distribution")
 
@@ -397,21 +362,11 @@ class TestAggregate(TestBase):
                 f"Reward account ADA amount: {reward_account_utxo.output.amount.coin}"
             )
 
-        # Check empty transports are created (no pending rewards)
-        empty_transports = state_checks.filter_empty_transports(
-            asset_checks.filter_utxos_by_token_name(
-                utxos,
-                ScriptHash(bytes.fromhex(self.token_config.oracle_policy)),
-                "C3RT",
-            )
-        )
-
-        assert len(empty_transports) > 0, "No empty transport UTxOs found after rewards"
-
-        # Verify the reward account datum nodes_to_rewards list is populated
+        # Verify the reward account datum nodes_to_rewards mapping is populated
         reward_account_datum = reward_account_utxo.output.datum.datum
+        # nodes_to_rewards is a dict mapping FeedVkh to amount
         assert (
-            sum(reward_account_datum.nodes_to_rewards) > 0
+            sum(reward_account_datum.nodes_to_rewards.values()) > 0
         ), "No rewards in nodes_to_rewards"
 
         # Log reward distribution details
