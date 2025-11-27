@@ -298,7 +298,7 @@ async def remove(config: Path, output: Path | None) -> None:  # noqa
             )
 
     except Exception as e:
-        logger.error("Reference script creation failed", exc_info=e)
+        logger.error("Reference script removal failed", exc_info=e)
         raise click.ClickException(str(e)) from e
 
 

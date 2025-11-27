@@ -8,6 +8,7 @@ from pycardano import (
     BlockFrostChainContext,
     ExtendedSigningKey,
     MultiAsset,
+    NativeScript,
     PaymentSigningKey,
     PlutusV3Script,
     Redeemer,
@@ -139,7 +140,9 @@ class TransactionManager:
 
     async def build_script_tx(
         self,
-        script_inputs: list[tuple[UTxO, Redeemer, UTxO | PlutusV3Script | None]],
+        script_inputs: list[
+            tuple[UTxO, Redeemer, UTxO | PlutusV3Script | NativeScript | None]
+        ],
         script_outputs: list[TransactionOutput],
         reference_inputs: set[UTxO | TransactionInput] | None = None,
         mint: MultiAsset | None = None,
