@@ -417,7 +417,8 @@ class OracleStartBuilder:
 
             subprocess.run(cmd, shell=True, check=True)  # noqa: S602
 
-            contracts = OracleContracts.from_blueprint(output_path)
+            # Pass the relative path (just the filename) since we're already in artifact_path
+            contracts = OracleContracts.from_blueprint(output_file)
 
             os.remove(output_file)
 

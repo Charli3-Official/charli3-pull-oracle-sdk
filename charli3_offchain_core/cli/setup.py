@@ -338,7 +338,8 @@ def apply_spend_params_with_aiken_compiler(
             capture_output=True,
         )
 
-        contracts = OracleContracts.from_blueprint(output_path)
+        # Pass the relative path (just the filename) since we're already in artifact_path
+        contracts = OracleContracts.from_blueprint(output_file)
 
         os.remove(output_file)
 

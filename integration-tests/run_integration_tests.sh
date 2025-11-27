@@ -10,7 +10,7 @@ test_result=0
 kill_processes() {
   # Capture the exit status of the script (or the command that triggered the trap)
   local saved_exit_status=$?
-  
+
   echo "Shutting down the cluster..."
   ./bin/devkit.sh stop
 
