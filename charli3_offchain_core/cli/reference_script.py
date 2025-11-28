@@ -3,7 +3,13 @@ import logging
 from pathlib import Path
 
 import click
-from pycardano import Address, Network, TransactionBuilder, TransactionOutput
+from pycardano import (
+    Address,
+    Network,
+    Transaction,
+    TransactionBuilder,
+    TransactionOutput,
+)
 from pycardano.hash import ScriptHash
 from pycardano.nativescript import NativeScript
 
@@ -250,14 +256,26 @@ async def remove(config: Path, output: Path | None) -> None:  # noqa
 
             # Build transaction for NativeScript input
             builder = TransactionBuilder(chain_query.context, fee_buffer=fee_buffer)
-            builder.add_input_address(keys.address)
-            builder.add_script_input(utxo=ref_script_utxo, script=platform_script)
+            builder.add_input_address(keys.address)  # For fee payment
+            builder.add_input(ref_script_utxo)  # Add as regular input
+
+            # Add the native script to the builder
+            if builder.native_scripts is None:
+                builder.native_scripts = []
+            builder.native_scripts.append(platform_script)
+
             builder.add_output(withdrawal_output)
 
-            transaction = await tx_manager.build_tx(
-                builder=builder,
-                change_address=keys.address,
-                signing_key=keys.payment_sk,
+            tx_body = builder.build(
+                change_address=keys.address, collateral_change_address=keys.address
+            )
+
+            # Create initial witness set
+            witness_set = builder.build_witness_set()
+            witness_set.vkey_witnesses = []
+
+            transaction = Transaction(
+                tx_body, witness_set, auxiliary_data=builder.auxiliary_data
             )
 
             if platform_config.threshold == 1:
