@@ -18,7 +18,7 @@ exit_status=$?
 
 if [ $exit_status -eq 0 ]; then
     echo "Docker Compose started successfully."
-    source ./info.sh
+    . ./info.sh
 else
     echo "Failed to start Docker Compose services."
 fi

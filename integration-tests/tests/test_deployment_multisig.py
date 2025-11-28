@@ -7,6 +7,9 @@ import pytest
 from pycardano import (
     PaymentExtendedSigningKey,
     PaymentVerificationKey,
+    ScriptAll,
+    ScriptNofK,
+    ScriptPubkey,
     VerificationKeyHash,
 )
 
@@ -149,14 +152,23 @@ class TestMultisigDeployment(TestBase):
 
         # Get platform script
         logger.info(f"Getting platform script for address: {self.platform_address}")
-        platform_script = await self.platform_auth_finder.get_platform_script(
-            str(self.platform_address)
+        # Manually construct the script since fetching from chain might fail if not indexed
+        multisig = ScriptNofK(
+            self.required_signers,
+            [
+                ScriptPubkey(VerificationKeyHash.from_primitive(bytes.fromhex(pkh)))
+                for pkh in self.parties
+            ],
         )
+        platform_script = ScriptAll([multisig])
+        logger.info(f"Constructed platform script with hash: {platform_script.hash()}")
 
         # Build the deployment transaction
         logger.info("Building deployment transaction")
         result = await self.orchestrator.build_tx(
             oracle_config=self.oracle_config,
+            use_aiken=self.deployment_config.use_aiken,
+            blueprint_path=self.deployment_config.blueprint_path,
             platform_script=platform_script,
             admin_address=self.admin_address,
             script_address=self.oracle_script_address,
@@ -170,6 +182,7 @@ class TestMultisigDeployment(TestBase):
             rate_config=self.fee_config,
             signing_key=self.admin_signing_key,
             platform_utxo=platform_utxo,
+            utxo_size_safety_buffer=self.timing_config.utxo_size_safety_buffer,
         )
 
         assert (

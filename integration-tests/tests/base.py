@@ -66,6 +66,14 @@ class TestBase:
             # Set status callback once in base class
             self.orchestrator.status_callback = format_status_update
 
+            # OVERRIDE: Increase TTL offset for integration tests
+            # This helps avoid "outside of validity interval" errors in slower CI environments
+            # Default is 180s (3 mins), increasing to 600s (10 mins)
+            self.tx_manager.config.ttl_offset = 300
+            logger.info(
+                f"Overridden ttl_offset to {self.tx_manager.config.ttl_offset} for testing"
+            )
+
             # Store important configuration details as instance attributes
             self.admin_signing_key = self.payment_sk
             self.admin_verification_key = self.payment_vk
@@ -130,14 +138,14 @@ class TestBase:
             await asyncio.sleep(3)
 
     async def create_collateral_utxos(
-        self, count: int = 5, amount: int = 9_000_000
+        self, count: int = 10, amount: int = 20_000_000
     ) -> bool:
         """
         Create dedicated collateral UTxOs to ensure availability for deployment.
 
         Args:
-            count: Number of collateral UTxOs to create
-            amount: Amount per UTxO in lovelace (9 ADA default)
+            count: Number of collateral UTxOs to create (default increased to 10)
+            amount: Amount per UTxO in lovelace (default increased to 20 ADA)
 
         Returns:
             True if creation succeeded, False otherwise

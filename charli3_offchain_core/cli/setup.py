@@ -296,7 +296,12 @@ def apply_spend_params_with_aiken_compiler(
     try:
         project_root = Path(__file__).parent.parent.parent
 
-        artifact_path = project_root / blueprint_path.parent
+        # Check if the path exists as-is (absolute or relative to CWD)
+        if blueprint_path.exists():
+            artifact_path = blueprint_path.parent
+        else:
+            # Try relative to project root (handling /artifacts style paths)
+            artifact_path = (project_root / str(blueprint_path).lstrip(os.sep)).parent
 
         os.chdir(artifact_path)
 
@@ -336,7 +341,8 @@ def apply_spend_params_with_aiken_compiler(
             capture_output=True,
         )
 
-        contracts = OracleContracts.from_blueprint(output_path)
+        # Pass the relative path (just the filename) since we're already in artifact_path
+        contracts = OracleContracts.from_blueprint(output_file)
 
         os.remove(output_file)
 
