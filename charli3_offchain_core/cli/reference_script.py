@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 from pycardano import Address, Network, TransactionBuilder, TransactionOutput
 from pycardano.hash import ScriptHash
+from pycardano.nativescript import NativeScript
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.base import (
@@ -240,15 +241,22 @@ async def remove(config: Path, output: Path | None) -> None:  # noqa
             return
 
         if isinstance(script_owner, ScriptHash):
-            platform_script = await platform_auth_finder.get_platform_script(
-                oracle_addresses.platform_address
+            platform_script: NativeScript = (
+                await platform_auth_finder.get_platform_script(
+                    oracle_addresses.platform_address
+                )
             )
             platform_config = platform_auth_finder.get_script_config(platform_script)
 
-            transaction = await tx_manager.build_script_tx(
-                script_inputs=[(ref_script_utxo, None, platform_script)],
-                script_outputs=[withdrawal_output],
-                fee_buffer=fee_buffer,
+            # Build transaction for NativeScript input
+            builder = TransactionBuilder(chain_query.context, fee_buffer=fee_buffer)
+            builder.add_input_address(keys.address)
+            builder.add_script_input(utxo=ref_script_utxo, script=platform_script)
+            builder.add_output(withdrawal_output)
+
+            transaction = await tx_manager.build_tx(
+                builder=builder,
+                change_address=keys.address,
                 signing_key=keys.payment_sk,
             )
 
