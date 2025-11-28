@@ -191,7 +191,7 @@ async def create(config: Path, force: bool) -> None:
 @async_command
 async def remove(config: Path, output: Path | None) -> None:  # noqa
     """Remove oracle manager reference script."""
-    fee_buffer = 10_000
+    fee_buffer = 190_000
     try:
         # Load configuration and contracts
         print_progress("Loading configuration...")
