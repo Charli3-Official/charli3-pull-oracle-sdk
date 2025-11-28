@@ -39,6 +39,7 @@ class TestOraclePause(TestBase):
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=self.oracle_addresses.script_address,
+            ref_script_config=self.ref_script_config,
         )
 
     @pytest.mark.asyncio
