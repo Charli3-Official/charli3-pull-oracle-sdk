@@ -306,7 +306,7 @@ async def remove(config: Path, output: Path | None) -> None:  # noqa
                 print_status("Transaction", "saved successfully", success=True)
                 print_hash_info("Output file", str(output_path))
         else:
-            builder = TransactionBuilder(chain_query.context)
+            builder = TransactionBuilder(chain_query.context, fee_buffer=fee_buffer)
             builder.add_input(ref_script_utxo)
             builder.add_output(withdrawal_output)
 
