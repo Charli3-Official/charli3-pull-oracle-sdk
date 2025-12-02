@@ -106,9 +106,9 @@ class KeyManager:
                      stake verification key, derived address)
         """
         # Load keys
-        payment_signing_key = PaymentSigningKey.load(payment_skey_path)
-        payment_verification_key = PaymentVerificationKey.load(payment_vkey_path)
-        stake_verification_key = PaymentVerificationKey.load(stake_vkey_path)
+        payment_signing_key = PaymentSigningKey.load(str(payment_skey_path))
+        payment_verification_key = PaymentVerificationKey.load(str(payment_vkey_path))
+        stake_verification_key = PaymentVerificationKey.load(str(stake_vkey_path))
 
         # Create address
         address = Address(
