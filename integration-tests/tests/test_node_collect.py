@@ -73,10 +73,10 @@ class TestNodeCollect(TestBase):
             node_dir = node_dirs[0]
 
             # Load the signing key
-            feed_skey = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
+            feed_skey = PaymentExtendedSigningKey.load(str(node_dir / "feed.skey"))
 
             # Load the verification key
-            feed_vkey = PaymentVerificationKey.load(node_dir / "feed.vkey")
+            feed_vkey = PaymentVerificationKey.load(str(node_dir / "feed.vkey"))
 
             # Load the verification key hash
             feed_vkh = VerificationKeyHash(
@@ -84,8 +84,10 @@ class TestNodeCollect(TestBase):
             )
 
             # Load the payment signing key
-            payment_skey = PaymentExtendedSigningKey.load(node_dir / "payment.skey")
-            payment_vkey = PaymentVerificationKey.load(node_dir / "payment.vkey")
+            payment_skey = PaymentExtendedSigningKey.load(
+                str(node_dir / "payment.skey")
+            )
+            payment_vkey = PaymentVerificationKey.load(str(node_dir / "payment.vkey"))
 
             # Load the payment verification key hash
             payment_vkh = VerificationKeyHash(

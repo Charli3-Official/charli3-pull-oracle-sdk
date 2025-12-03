@@ -87,12 +87,12 @@ def save_node_keys(nodes: list[dict], output_dir: Path) -> None:
         node_dir.mkdir(exist_ok=True)
 
         # Save verification keys
-        node["feed_vkey"].save(node_dir / "feed.vkey")
-        node["payment_vkey"].save(node_dir / "payment.vkey")
+        node["feed_vkey"].save(str(node_dir / "feed.vkey"))
+        node["payment_vkey"].save(str(node_dir / "payment.vkey"))
 
         # Save signing keys
-        node["feed_skey"].save(node_dir / "feed.skey")
-        node["payment_skey"].save(node_dir / "payment.skey")
+        node["feed_skey"].save(str(node_dir / "feed.skey"))
+        node["payment_skey"].save(str(node_dir / "payment.skey"))
 
         # Save VKH values for easy reference
         with (node_dir / "feed.vkh").open("w") as f:
