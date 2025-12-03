@@ -118,8 +118,8 @@ class TestAggregate(TestBase):
         self.node_keys = []
         for node_dir in sorted(self.node_keys_dir.glob("node_*")):
             try:
-                skey = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
-                vkey = PaymentVerificationKey.load(node_dir / "feed.vkey")
+                skey = PaymentExtendedSigningKey.load(str(node_dir / "feed.skey"))
+                vkey = PaymentVerificationKey.load(str(node_dir / "feed.vkey"))
                 feed_vkh = VerificationKeyHash(
                     bytes.fromhex((node_dir / "feed.vkh").read_text().strip())
                 )

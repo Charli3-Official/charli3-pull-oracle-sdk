@@ -138,9 +138,11 @@ class TestMultisigPlatformAuth(TestBase):
             try:
                 # Corregido: "adminsitrator.skey" a "administrator.skey"
                 skey = PaymentExtendedSigningKey.load(
-                    platform_dir / "administrator.skey"
+                    str(platform_dir / "administrator.skey")
                 )
-                vkey = PaymentVerificationKey.load(platform_dir / "administrator.vkey")
+                vkey = PaymentVerificationKey.load(
+                    str(platform_dir / "administrator.vkey")
+                )
                 vkh = VerificationKeyHash(
                     bytes.fromhex(
                         (platform_dir / "administrator.vkh").read_text().strip()
@@ -212,8 +214,8 @@ class TestMultisigPlatformAuth(TestBase):
             platform_dir.mkdir(exist_ok=True)
 
             # Save verification and signing keys
-            administrator["vkey"].save(platform_dir / "administrator.vkey")
-            administrator["skey"].save(platform_dir / "administrator.skey")
+            administrator["vkey"].save(str(platform_dir / "administrator.vkey"))
+            administrator["skey"].save(str(platform_dir / "administrator.skey"))
 
             # Save verification key hash
             with (platform_dir / "administrator.vkh").open("w") as f:

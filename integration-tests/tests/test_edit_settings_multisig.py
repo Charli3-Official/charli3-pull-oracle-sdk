@@ -127,8 +127,10 @@ class TestMultisigGovernance(GovernanceBase):
         self.platform_keys = []
         for key_dir in sorted(self.platform_keys_dir.glob("platform_*")):
             try:
-                skey = PaymentExtendedSigningKey.load(key_dir / "administrator.skey")
-                vkey = PaymentVerificationKey.load(key_dir / "administrator.vkey")
+                skey = PaymentExtendedSigningKey.load(
+                    str(key_dir / "administrator.skey")
+                )
+                vkey = PaymentVerificationKey.load(str(key_dir / "administrator.vkey"))
                 vkh = VerificationKeyHash(
                     bytes.fromhex((key_dir / "administrator.vkh").read_text().strip())
                 )
