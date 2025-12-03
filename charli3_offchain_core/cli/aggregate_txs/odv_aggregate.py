@@ -87,7 +87,7 @@ async def submit(
         node_keys = []
         for node_dir in sorted(node_keys_dir.glob("node_*")):
             try:
-                skey = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
+                skey = PaymentExtendedSigningKey.load(str(node_dir / "feed.skey"))
                 node_keys.append(skey)
             except Exception as e:  # pylint: disable=broad-except
                 logger.warning("Failed to load key from %s: %s", node_dir, e)
