@@ -41,6 +41,7 @@ from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
     create_submit_tx_command,
 )
+from charli3_offchain_core.constants.colors import CliColor
 from charli3_offchain_core.constants.status import ProcessStatus
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import OracleConfiguration
@@ -149,6 +150,17 @@ async def create(config: Path, force: bool) -> None:
                 print_information(
                     f"Found existing reference script at: {existing.output.address}"
                 )
+        if ref_script_finder.reference_script_address != (
+            parameterized_contracts.spend.mainnet_addr
+            if chain_query.context.network == Network.MAINNET
+            else parameterized_contracts.spend.testnet_addr
+        ):
+            click.secho(
+                "WARNING: If you are deploying a reference script to an address that you are going to use with another third party wallet:\n\
+                              1. This reference script UTXO might become unusable from that third party wallet.\n\
+                              2. To use this UTXO again, remove reference script from there using the CLI - run `charli3 reference-script remove`.",
+                fg=CliColor.WARNING,
+            )
         if not click.confirm("Continue with creation?"):
             raise click.Abort()
 

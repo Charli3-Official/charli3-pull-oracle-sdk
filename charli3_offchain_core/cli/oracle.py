@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 import click
+from pycardano import Network
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
@@ -24,6 +25,7 @@ from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
     create_submit_tx_command,
 )
+from charli3_offchain_core.constants.colors import CliColor
 from charli3_offchain_core.oracle.lifecycle.orchestrator import LifecycleOrchestrator
 
 from ..constants.status import ProcessStatus
@@ -98,7 +100,7 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
             payment_sk,
             _payment_vk,
             addresses,
-            _chain_query,
+            chain_query,
             tx_manager,
             orchestrator,
             platform_auth_finder,
@@ -145,6 +147,20 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
         )
 
         if needs_reference:
+            if (
+                orchestrator.reference_builder.script_finder.reference_script_address
+                != (
+                    orchestrator.contracts.spend.mainnet_addr
+                    if chain_query.context.network == Network.MAINNET
+                    else orchestrator.contracts.spend.testnet_addr
+                )
+            ):
+                click.secho(
+                    "WARNING: If you are deploying a reference script to an address that you are going to use with another third party wallet:\n\
+                                1. This reference script UTXO might become unusable from that third party wallet.\n\
+                                2. To use this UTXO again, remove reference script from there using the CLI - run `charli3 reference-script remove`.",
+                    fg=CliColor.WARNING,
+                )
             if not print_confirmation_message_prompt(
                 "Reference Script was not found! Would you like to proceed with reference script creation now?"
             ):
