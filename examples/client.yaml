@@ -20,6 +20,15 @@ tokens:
 # This is odv request validity window length, should be <= time_uncertainty_aggregation
 odv_validity_length: 120000 # milliseconds
 
+reference_script:
+  # Will pay out utxo with reference script to this address. And lookup the script utxo at this address.
+  # If not provided will derive from the deployed script address.
+  address: "addr..."
+  # Looking through all utxos at an address could be inefficient. Provide optional utxo reference to speed up the reference script query.
+  utxo_reference:
+    transaction_id: "4606793120f127744d2b2f3bcc265a9a91eea8693f6eee2f48287738edededed"
+    output_index: 1
+
 # Nodes network identifiers root url (or ip address) and public key converted to cbor hex
 nodes:
   - root_url: "http://localhost:8000"

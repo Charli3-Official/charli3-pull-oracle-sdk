@@ -8,6 +8,7 @@ from pycardano import (
     Address,
     NativeScript,
     Network,
+    PaymentSigningKey,
     ScriptHash,
     Transaction,
     UTxO,
@@ -18,6 +19,7 @@ from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.base import LoadedKeys
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
@@ -65,10 +67,12 @@ class RewardOrchestrator:
         chain_query: ChainQuery,
         tx_manager: TransactionManager,
         script_address: Address | str,
+        ref_script_config: ReferenceScriptConfig,
         status_callback: Callable | None = None,
     ) -> None:
         self.chain_query = chain_query
         self.tx_manager = tx_manager
+        self.ref_script_config = ref_script_config
         self.script_address = (
             Address.from_primitive(script_address)
             if isinstance(script_address, str)
@@ -88,7 +92,8 @@ class RewardOrchestrator:
         tokens: TokenConfig,
         loaded_key: LoadedKeys,
         network: Network,
-        required_signers: list[VerificationKeyHash] | None = None,
+        max_inputs: int = 10,
+        payment_key: tuple[PaymentSigningKey, Address] | None = None,
     ) -> RewardOrchestratorResult:
         if not oracle_policy:
             raise ValueError("oracle_policy cannot be None or empty")
@@ -99,6 +104,17 @@ class RewardOrchestrator:
         oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
         reward_token = setup_token(tokens.reward_token_policy, tokens.reward_token_name)
 
+        # Derive feed_vkh from loaded_key
+        feed_vkh = loaded_key.payment_vk.hash()
+
+        # We only add feed_vkh to required_signers.
+        # The payment key signs the transaction to authorize spending fees/collateral,
+        # but it should NOT be listed in required_signers (tx_signatories on-chain).
+        # The on-chain script expects the FIRST signer to be the node. Since required_signers
+        # are sorted lexicographically on-chain, adding the payment key here risks it
+        # appearing 'before' the feed key, causing the script to check the wrong key against rewards.
+        required_signers = [feed_vkh]
+
         builder = NodeCollectBuilder(self.chain_query, self.tx_manager)
 
         result = await builder.build_tx(
@@ -106,8 +122,12 @@ class RewardOrchestrator:
             contract_utxos=contract_utxos,
             reward_token=reward_token,
             loaded_key=loaded_key,
+            script_address=self.script_address,
+            ref_script_config=self.ref_script_config,
             network=network,
+            max_inputs=max_inputs,
             required_signers=required_signers,
+            payment_key=payment_key,
         )
 
         if isinstance(result.exception_type, NodeNotRegisteredError):
@@ -148,6 +168,7 @@ class RewardOrchestrator:
         tokens: TokenConfig,
         loaded_key: LoadedKeys,
         network: Network,
+        max_inputs: int = 10,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> RewardOrchestratorResult:
         if not oracle_policy:
@@ -168,7 +189,10 @@ class RewardOrchestrator:
             contract_utxos=contract_utxos,
             reward_token=reward_token,
             loaded_key=loaded_key,
+            script_address=self.script_address,
+            ref_script_config=self.ref_script_config,
             network=network,
+            max_inputs=max_inputs,
             required_signers=required_signers,
         )
 
@@ -227,6 +251,8 @@ class RewardOrchestrator:
             reward_token=reward_token,
             loaded_key=loaded_key,
             network=network,
+            script_address=self.script_address,
+            ref_script_config=self.ref_script_config,
             reward_dismission_period_length=reward_dismission_period_length,
             max_inputs=max_inputs,
             required_signers=required_signers,

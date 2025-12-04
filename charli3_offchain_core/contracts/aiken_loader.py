@@ -9,12 +9,12 @@ from typing import Any, ClassVar, TypedDict
 from pycardano import (
     PlutusV3Script,
     ScriptHash,
-    TransactionOutput,
     UTxO,
 )
 
 from charli3_offchain_core.contracts.plutus_v3_contract import PlutusV3Contract, Purpose
 from charli3_offchain_core.models.oracle_datums import (
+    NftsConfiguration,
     OracleConfiguration,
     OracleDatum,
     OutputReference,
@@ -69,11 +69,7 @@ class OracleContracts:
         },
         OracleValidatorType.MINT: {
             "redeemer_type": ("redeemer", MintingRedeemer),
-            "parameter_types": [
-                ("utxo_ref", TransactionOutput),
-                ("config", OracleConfiguration),
-                ("oracle_script_hash", ScriptHash),
-            ],
+            "parameter_types": [("nfts_config", NftsConfiguration)],
             "purpose": [Purpose.minting],
         },
     }
@@ -131,53 +127,6 @@ class OracleContracts:
         tx_ref = OutputReference(
             utxo_ref.input.transaction_id.payload, utxo_ref.input.index
         )
-        return self.mint.apply_parameter(tx_ref, config, oracle_script_hash)
-
-
-@dataclass
-class RewardEscrowContract:
-    """Reward Escrow spend validator container."""
-
-    escrow_manager: PlutusV3Contract
-
-    ESCROW_SPEND_VALIDATOR_TITLE: ClassVar[str] = (
-        "reward_escrow.reward_escrow_manager.spend"
-    )
-
-    VALIDATOR_CONFIG: ClassVar[ValidatorConfig] = {
-        "datum_type": ("own_datum", OracleDatum),
-        "redeemer_type": ("redeemer", OracleRedeemer),
-        "purpose": [Purpose.spending],
-    }
-
-    ERROR_MESSAGES: ClassVar[dict[str, str]] = {
-        "plutus_version": "Only Plutus V3 contracts supported",
-        "missing_validator": "Missing required validator",
-        "invalid_blueprint": "Invalid blueprint: {error}",
-    }
-
-    @classmethod
-    def from_blueprint(cls, blueprint_path: str | Path) -> "RewardEscrowContract":
-        """Load Escrow contract from blueprint."""
-        try:
-            blueprint = json.loads(Path(blueprint_path).read_text(encoding="utf-8"))
-
-            if blueprint["preamble"].get("plutusVersion") != "v3":
-                raise ValueError(cls.ERROR_MESSAGES["plutus_version"])
-
-            validators = {v["title"]: v for v in blueprint["validators"]}
-
-            if cls.ESCROW_SPEND_VALIDATOR_TITLE not in validators:
-                raise ValueError(cls.ERROR_MESSAGES["missing_validator"])
-
-            contract = create_validator(
-                validators[cls.ESCROW_SPEND_VALIDATOR_TITLE],
-                cls.VALIDATOR_CONFIG,
-            )
-
-            return cls(escrow_manager=contract)
-
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            raise ValueError(
-                cls.ERROR_MESSAGES["invalid_blueprint"].format(error=e)
-            ) from e
+        return self.mint.apply_parameter(
+            NftsConfiguration(tx_ref, config, oracle_script_hash.to_primitive())
+        )

@@ -130,10 +130,6 @@ class TestRemoveNodes(GovernanceBase):
             platform_script=platform_script,
             change_address=self.oracle_addresses.admin_address,
             tokens=self.management_config.tokens,
-            reward_dismissing_period_length=self.oracle_configuration.reward_dismissing_period_length,
-            network=self.management_config.network.network,
-            reward_issuer_addr=self.escrow_config.reward_issuer_addr,
-            escrow_address=self.escrow_config.reference_script_addr,
             signing_key=self.loaded_key.payment_sk,
             test_mode=True,
         )

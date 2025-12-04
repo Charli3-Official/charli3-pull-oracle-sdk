@@ -67,9 +67,11 @@ class TestMultisigReferenceScript(TestBase):
         for platform_dir in sorted(self.platform_keys_dir.glob("platform_*")):
             try:
                 skey = PaymentExtendedSigningKey.load(
-                    platform_dir / "administrator.skey"
+                    str(platform_dir / "administrator.skey")
                 )
-                vkey = PaymentVerificationKey.load(platform_dir / "administrator.vkey")
+                vkey = PaymentVerificationKey.load(
+                    str(platform_dir / "administrator.vkey")
+                )
                 vkh = VerificationKeyHash(
                     bytes.fromhex(
                         (platform_dir / "administrator.vkh").read_text().strip()
@@ -136,7 +138,6 @@ class TestMultisigReferenceScript(TestBase):
         reference_result, needs_reference = (
             await self.orchestrator.handle_reference_scripts(
                 script_config=self.script_config,
-                script_address=self.oracle_script_address,
                 admin_address=self.admin_address,
                 signing_key=self.admin_signing_key,
             )

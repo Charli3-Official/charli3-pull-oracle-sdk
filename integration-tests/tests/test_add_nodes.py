@@ -96,7 +96,7 @@ class TestAddNodes(GovernanceBase):
         )
 
         # Log current node count in the UTxO's datum
-        initial_node_count = initial_oracle_datum.nodes.length
+        initial_node_count = len(initial_oracle_datum.nodes)
         logger.info(f"Initial nodes in UTxO datum: {initial_node_count}")
 
         # Find platform auth NFT at the platform address
@@ -180,7 +180,7 @@ class TestAddNodes(GovernanceBase):
         )
 
         # Log current node count in the UTxO's datum
-        final_node_count = updated_oracle_datum.nodes.length
+        final_node_count = len(updated_oracle_datum.nodes)
         logger.info(f"Final nodes in UTxO datum after addition: {final_node_count}")
 
         # Calculate expected node count after addition

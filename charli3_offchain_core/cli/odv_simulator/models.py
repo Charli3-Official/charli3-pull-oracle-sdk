@@ -13,7 +13,6 @@ from pycardano import (
 
 from charli3_offchain_core.cli.aggregate_txs.base import TxConfig
 from charli3_offchain_core.cli.config import NetworkConfig, WalletConfig
-from charli3_offchain_core.oracle.aggregate.builder import RewardsResult
 
 logger = getLogger(__name__)
 
@@ -55,8 +54,8 @@ class SimulatedNode:
         """
         try:
             # Load keys from files
-            signing_key = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
-            verification_key = PaymentVerificationKey.load(node_dir / "feed.vkey")
+            signing_key = PaymentExtendedSigningKey.load(str(node_dir / "feed.skey"))
+            verification_key = PaymentVerificationKey.load(str(node_dir / "feed.vkey"))
 
             # Load VKH values
             feed_vkh = VerificationKeyHash(
@@ -125,7 +124,7 @@ class SimulationResult:
     nodes: list[SimulatedNode]
     feeds: dict[int, dict]
     odv_tx: str
-    rewards: RewardsResult
+    rewards: dict[str, int] | None = None
 
 
 class SimulationConfig(TxConfig):

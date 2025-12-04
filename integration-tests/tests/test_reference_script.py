@@ -37,7 +37,6 @@ class TestCreateReferenceScript(TestBase):
         reference_result, needs_reference = (
             await self.orchestrator.handle_reference_scripts(
                 script_config=self.script_config,
-                script_address=self.oracle_script_address,
                 admin_address=self.admin_address,
                 signing_key=self.admin_signing_key,
             )

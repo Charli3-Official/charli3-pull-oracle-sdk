@@ -1,10 +1,15 @@
 """Node simulator implementation."""
 
+import hashlib
 import logging
 import secrets
 import time
 
-from pycardano import Transaction, TransactionWitnessSet, VerificationKeyWitness
+from pycardano import (
+    Transaction,
+    TransactionBody,
+    TransactionWitnessSet,
+)
 
 from charli3_offchain_core.models.client import OdvFeedRequest, OdvTxSignatureRequest
 from charli3_offchain_core.models.message import (
@@ -65,7 +70,7 @@ class NodeSimulator:
                 verification_key=self.node.verification_key,
             )
 
-            return self.node.hex_feed_vkh, signed_message
+            return self.node.feed_vkh.to_primitive().hex(), signed_message
 
         except Exception as e:
             logger.error(
@@ -73,30 +78,47 @@ class NodeSimulator:
             )
             return self.node.hex_feed_vkh, None
 
-    async def handle_sign_request(
-        self, request: OdvTxSignatureRequest
-    ) -> Transaction | None:
-        """Handle ODV transaction signing request."""
+    async def handle_sign_request(self, request: OdvTxSignatureRequest) -> str | None:
         try:
-            tx = Transaction.from_cbor(request.tx_cbor)
+            witness_vkh = self.node.verification_key.hash()
+            file_vkh = self.node.feed_vkh
 
-            # Sign transaction
-            if tx.transaction_witness_set is None:
-                tx.transaction_witness_set = TransactionWitnessSet()
+            logger.info(f"Node {self.node.hex_feed_vkh[:8]}:")
+            logger.info(f"  VKH from witness vkey: {witness_vkh.to_primitive().hex()}")
+            logger.info(f"  VKH from file:         {file_vkh.to_primitive().hex()}")
+            logger.info(f"  Match: {witness_vkh.payload == file_vkh.payload}")
 
-            signature = self.node.signing_key.sign(tx.transaction_body.hash())
-            witness = VerificationKeyWitness(
-                vkey=self.node.verification_key, signature=signature
+            tx_body_cbor_bytes = bytes.fromhex(request.tx_cbor)
+            tx_body_hash_bytes = hashlib.blake2b(
+                tx_body_cbor_bytes, digest_size=32
+            ).digest()
+            tx_body_hash_hex = tx_body_hash_bytes.hex()
+
+            logger.info(f"Computed transaction body hash: {tx_body_hash_hex}")
+
+            # Deserialize transaction body for validation purposes only
+            parsed_tx_body = TransactionBody.from_cbor(request.tx_cbor)
+
+            validation_tx = Transaction(
+                transaction_body=parsed_tx_body,
+                transaction_witness_set=TransactionWitnessSet(),
             )
-            tx.transaction_witness_set.vkey_witnesses.append(witness)
 
-            logger.info(f"Node {self.node.hex_feed_vkh[:8]} signed transaction")
-            return tx
+            if validation_tx.transaction_body.required_signers:
+                logger.info("  Required signers in tx:")
+                for rs in validation_tx.transaction_body.required_signers:
+                    logger.info(f"    {rs.to_primitive().hex()}")
+
+            signature = self.node.signing_key.sign(tx_body_hash_bytes)
+            signature_hex = signature.hex()
+
+            logger.info(
+                f"Node {self.node.hex_feed_vkh[:8]} signed tx body hash: {tx_body_hash_bytes.hex()[:16]}..."
+            )
+            return signature_hex
 
         except Exception as e:
-            logger.error(
-                f"Sign request failed for node {self.node.hex_feed_vkh}: {e!s}"
-            )
+            logger.error(f"Sign request failed: {e!s}")
             return None
 
     @property

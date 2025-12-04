@@ -16,36 +16,34 @@ from pycardano import (
     Transaction,
     TransactionOutput,
     UTxO,
+    VerificationKeyHash,
 )
 
 from charli3_offchain_core.blockchain.transactions import (
     TransactionManager,
     ValidityWindow,
 )
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
+from charli3_offchain_core.models.base import (
+    PosixTime,
+)
 from charli3_offchain_core.models.oracle_datums import (
-    AggregateMessage,
-    Aggregation,
     AggState,
     NoDatum,
-    NoRewards,
-    OracleSettingsDatum,
+    Nodes,
     PriceData,
     RewardAccountDatum,
     RewardAccountVariant,
-    RewardConsensusPending,
-    RewardTransportVariant,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
-    CalculateRewards,
+    AggregateMessage,
     OdvAggregate,
+    OdvAggregateMsg,
 )
 from charli3_offchain_core.oracle.exceptions import (
-    NoPendingTransportUtxosFoundError,
-    RewardCalculationIsNotSubsidizedError,
     TransactionError,
 )
 from charli3_offchain_core.oracle.utils import (
-    asset_checks,
     calc_methods,
     common,
     rewards,
@@ -62,101 +60,7 @@ class OdvResult:
     transaction: Transaction
     transport_output: TransactionOutput
     agg_state_output: TransactionOutput
-
-
-@dataclass
-class RewardsResult:
-    """Result of rewards calculation transaction."""
-
-    transaction: Transaction
-    pending_transports: list[UTxO]
-    new_reward_account: TransactionOutput
-    in_settings: OracleSettingsDatum | None = None
-
-    @property
-    def reward_distribution(self) -> dict[int, int]:
-        """Get reward distribution from pending transports.
-
-        Returns:
-            Dictionary mapping node IDs to their reward amounts.
-            The rewards are extracted from the first transport's aggregation data
-            and matched with reward amounts from the reward account datum.
-
-        Note:
-            Only processes the first transport UTxO, even if multiple are present.
-        """
-        # Early return if no pending transports
-        if not self.pending_transports:
-            return {}
-
-        # Get reward amounts list from reward account
-        reward_list = self.new_reward_account.datum.datum.nodes_to_rewards
-
-        # Get the first transport's datum
-        transport_datum = self.pending_transports[0].output.datum.datum
-
-        # Early return if no aggregation data
-        if not hasattr(transport_datum, "aggregation"):
-            return {}
-
-        # Build distribution mapping
-        distribution = {}
-        node_map_keys = list(self.in_settings.nodes.node_map.keys())
-        for node_id in transport_datum.aggregation.message.node_feeds_sorted_by_feed:
-            if node_id not in node_map_keys:
-                continue
-
-            idx = node_map_keys.index(node_id)
-            distribution[node_id] = reward_list[idx]
-
-        return distribution
-
-    @property
-    def platform_fee(self) -> int:
-        """Calculate total platform fee from pending transports."""
-        total_fee = 0
-        for transport in self.pending_transports:
-            datum = transport.output.datum.datum
-            if hasattr(datum, "aggregation"):
-                agg = datum.aggregation
-                node_count = len(agg.message.node_feeds_sorted_by_feed)
-                total_fee += agg.rewards_amount_paid - (
-                    node_count * agg.node_reward_price
-                )
-        return total_fee
-
-    @property
-    def total_distributed(self) -> int:
-        """Calculate total rewards distributed."""
-        return sum(self.reward_distribution.values()) + self.platform_fee
-
-    @property
-    def transport_details(self) -> list[dict]:
-        """Get detailed information about each transport."""
-        details = []
-        for transport in self.pending_transports:
-            datum = transport.output.datum.datum
-            if hasattr(datum, "aggregation"):
-                agg = datum.aggregation
-                node_count = len(agg.message.node_feeds_sorted_by_feed)
-                platform_fee = agg.rewards_amount_paid - (
-                    node_count * agg.node_reward_price
-                )
-
-                details.append(
-                    {
-                        "tx_hash": transport.input.transaction_id,
-                        "index": transport.input.index,
-                        "oracle_feed": agg.oracle_feed,
-                        "node_count": node_count,
-                        "reward_per_node": agg.node_reward_price,
-                        "platform_fee": platform_fee,
-                        "total_amount": agg.rewards_amount_paid,
-                        "node_feeds": dict(agg.message.node_feeds_sorted_by_feed),
-                        "timestamp": agg.message.timestamp,
-                    }
-                )
-        return details
+    sorted_required_signers: list[VerificationKeyHash]
 
 
 class OracleTransactionBuilder:
@@ -167,6 +71,7 @@ class OracleTransactionBuilder:
         tx_manager: TransactionManager,
         script_address: Address,
         policy_id: ScriptHash,
+        ref_script_config: ReferenceScriptConfig,
         reward_token_hash: ScriptHash | None = None,
         reward_token_name: AssetName | None = None,
     ) -> None:
@@ -180,6 +85,7 @@ class OracleTransactionBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
+        self.ref_script_config = ref_script_config
         self.reward_token_hash = reward_token_hash
         self.reward_token_name = reward_token_name
         self.network_config = self.tx_manager.chain_query.config.network_config
@@ -197,6 +103,7 @@ class OracleTransactionBuilder:
             message: Aggregate message to validate
             signing_key: Signing key for transaction
             change_address: Optional change address
+            validity_window: Optional validity window
 
         Returns:
             OdvResult containing transaction and outputs
@@ -212,7 +119,23 @@ class OracleTransactionBuilder:
             settings_datum, settings_utxo = (
                 state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
             )
-            script_utxo = common.get_reference_script_utxo(utxos)
+
+            print("\n=== COMPARING NODES ===")
+            print("On-chain nodes:")
+            for node_vkh in settings_datum.nodes.node_map:
+                print(
+                    f"  {node_vkh.to_primitive().hex()} ({len(node_vkh.payload)} bytes)"
+                )
+
+            print("\nYour message nodes (in order they will be sent):")
+            for i, vkh in enumerate(message.node_feeds_sorted_by_feed.keys(), 1):
+                feed_value = message.node_feeds_sorted_by_feed[vkh]
+                print(f"  {i}. {vkh.to_primitive().hex()} (feed={feed_value})")
+            script_utxo = await common.get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                self.ref_script_config,
+                self.script_address,
+            )
 
             reference_inputs = {settings_utxo}
 
@@ -233,6 +156,7 @@ class OracleTransactionBuilder:
                     raise ValueError(
                         f"Incorrect validity window length: {window_length}"
                     )
+
             validity_start, validity_end, current_time = [
                 validity_window.validity_start,
                 validity_window.validity_end,
@@ -243,24 +167,22 @@ class OracleTransactionBuilder:
                 validity_start, validity_end
             )
 
-            transport, agg_state = state_checks.find_transport_pair(
+            account, agg_state = state_checks.find_account_pair(
                 utxos, self.policy_id, current_time
             )
 
-            # Create a new message with the current timestamp
-            current_message = AggregateMessage(
-                node_feeds_sorted_by_feed=message.node_feeds_sorted_by_feed,
-                node_feeds_count=message.node_feeds_count,
-                timestamp=current_time,
+            # Don't re-sort! message.node_feeds_sorted_by_feed is already correctly
+            # sorted by (feed_value, VKH) from build_aggregate_message
+            sorted_feeds = message.node_feeds_sorted_by_feed
+
+            logger.debug(
+                "Using %d node feeds in correct (feed, VKH) order", len(sorted_feeds)
             )
 
-            # Calculate median using the current message
-            feeds = list(current_message.node_feeds_sorted_by_feed.values())
-            node_count = current_message.node_feeds_count
-            median_value = calc_methods.median(
-                feeds,
-                node_count,
-            )
+            # Calculate median using sorted feeds
+            feeds = list(sorted_feeds.values())
+            node_count = len(sorted_feeds)
+            median_value = calc_methods.median(feeds, node_count)
 
             # Update fees according to the rate feed
             reward_prices = deepcopy(settings_datum.fee_info.reward_prices)
@@ -282,17 +204,18 @@ class OracleTransactionBuilder:
                 )
 
             # Calculate minimum fee
-            minimum_fee = rewards.calculate_min_fee_amount(
-                reward_prices, len(current_message.node_feeds_sorted_by_feed)
-            )
+            minimum_fee = rewards.calculate_min_fee_amount(reward_prices, node_count)
 
             # Create outputs using helper methods
-            transport_output = self._create_transport_output(
-                transport=transport,
-                current_message=current_message,
-                median_value=median_value,
+            account_output = self._create_reward_account_output(
+                account=account,
+                sorted_node_feeds=sorted_feeds,
                 node_reward_price=reward_prices.node_fee,
+                iqr_fence_multiplier=settings_datum.iqr_fence_multiplier,
+                median_divergency_factor=settings_datum.median_divergency_factor,
+                allowed_nodes=settings_datum.nodes,
                 minimum_fee=minimum_fee,
+                last_update_time=current_time,
             )
 
             agg_state_output = self._create_agg_state_output(
@@ -302,152 +225,77 @@ class OracleTransactionBuilder:
                 liveness_period=settings_datum.aggregation_liveness_period,
             )
 
-            # Estimate tx fee
-            evaluated_tx = await self.tx_manager.build_script_tx(
-                script_inputs=[
-                    (transport, Redeemer(OdvAggregate()), script_utxo),
-                    (agg_state, Redeemer(OdvAggregate()), script_utxo),
-                ],
-                script_outputs=[transport_output, agg_state_output],
-                reference_inputs=reference_inputs,
-                required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
-                change_address=change_address,
-                signing_key=signing_key,
-                validity_start=validity_start_slot,
-                validity_end=validity_end_slot,
-            )
-            transport_output.amount.coin += evaluated_tx.transaction_body.fee
-            # Build and return transaction
+            account_redeemer = Redeemer(OdvAggregate.create_sorted(sorted_feeds))
+            aggstate_redeemer = Redeemer(OdvAggregateMsg())
+
+            # Log redeemer for debugging
+            try:
+                logger.debug(
+                    "Account redeemer CBOR: %s", account_redeemer.to_cbor().hex()[:200]
+                )
+            except Exception as e:
+                logger.warning("Failed to dump redeemer CBOR: %s", e)
+
+            required_signers = sorted(sorted_feeds.keys(), key=lambda vkh: vkh.payload)
             tx = await self.tx_manager.build_script_tx(
                 script_inputs=[
-                    (transport, Redeemer(OdvAggregate()), script_utxo),
-                    (agg_state, Redeemer(OdvAggregate()), script_utxo),
+                    (account, account_redeemer, script_utxo),
+                    (agg_state, aggstate_redeemer, script_utxo),
                 ],
-                script_outputs=[transport_output, agg_state_output],
+                script_outputs=[account_output, agg_state_output],
                 reference_inputs=reference_inputs,
-                required_signers=list(current_message.node_feeds_sorted_by_feed.keys()),
+                required_signers=required_signers,
                 change_address=change_address,
                 signing_key=signing_key,
                 validity_start=validity_start_slot,
                 validity_end=validity_end_slot,
             )
 
-            return OdvResult(tx, transport_output, agg_state_output)
+            return OdvResult(
+                tx,
+                account_output,
+                agg_state_output,
+                sorted_required_signers=required_signers,
+            )
 
         except Exception as e:
             raise TransactionError(f"Failed to build ODV transaction: {e}") from e
 
-    async def build_rewards_tx(
+    def _create_reward_account_output(
         self,
-        signing_key: PaymentSigningKey | ExtendedSigningKey,
-        change_address: Address | None = None,
-        max_inputs: int = 10,
-        check_if_tx_fee_subsidized: bool = False,
-    ) -> RewardsResult:
-        """Build rewards calculation transaction with consensus processing.
-
-        Args:
-            signing_key: Signing key for transaction
-            change_address: Optional change address
-            max_inputs: Maximum number of transport inputs to process
-
-        Returns:
-            RewardsResult containing transaction and processing results
-
-        Raises:
-            ValidationError: If validation fails
-            TransactionError: If transaction building fails
-        """
-        try:
-            # Get and validate UTxOs
-            utxos = await common.get_script_utxos(self.script_address, self.tx_manager)
-            settings_datum, settings_utxo = (
-                state_checks.get_oracle_settings_by_policy_id(utxos, self.policy_id)
-            )
-            script_utxo = common.get_reference_script_utxo(utxos)
-
-            # Find pending transports
-            pending_transports = state_checks.filter_pending_transports(
-                asset_checks.filter_utxos_by_token_name(utxos, self.policy_id, "C3RT")
-            )[:max_inputs]
-            if not pending_transports:
-                raise NoPendingTransportUtxosFoundError(
-                    "No pending transport UTxOs found"
-                )
-
-            # Find reward account
-            _, reward_account_utxo = state_checks.get_reward_account_by_policy_id(
-                utxos, self.policy_id
-            )
-
-            # Calculate the minimum ADA required for Transport UTxOs,
-            # using the CoreSettings UTxO as a reference.
-            # This approach aligns with the deployment strategy where
-            # the CoreSettings UTxO determines the minimum ADA.
-            min_core_settings_ada = settings_datum.utxo_size_safety_buffer
-
-            # Create new transport outputs
-            new_transports = [
-                self._create_empty_transport(transport, min_core_settings_ada)
-                for transport in pending_transports
-            ]
-
-            # Create new reward account output
-            reward_account_output = self._create_reward_account(
-                reward_account_utxo, pending_transports, settings_datum
-            )
-
-            # Build transaction
-            script_inputs = [
-                (t, Redeemer(CalculateRewards()), script_utxo)
-                for t in pending_transports
-            ]
-            script_inputs.append(
-                (reward_account_utxo, Redeemer(CalculateRewards()), script_utxo)
-            )
-
-            tx = await self.tx_manager.build_script_tx(
-                script_inputs=script_inputs,
-                script_outputs=[*new_transports, reward_account_output],
-                reference_inputs=[settings_utxo],
-                change_address=change_address,
-                signing_key=signing_key,
-            )
-
-            if check_if_tx_fee_subsidized:
-                self._check_rewards_tx_fee_subsidized(
-                    tx.transaction_body.fee, pending_transports, settings_datum
-                )
-
-            return RewardsResult(
-                transaction=tx,
-                pending_transports=pending_transports,
-                new_reward_account=reward_account_output,
-                in_settings=settings_datum,
-            )
-
-        except Exception as e:
-            raise TransactionError(f"Failed to build rewards transaction: {e}") from e
-
-    def _create_transport_output(
-        self,
-        transport: UTxO,
-        current_message: AggregateMessage,
-        median_value: int,
+        account: UTxO,
+        sorted_node_feeds: dict[VerificationKeyHash, int],
         node_reward_price: int,
+        iqr_fence_multiplier: int,
+        median_divergency_factor: int,
+        allowed_nodes: Nodes,
         minimum_fee: int,
+        last_update_time: PosixTime,
     ) -> TransactionOutput:
-        """Helper method to create transport output with consistent data."""
-        transport_output = deepcopy(transport.output)
+        account_output = deepcopy(account.output)
+        self._add_reward_to_output(account_output, minimum_fee)
 
-        self._add_reward_to_output(transport_output, minimum_fee)
+        # Ensure in_distribution is sorted by VKH in ascending order
+        raw_in_distribution = account_output.datum.datum.nodes_to_rewards
+        in_distribution = dict(
+            sorted(raw_in_distribution.items(), key=lambda x: x[0].payload)
+        )
+
+        message = AggregateMessage(node_feeds_sorted_by_feed=sorted_node_feeds)
+
+        out_nodes_to_rewards = rewards.calculate_reward_distribution(
+            message,
+            iqr_fence_multiplier,
+            median_divergency_factor,
+            in_distribution,
+            node_reward_price,
+            allowed_nodes.as_mapping(),
+        )
 
         return self._create_final_output(
-            transport_output,
-            current_message,
-            median_value,
-            node_reward_price,
-            minimum_fee,
+            account_output,
+            out_nodes_to_rewards,
+            last_update_time,
         )
 
     def _add_reward_to_output(
@@ -490,37 +338,26 @@ class OracleTransactionBuilder:
 
     def _create_final_output(
         self,
-        transport_output: TransactionOutput,
-        current_message: AggregateMessage,
-        median_value: int,
-        node_reward_price: int,
-        minimum_fee: int,
+        account_output: TransactionOutput,
+        nodes_to_rewards: dict[VerificationKeyHash, int],
+        last_update_time: PosixTime,
     ) -> TransactionOutput:
         """
         Create the final transaction output with all necessary data.
 
         Args:
-            transport_output: The processed transport output
-            current_message: Current aggregate message
-            median_value: The calculated median value
-            node_reward_price: Price for node reward
-            minimum_fee: Minimum fee added
+            account_output: The processed account output
+            nodes_to_rewards: Mapping of nodes to their rewards
+            last_update_time: Last update timestamp
 
         Returns:
             TransactionOutput: The final transaction output
         """
         return TransactionOutput(
             address=self.script_address,
-            amount=transport_output.amount,
-            datum=RewardTransportVariant(
-                datum=RewardConsensusPending(
-                    aggregation=Aggregation(
-                        oracle_feed=median_value,
-                        message=current_message,
-                        node_reward_price=node_reward_price,
-                        rewards_amount_paid=minimum_fee,
-                    )
-                )
+            amount=account_output.amount,
+            datum=RewardAccountVariant(
+                RewardAccountDatum.sort_account(nodes_to_rewards, last_update_time)
             ),
         )
 
@@ -542,81 +379,6 @@ class OracleTransactionBuilder:
             ),
         )
 
-    def _create_empty_transport(
-        self, transport: UTxO, min_ada: int
-    ) -> TransactionOutput:
-        """Create empty reward transport output."""
-        output_amount = deepcopy(transport.output.amount)
-
-        # Just set the fee token quantity to 0 - MultiAsset normalize() will handle cleanup
-        if self.reward_token_hash and self.reward_token_name:
-            if (
-                output_amount.multi_asset
-                and self.reward_token_hash in output_amount.multi_asset
-                and self.reward_token_name
-                in output_amount.multi_asset[self.reward_token_hash]
-            ):
-                output_amount.multi_asset[self.reward_token_hash][
-                    self.reward_token_name
-                ] = 0
-        output_amount.coin = min_ada
-
-        return TransactionOutput(
-            address=self.script_address,
-            amount=output_amount,
-            datum=RewardTransportVariant(datum=NoRewards()),
-        )
-
-    def _create_reward_account(
-        self,
-        reward_account: UTxO,
-        transports: list[UTxO],
-        settings: OracleSettingsDatum,
-    ) -> TransactionOutput:
-        """Create updated reward account output.
-
-        The nodes_to_rewards list contains only the reward amounts, which map positionally
-        to the nodes list in oracle settings.
-        """
-        # Calculate rewards from transports
-        output_amount = deepcopy(reward_account.output.amount)
-        current_datum = reward_account.output.datum.datum
-        nodes = list(settings.nodes.node_map.keys())
-
-        # Calculate total fees and rewards
-        total_payment_tokens = rewards.calculate_total_fees(
-            transports,
-            self.reward_token_hash,
-            self.reward_token_name,
-        )
-        node_rewards = rewards.calculate_node_rewards_from_transports(
-            transports,
-            nodes,
-            settings.iqr_fence_multiplier,
-            settings.median_divergency_factor,
-        )
-
-        # Accumulate rewards
-        new_rewards = rewards.accumulate_node_rewards(
-            current_datum, node_rewards, nodes
-        )
-
-        # Update fee tokens
-        new_value = rewards.update_fee_tokens(
-            output_amount,
-            self.reward_token_hash,
-            self.reward_token_name,
-            total_payment_tokens,
-        )
-
-        return TransactionOutput(
-            address=self.script_address,
-            amount=new_value,
-            datum=RewardAccountVariant(
-                datum=RewardAccountDatum(nodes_to_rewards=new_rewards)
-            ),
-        )
-
     def _validity_window_to_slot(
         self, validity_start: int, validity_end: int
     ) -> tuple[int, int]:
@@ -624,21 +386,3 @@ class OracleTransactionBuilder:
         validity_start_slot = self.network_config.posix_to_slot(validity_start)
         validity_end_slot = self.network_config.posix_to_slot(validity_end)
         return validity_start_slot, validity_end_slot
-
-    def _check_rewards_tx_fee_subsidized(
-        self, tx_fee: int, pending_transports: list[UTxO], settings: OracleSettingsDatum
-    ) -> None:
-        subsidies = sum(
-            utxo.output.amount.coin
-            - settings.utxo_size_safety_buffer
-            - (
-                utxo.output.datum.datum.aggregation.rewards_amount_paid
-                if self.reward_token_hash is None and self.reward_token_name is None
-                else 0
-            )
-            for utxo in pending_transports
-        )
-        if subsidies < tx_fee:
-            raise RewardCalculationIsNotSubsidizedError(
-                "Tx fee for reward calculation is not subsidized"
-            )

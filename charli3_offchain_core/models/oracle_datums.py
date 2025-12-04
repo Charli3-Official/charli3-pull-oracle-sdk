@@ -1,16 +1,14 @@
 """Oracle datums for the oracle core contract"""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Union
 
-from pycardano import PlutusData, VerificationKeyHash
+from pycardano import IndefiniteList, PlutusData, VerificationKeyHash
 
 from charli3_offchain_core.models.base import (
     AssetName,
     FeedVkh,
-    NodeFeed,
-    OracleFeed,
-    PaymentVkh,
     PolicyId,
     PosixTime,
     PosixTimeDiff,
@@ -41,12 +39,16 @@ class OutputReference(PlutusData):
 @dataclass
 class Nodes(PlutusData):
     """
-    Represents a map of feed VKHs to payment VKHs.
+    Represents a list of feed VKHs.
     Keys must be sorted to match Aiken's requirements.
     """
 
     CONSTR_ID = 0
-    node_map: Dict[FeedVkh, PaymentVkh]
+    node_map: IndefiniteList
+
+    def __post_init__(self) -> None:
+        if len(self.node_map) != len({*self.node_map}):
+            raise ValueError("Oracle Nodes Validator: Must not have duplicates")
 
     @classmethod
     def from_primitive(cls, data: Any) -> "Nodes":
@@ -55,23 +57,22 @@ class Nodes(PlutusData):
             data = data.value
 
         if not data:
-            return cls(node_map={})
+            return cls(node_map=IndefiniteList([]))
 
         return cls(
-            node_map={
-                VerificationKeyHash.from_primitive(
-                    k
-                ): VerificationKeyHash.from_primitive(v)
-                for k, v in data.items()
-            }
+            node_map=IndefiniteList(
+                sorted(
+                    [VerificationKeyHash.from_primitive(k) for k in data],
+                    key=lambda x: x.payload,
+                )
+            )
         )
 
-    def to_primitive(self) -> Dict[bytes, bytes]:
-        """Convert to primitive map representation."""
-        return {
-            k.to_primitive(): v.to_primitive()
-            for k, v in sorted(self.node_map.items(), key=lambda x: str(x[0]))
-        }
+    def to_primitive(self) -> list:
+        """Convert to primitive list representation."""
+        return [
+            vkh.to_primitive() for vkh in sorted(self.node_map, key=lambda x: x.payload)
+        ]
 
     @classmethod
     def empty(cls) -> "Nodes":
@@ -80,11 +81,37 @@ class Nodes(PlutusData):
         Returns:
             Nodes: A new Nodes instance with an empty map.
         """
-        return cls(node_map={})
+        return cls(node_map=IndefiniteList([]))
 
     @property
     def length(self) -> int:
         return len(self.node_map)
+
+    def as_mapping(self) -> dict:
+        """Convert node_map to a dict mapping each VKH to itself.
+
+        This is used by reward distribution logic which expects a dict.
+
+        Returns:
+            dict: Dictionary mapping each VerificationKeyHash to itself
+        """
+        return {vkh: vkh for vkh in self.node_map}
+
+    def __len__(self) -> int:
+        """Return the number of nodes."""
+        return len(self.node_map)
+
+    def __iter__(self) -> Iterator:
+        """Iterate over node map."""
+        return iter(self.node_map)
+
+    def items(self) -> Iterator[tuple[VerificationKeyHash, VerificationKeyHash]]:
+        """Return items as (vkh, vkh) pairs for dict-like access."""
+        return ((vkh, vkh) for vkh in self.node_map)
+
+    def values(self) -> Iterator:
+        """Return node VKHs as values."""
+        return iter(self.node_map)
 
 
 @dataclass
@@ -109,7 +136,6 @@ class Asset(PlutusData):
     name: AssetName
 
     def __post_init__(self) -> None:
-        # Add validation for policy_id length (28 bytes for Cardano)
         if len(self.policy_id) != 28:
             raise ValueError("Policy ID must be 28 bytes long")
 
@@ -151,12 +177,20 @@ class OracleConfiguration(PlutusData):
     pause_period_length: PosixTimeDiff
     reward_dismissing_period_length: PosixTimeDiff
     fee_token: Union[SomeAsset, NoDatum]
-    reward_escrow_script_hash: ScriptHash
 
     def __post_init__(self) -> None:
-        # Add validation for platform_auth_nft length (28 bytes for Cardano)
         if len(self.platform_auth_nft) != 28:
             raise ValueError("Policy ID must be 28 bytes long")
+
+
+@dataclass
+class NftsConfiguration(PlutusData):
+    """Immutable nfts settings"""
+
+    CONSTR_ID = 0
+    utxo_ref: OutputReference
+    oracle_config: OracleConfiguration
+    script_hash: ScriptHash
 
 
 @dataclass
@@ -170,14 +204,14 @@ class OracleSettingsDatum(PlutusData):
     aggregation_liveness_period: PosixTimeDiff
     time_uncertainty_aggregation: PosixTimeDiff
     time_uncertainty_platform: PosixTimeDiff
-    iqr_fence_multiplier: int  # Percent
-    median_divergency_factor: int  # Permille
-    utxo_size_safety_buffer: int  # Lovelace
+    iqr_fence_multiplier: int
+    median_divergency_factor: int
+    utxo_size_safety_buffer: int
     pause_period_started_at: Union[SomePosixTime, NoDatum]
 
     def __post_init__(self) -> None:
         if (
-            len(self.nodes.node_map) < self.required_node_signatures_count
+            self.nodes.length < self.required_node_signatures_count
             or self.required_node_signatures_count <= 0
         ):
             raise ValueError("Oracle Settings Validator: Must not break multisig")
@@ -218,43 +252,31 @@ class RewardAccountDatum(PlutusData):
     """Reward distribution datum"""
 
     CONSTR_ID = 0
-    nodes_to_rewards: List[int]
+    nodes_to_rewards: Dict[FeedVkh, int]
+    last_update_time: PosixTime = 0
 
+    @classmethod
+    def sort_account(
+        cls, data: dict[FeedVkh, int], last_update_time: int
+    ) -> "RewardAccountDatum":
+        """Create sorted reward account datum from a dictionary."""
+        if not data:
+            return cls.empty()
 
-@dataclass
-class AggregateMessage(PlutusData):
-    """Represents an aggregate message from nodes"""
+        sorted_items = sorted(data.items(), key=lambda item: item[0].payload)
+        sorted_distribution = dict(sorted_items)
 
-    CONSTR_ID = 0
-    node_feeds_sorted_by_feed: Dict[VerificationKeyHash, NodeFeed]
-    node_feeds_count: int
-    timestamp: PosixTime
+        return cls(
+            nodes_to_rewards=sorted_distribution, last_update_time=last_update_time
+        )
 
+    @classmethod
+    def empty(cls) -> "RewardAccountDatum":
+        return cls(nodes_to_rewards={}, last_update_time=0)
 
-@dataclass
-class NoRewards(PlutusData):
-    """Reward transport with no rewards state"""
-
-    CONSTR_ID = 0
-
-
-@dataclass
-class Aggregation(PlutusData):
-    """Represents information on aggregation specific details"""
-
-    CONSTR_ID = 0
-    oracle_feed: OracleFeed
-    message: AggregateMessage
-    node_reward_price: int
-    rewards_amount_paid: int
-
-
-@dataclass
-class RewardConsensusPending(PlutusData):
-    """Reward transport with pending consensus state"""
-
-    CONSTR_ID = 1
-    aggregation: Aggregation
+    @property
+    def length(self) -> int:
+        return len(self.nodes_to_rewards)
 
 
 # Main datum variants
@@ -344,23 +366,12 @@ class RewardAccountVariant(PlutusData):
 
 
 @dataclass
-class RewardTransportVariant(PlutusData):
-    """Reward transport variant of OracleDatum"""
-
-    CONSTR_ID = 3
-    datum: Union[NoRewards, RewardConsensusPending]
-
-
-@dataclass
 class OracleDatum(PlutusData):
     """
     Main oracle datum with four possible variants:
     1. AggState
     2. OracleSettingsVariant
     3. RewardAccountVariant
-    4. RewardTransportVariant
     """
 
-    variant: (
-        AggState | RewardAccountVariant | RewardTransportVariant | OracleSettingsVariant
-    )
+    variant: AggState | RewardAccountVariant | OracleSettingsVariant

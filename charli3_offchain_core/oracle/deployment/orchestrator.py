@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from pycardano import (
     Address,
@@ -15,6 +16,7 @@ from pycardano import (
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     FeeConfig,
@@ -56,6 +58,7 @@ class OracleDeploymentOrchestrator:
         chain_query: ChainQuery,
         contracts: OracleContracts,
         tx_manager: TransactionManager,
+        ref_script_config: ReferenceScriptConfig,
         status_callback: Callable[[ProcessStatus, str], None] | None = None,
     ) -> None:
         """Initialize the deployment orchestrator.
@@ -73,7 +76,10 @@ class OracleDeploymentOrchestrator:
 
         # Initialize builders
         self.reference_builder = ReferenceScriptBuilder(
-            chain_query, contracts, tx_manager
+            chain_query,
+            contracts,
+            ref_script_config,
+            tx_manager,
         )
         self.start_builder = OracleStartBuilder(chain_query, contracts, tx_manager)
 
@@ -91,6 +97,8 @@ class OracleDeploymentOrchestrator:
         self,
         # oracle configuration
         oracle_config: OracleConfiguration,
+        use_aiken: bool,
+        blueprint_path: Path,
         platform_script: NativeScript,
         admin_address: Address,
         script_address: Address,
@@ -139,6 +147,8 @@ class OracleDeploymentOrchestrator:
             # Handle start transaction
             start_result = await self._handle_start_transaction(
                 config=oracle_config,
+                use_aiken=use_aiken,
+                blueprint_path=blueprint_path,
                 deployment_config=deployment_config,
                 nodes_config=nodes_config,
                 script_address=script_address,
@@ -172,7 +182,6 @@ class OracleDeploymentOrchestrator:
     async def handle_reference_scripts(
         self,
         script_config: OracleScriptConfig,
-        script_address: Address,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
     ) -> tuple[ReferenceScriptResult, bool]:
@@ -185,7 +194,6 @@ class OracleDeploymentOrchestrator:
 
         result = await self.reference_builder.prepare_reference_script(
             script_config=script_config,
-            script_address=script_address,
             admin_address=admin_address,
             signing_key=signing_key,
         )
@@ -207,6 +215,8 @@ class OracleDeploymentOrchestrator:
     async def _handle_start_transaction(
         self,
         config: OracleConfiguration,
+        use_aiken: bool,
+        blueprint_path: Path,
         deployment_config: OracleDeploymentConfig,
         nodes_config: NodesConfig,
         script_address: Address,
@@ -229,6 +239,8 @@ class OracleDeploymentOrchestrator:
 
         return await self.start_builder.build_start_transaction(
             config=config,
+            use_aiken=use_aiken,
+            blueprint_path=blueprint_path,
             nodes_config=nodes_config,
             deployment_config=deployment_config,
             script_address=script_address,

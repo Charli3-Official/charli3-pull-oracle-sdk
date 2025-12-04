@@ -19,6 +19,12 @@ network:
   wallet:
     # Option 1: Mnemonic (recommended to use environment variable)
     mnemonic: "$WALLET_MNEMONIC"
+    # Optional: Use a separate mnemonic for withdrawing rewards and paying fees/collateral.
+    # If provided, this mnemonic will be used to sign transactions for reward collection,
+    # pay transaction fees, and receive the collected rewards. The 'mnemonic' above
+    # will still be used for on-chain validation checks in the oracle contract.
+    # If not provided, the 'mnemonic' above will be used for all transaction purposes.
+    # withdrawal_mnemonic: "$WITHDRAWAL_MNEMONIC"
 
     # Option 2: Key files
     # payment_skey_path: "keys/payment.skey"
@@ -59,16 +65,22 @@ timing:
   median_divergency_factor: 200 # 20% divergency allowed when iqr=0
   utxo_size_safety_buffer: 7500000 # 7.5 ada for utxo fee buffer, if not provided settings utxo size will be used to calculate this dynamically
 
-# Number of reward transport UTxOs (minimum 4 for mainnet)
-transport_count: 4
+# Number of Reward and Aggregation State UTxOs minted during deployment
+reward_count: 1
+aggstate_count: 1
 
 # Path to Aiken blueprint file
 blueprint_path: "artifacts/plutus.json"
+apply_arguments_with_aiken: True
 
 # Reference script creation options
 create_reference: true # Create manager reference script
 
-# Will pay out utxo with reference script to this address.
-# By default creates reference script at this script address.
-reference_script_addr: "addr1wqxxyk7uedfl27gw6dyfgrptrd5y7xz66vmm2rfmmg6fn6c9s5ggf"
-reward_issuer_address: "addr1qylfnxq8p2p5t8svf7q6r2v3kn47humag3q9qulzjc20auvzz8sc749jnq8pu5l6gvnfyql3azfxgtup77swyxpf95kq8y8y4e"
+reference_script:
+  # Will pay out utxo with reference script to this address. And lookup the script utxo at this address.
+  # If not provided will derive from the deployed script address.
+  address: "addr..."
+  # Looking through all utxos at an address could be inefficient. Provide optional utxo reference to speed up the reference script query.
+  utxo_reference:
+    transaction_id: "4606793120f127744d2b2f3bcc265a9a91eea8693f6eee2f48287738edededed"
+    output_index: 1

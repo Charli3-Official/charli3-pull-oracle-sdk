@@ -6,8 +6,8 @@ from pathlib import Path
 
 import click
 
-from charli3_offchain_core.cli.config.escrow import EscrowConfig
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.oracle.governance.orchestrator import GovernanceOrchestrator
 
 from ..constants.status import ProcessStatus
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 )
 @click.command()
 @async_command
-async def add_nodes(config: Path, output: Path | None) -> None:
+async def add_nodes(config: Path, output: Path | None) -> None:  # noqa: C901
     """Add the nodes' PKHs to an Oracle instance"""
     try:
         print_header("Add Nodes")
@@ -49,6 +49,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -67,6 +68,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -91,7 +93,11 @@ async def add_nodes(config: Path, output: Path | None) -> None:
             )
             return
         if result.status != ProcessStatus.TRANSACTION_BUILT:
-            raise click.ClickException(f"Add nodes failed: {result.error}")
+            if result.error:
+                raise click.ClickException(
+                    f"Add nodes failed: {result.error}"
+                ) from result.error
+            raise click.ClickException("Add nodes failed: unknown error")
 
         if platform_config.threshold == 1:
             if print_confirmation_message_prompt(
@@ -141,15 +147,15 @@ async def del_nodes(config: Path, output: Path | None) -> None:
         print_header("Delete Nodes")
         (
             management_config,
-            oracle_configuration,
+            _,
             loaded_key,
             oracle_addresses,
             chain_query,
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
-        escrow_config = EscrowConfig.from_yaml(config)
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
             platform_address=oracle_addresses.platform_address,
@@ -167,6 +173,7 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -177,10 +184,6 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
             tokens=management_config.tokens,
-            reward_dismissing_period_length=oracle_configuration.reward_dismissing_period_length,
-            network=management_config.network.network,
-            reward_issuer_addr=escrow_config.reward_issuer_addr,
-            escrow_address=escrow_config.reference_script_addr,
             signing_key=loaded_key.payment_sk,
         )
         if result.status == ProcessStatus.CANCELLED_BY_USER:
@@ -258,6 +261,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -276,6 +280,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -329,10 +334,16 @@ async def update_settings(config: Path, output: Path | None) -> None:
     help="Path to deployment configuration YAML",
 )
 @click.option(
-    "--amount",
+    "--reward-accounts",
     type=int,
-    required=True,
-    help="Amount of UTxO pairs to scale up",
+    default=0,
+    help="Number of RewardAccount UTxOs to create (default 0)",
+)
+@click.option(
+    "--aggstates",
+    type=int,
+    default=0,
+    help="Number of AggState UTxOs to create (default 0)",
 )
 @click.option(
     "--output",
@@ -341,9 +352,16 @@ async def update_settings(config: Path, output: Path | None) -> None:
 )
 @click.command()
 @async_command
-async def scale_up(config: Path, amount: int, output: Path | None) -> None:
-    """Scale up ODV capacity by creating new UTxO pairs"""
+async def scale_up(
+    config: Path, reward_accounts: int, aggstates: int, output: Path | None
+) -> None:
+    """Scale up ODV capacity by creating new RewardAccount and/or AggState UTxOs"""
     try:
+        if reward_accounts == 0 and aggstates == 0:
+            raise click.ClickException(
+                "At least one of --reward-accounts or --aggstates must be specified"
+            )
+
         print_header("Scale Up ODV Capacity")
 
         (
@@ -355,6 +373,7 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -373,12 +392,14 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
         result = await orchestrator.scale_up_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
-            scale_amount=amount,
+            reward_account_count=reward_accounts,
+            aggstate_count=aggstates,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,
@@ -432,10 +453,16 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
     help="Path to deployment configuration YAML",
 )
 @click.option(
-    "--amount",
+    "--reward-accounts",
     type=int,
-    required=True,
-    help="Amount of UTxO pairs to scale down",
+    default=0,
+    help="Number of empty RewardAccount UTxOs to remove (default 0)",
+)
+@click.option(
+    "--aggstates",
+    type=int,
+    default=0,
+    help="Number of empty/expired AggState UTxOs to remove (default 0)",
 )
 @click.option(
     "--output",
@@ -444,9 +471,16 @@ async def scale_up(config: Path, amount: int, output: Path | None) -> None:
 )
 @click.command()
 @async_command
-async def scale_down(config: Path, amount: int, output: Path | None) -> None:
-    """Scale down ODV capacity by removing UTxO pairs"""
+async def scale_down(
+    config: Path, reward_accounts: int, aggstates: int, output: Path | None
+) -> None:
+    """Scale down ODV capacity by removing RewardAccount and/or AggState UTxOs"""
     try:
+        if reward_accounts == 0 and aggstates == 0:
+            raise click.ClickException(
+                "At least one of --reward-accounts or --aggstates must be specified"
+            )
+
         print_header("Scale Down ODV Capacity")
 
         (
@@ -458,6 +492,7 @@ async def scale_down(config: Path, amount: int, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -476,12 +511,14 @@ async def scale_down(config: Path, amount: int, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
         result = await orchestrator.scale_down_oracle(
             oracle_policy=management_config.tokens.oracle_policy,
-            scale_amount=amount,
+            reward_account_count=reward_accounts,
+            aggstate_count=aggstates,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
             change_address=oracle_addresses.admin_address,

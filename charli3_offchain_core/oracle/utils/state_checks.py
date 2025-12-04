@@ -1,7 +1,6 @@
 """Utilities for validating and managing oracle state transitions."""
 
 import logging
-import random
 from collections.abc import Sequence
 
 from pycardano import ScriptHash, UTxO
@@ -9,14 +8,11 @@ from pycardano import ScriptHash, UTxO
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     NoDatum,
-    NoRewards,
     OracleDatum,
     OracleSettingsDatum,
     OracleSettingsVariant,
     RewardAccountDatum,
     RewardAccountVariant,
-    RewardConsensusPending,
-    RewardTransportVariant,
 )
 from charli3_offchain_core.oracle.exceptions import StateValidationError
 from charli3_offchain_core.oracle.utils import asset_checks
@@ -24,7 +20,7 @@ from charli3_offchain_core.oracle.utils import asset_checks
 logger = logging.getLogger(__name__)
 
 
-def convert_cbor_to_transports(transport_utxos: Sequence[UTxO]) -> list[UTxO]:
+def convert_cbor_to_reward_accounts(account_utxos: Sequence[UTxO]) -> list[UTxO]:
     """
     Convert CBOR encoded NodeDatum objects to their corresponding Python objects.
 
@@ -37,18 +33,16 @@ def convert_cbor_to_transports(transport_utxos: Sequence[UTxO]) -> list[UTxO]:
       original Python format.
     """
     result: list[UTxO] = []
-    for utxo in transport_utxos:
+    for utxo in account_utxos:
         if utxo.output.datum and not isinstance(
-            utxo.output.datum, RewardTransportVariant
+            utxo.output.datum, RewardAccountVariant
         ):
             if utxo.output.datum.cbor:
-                utxo.output.datum = RewardTransportVariant.from_cbor(
+                utxo.output.datum = RewardAccountVariant.from_cbor(
                     utxo.output.datum.cbor
                 )
                 result.append(utxo)
-        elif utxo.output.datum and isinstance(
-            utxo.output.datum, RewardTransportVariant
-        ):
+        elif utxo.output.datum and isinstance(utxo.output.datum, RewardAccountVariant):
             result.append(utxo)
     return result
 
@@ -76,7 +70,7 @@ def convert_cbor_to_agg_states(agg_state_utxos: Sequence[UTxO]) -> list[UTxO]:
     return result
 
 
-def filter_empty_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
+def filter_reward_account(utxos: Sequence[UTxO]) -> list[UTxO]:
     """Filter UTxOs for empty reward transport states.
 
     Args:
@@ -86,41 +80,15 @@ def filter_empty_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
         List of UTxOs with empty reward transport states
     """
 
-    utxos_with_datum = convert_cbor_to_transports(utxos)
+    utxos_with_datum = convert_cbor_to_reward_accounts(utxos)
 
     return [
         utxo
         for utxo in utxos_with_datum
         if utxo.output.datum
-        and isinstance(utxo.output.datum, RewardTransportVariant)
-        and isinstance(utxo.output.datum.datum, NoRewards)
+        and isinstance(utxo.output.datum, RewardAccountVariant)
+        and isinstance(utxo.output.datum.datum, RewardAccountDatum)
     ]
-
-
-def filter_pending_transports(utxos: Sequence[UTxO]) -> list[UTxO]:
-    """Filter UTxOs for pending reward consensus states, and sort by timestamp
-
-    Args:
-        utxos: List of UTxOs to filter
-
-    Returns:
-        List of UTxOs with pending consensus states
-    """
-
-    utxos_with_datum = convert_cbor_to_transports(utxos)
-
-    pending_transports = [
-        utxo
-        for utxo in utxos_with_datum
-        if utxo.output.datum
-        and isinstance(utxo.output.datum, RewardTransportVariant)
-        and isinstance(utxo.output.datum.datum, RewardConsensusPending)
-    ]
-    pending_transports.sort(
-        key=lambda utxo: utxo.output.datum.datum.aggregation.message.timestamp
-    )
-
-    return pending_transports
 
 
 def filter_empty_agg_states(utxos: Sequence[UTxO]) -> list[UTxO]:
@@ -286,7 +254,7 @@ def filter_valid_agg_states(utxos: Sequence[UTxO], current_time: int) -> list[UT
     ]
 
 
-def find_transport_pair(
+def find_account_pair(
     utxos: Sequence[UTxO], policy_id: ScriptHash, current_time: int
 ) -> tuple[UTxO, UTxO]:
     """Find empty transport and agg state pair (empty or expired).
@@ -304,11 +272,11 @@ def find_transport_pair(
     """
     try:
         # Find empty transports
-        transports = filter_empty_transports(
-            asset_checks.filter_utxos_by_token_name(utxos, policy_id, "C3RT")
+        reward_accounts = filter_reward_account(
+            asset_checks.filter_utxos_by_token_name(utxos, policy_id, "C3RA")
         )
-        if not transports:
-            raise StateValidationError("No empty transport UTxO found")
+        if not reward_accounts:
+            raise StateValidationError("No Reward Account UTxOs found")
 
         # Find empty or expired agg states
         agg_states = filter_valid_agg_states(
@@ -318,17 +286,8 @@ def find_transport_pair(
         if not agg_states:
             raise StateValidationError("No valid agg state UTxO found")
 
-        # Randomly select a pair to prevent UTxO contention
-        if len(transports) == len(agg_states):
-            # If lists are same length, zip them and choose a random pair
-            paired = list(zip(transports, agg_states))
-            return random.choice(paired)
-        else:
-            # If different lengths, select one randomly from each list
-            transport = random.choice(transports)
-            agg_state = random.choice(agg_states)
-            return transport, agg_state
-
+        # Return first pair found
+        return reward_accounts[0], agg_states[0]
     except Exception as e:
         raise StateValidationError(f"Failed to find UTxO pair: {e}") from e
 
@@ -343,37 +302,6 @@ def is_oracle_paused(settings: OracleSettingsDatum) -> bool:
         bool: True if oracle is in pause period
     """
     return not isinstance(settings.pause_period_started_at, NoDatum)
-
-
-def can_process_rewards(
-    transport: UTxO, current_time: int, liveness_period: int
-) -> bool:
-    """Check if rewards can be processed for transport UTxO.
-
-    Args:
-        transport: Transport UTxO to check
-        current_time: Current time in milliseconds
-        liveness_period: Liveness period duration
-
-    Returns:
-        bool: True if rewards can be processed
-
-    Raises:
-        StateValidationError: If validation fails
-    """
-    try:
-        if not isinstance(
-            transport.output.datum, RewardTransportVariant
-        ) or not isinstance(transport.output.datum.datum, RewardConsensusPending):
-            return False
-
-        pending_data = transport.output.datum.datum
-        message_time = pending_data.message.timestamp
-
-        return current_time >= message_time + liveness_period
-
-    except Exception as e:
-        raise StateValidationError(f"Failed to validate reward processing: {e}") from e
 
 
 def validate_datum_transition(
@@ -405,42 +333,3 @@ def validate_datum_transition(
 
     except Exception as e:
         raise StateValidationError(f"Failed to validate datum transition: {e}") from e
-
-
-def validate_matching_pair(transport: UTxO, agg_state: UTxO) -> bool:
-    """Validate transport and agg state form a valid pair.
-
-    Args:
-        transport: Transport UTxO
-        agg_state: Aggregation state UTxO
-
-    Returns:
-        bool: True if UTxOs form valid pair
-
-    Raises:
-        StateValidationError: If validation fails
-    """
-    try:
-
-        # Validate state combinations
-        transport_variant = transport.output.datum
-        agg_state_variant = agg_state.output.datum
-
-        if not isinstance(transport_variant, RewardTransportVariant):
-            return False
-        if not isinstance(agg_state_variant, AggState):
-            return False
-
-        # Check valid state combinations
-        transport_empty = isinstance(transport_variant.datum, NoRewards)
-        agg_state_empty = agg_state_variant.price_data.is_empty
-
-        transport_pending = isinstance(transport_variant.datum, RewardConsensusPending)
-        agg_state_active = not agg_state_variant.price_data.is_valid
-
-        return (transport_empty and agg_state_empty) or (
-            transport_pending and agg_state_active
-        )
-
-    except Exception as e:
-        raise StateValidationError(f"Failed to validate UTxO pair: {e}") from e

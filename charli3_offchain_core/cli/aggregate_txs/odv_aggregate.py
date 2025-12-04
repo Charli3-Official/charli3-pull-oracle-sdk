@@ -8,9 +8,12 @@ from typing import Any
 import click
 from pycardano import PaymentExtendedSigningKey, UTxO, VerificationKeyHash
 
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
-    AggregateMessage,
     AggState,
+)
+from charli3_offchain_core.models.oracle_redeemers import (
+    AggregateMessage,
 )
 from charli3_offchain_core.oracle.aggregate.builder import (
     OdvResult,
@@ -69,6 +72,7 @@ async def submit(
         # Load configuration
         print_progress("Loading configuration...")
         tx_config = TxConfig.from_yaml(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
         ctx = TransactionContext(tx_config)
 
         # Load and validate feed data
@@ -83,7 +87,7 @@ async def submit(
         node_keys = []
         for node_dir in sorted(node_keys_dir.glob("node_*")):
             try:
-                skey = PaymentExtendedSigningKey.load(node_dir / "feed.skey")
+                skey = PaymentExtendedSigningKey.load(str(node_dir / "feed.skey"))
                 node_keys.append(skey)
             except Exception as e:  # pylint: disable=broad-except
                 logger.warning("Failed to load key from %s: %s", node_dir, e)
@@ -99,6 +103,7 @@ async def submit(
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
+            ref_script_config=ref_script_config,
             reward_token_hash=ctx.reward_token_hash,
             reward_token_name=ctx.reward_token_name,
         )

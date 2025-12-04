@@ -1,7 +1,7 @@
 """Test platform collection of rewards in the Charli3 ODV Oracle."""
 
 from collections.abc import Callable
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pycardano import (
@@ -36,6 +36,7 @@ class TestPlatformCollect(TestBase):
             chain_query=self.chain_query,
             tx_manager=self.tx_manager,
             script_address=self.oracle_script_address,
+            ref_script_config=self.ref_script_config,
         )
 
         logger.info("TestPlatformCollect setup complete")
@@ -48,11 +49,9 @@ class TestPlatformCollect(TestBase):
 
         # Mock the confirm_withdrawal_amount_and_address function to avoid user input
         with patch(
-            "charli3_offchain_core.oracle.rewards.platform_collect_builder.confirm_withdrawal_amount_and_address"
-        ) as mock_confirm:
-            # Properly set up the async mock to return the loaded address
-            mock_confirm.return_value = self.platform_address
-
+            "charli3_offchain_core.oracle.rewards.platform_collect_builder.confirm_withdrawal_amount_and_address",
+            new=AsyncMock(return_value=self.platform_address),
+        ):
             # 1. First, check if there are rewards to collect
             # Get UTxOs at script address
             utxos = await self.chain_query.get_utxos(self.oracle_script_address)
@@ -71,7 +70,7 @@ class TestPlatformCollect(TestBase):
                 logger.info(f"Initial reward account amount: {initial_reward_amount}")
 
                 # Check if we have rewards in excess of node allocations that can be collected by platform
-                total_node_rewards = sum(reward_datum.nodes_to_rewards)
+                total_node_rewards = sum(reward_datum.nodes_to_rewards.values())
                 logger.info(f"Total allocated node rewards: {total_node_rewards}")
 
                 if initial_reward_amount <= total_node_rewards:
@@ -274,10 +273,11 @@ class TestPlatformCollect(TestBase):
         assert len(new_rewards) == len(
             orig_rewards
         ), "Reward lists should have same length"
-        for i, (new, orig) in enumerate(zip(new_rewards, orig_rewards)):
-            assert (
-                new == orig
-            ), f"Node rewards should not change during platform collect: node {i}: {orig} -> {new}"
+
+        # Compare dictionaries directly (checks keys and values)
+        assert (
+            new_rewards == orig_rewards
+        ), "Node rewards should not change during platform collect"
 
         # 3. Verify the platform address received the rewards
         new_platform_utxos = await self.chain_query.get_utxos(self.platform_address)

@@ -16,6 +16,7 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.constants.status import ProcessStatus
 
 from ..utils.common import get_script_utxos
@@ -43,11 +44,13 @@ class LifecycleOrchestrator:
         chain_query: ChainQuery,
         tx_manager: TransactionManager,
         script_address: Address,
+        ref_script_config: ReferenceScriptConfig,
         status_callback: Callable | None = None,
     ) -> None:
         self.chain_query = chain_query
         self.tx_manager = tx_manager
         self.script_address = script_address
+        self.ref_script_config = ref_script_config
         self.status_callback = status_callback
         self.current_status = ProcessStatus.NOT_STARTED
 
@@ -76,6 +79,8 @@ class LifecycleOrchestrator:
                 utxos=utxos,
                 change_address=change_address,
                 signing_key=signing_key,
+                script_address=self.script_address,
+                ref_script_config=self.ref_script_config,
             )
 
             return LifecycleResult(
@@ -120,6 +125,8 @@ class LifecycleOrchestrator:
                 platform_script=platform_script,
                 policy_hash=policy_hash,
                 utxos=utxos,
+                script_address=self.script_address,
+                ref_script_config=self.ref_script_config,
                 change_address=change_address,
                 signing_key=signing_key,
             )
@@ -143,7 +150,7 @@ class LifecycleOrchestrator:
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
-        pair_count: int | None = None,
+        pause_period: int,
     ) -> LifecycleResult:
         """Remove an oracle permanently and burn all NFTs.
 
@@ -171,9 +178,11 @@ class LifecycleOrchestrator:
                 platform_script=platform_script,
                 policy_hash=policy_hash,
                 utxos=utxos,
-                pair_count=pair_count,
+                script_address=self.script_address,
+                ref_script_config=self.ref_script_config,
                 change_address=change_address,
                 signing_key=signing_key,
+                pause_period=pause_period,
             )
 
             self._update_status(

@@ -5,9 +5,12 @@ import logging
 from pathlib import Path
 
 import click
+from pycardano import Address, PaymentSigningKey
 
 from charli3_offchain_core.blockchain.exceptions import CollateralError
+from charli3_offchain_core.cli.base import DerivedAddresses, LoadedKeys
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
     CollectingNodesError,
@@ -20,7 +23,10 @@ from charli3_offchain_core.oracle.exceptions import (
     NoRewardsAvailableError,
     PlatformCollectCancelled,
 )
-from charli3_offchain_core.oracle.rewards.orchestrator import RewardOrchestrator
+from charli3_offchain_core.oracle.rewards.orchestrator import (
+    RewardOrchestrator,
+    RewardOrchestratorResult,
+)
 
 from ..constants.status import ProcessStatus
 from .config.formatting import (
@@ -47,9 +53,15 @@ logger = logging.getLogger(__name__)
     type=click.Path(path_type=Path),
     help="Output file for transaction data",
 )
+@click.option(
+    "--batch-size",
+    type=int,
+    default=10,
+    help="Maximum number of reward accounts to process",
+)
 @click.command()
 @async_command
-async def node_collect(config: Path, output: Path | None) -> None:
+async def node_collect(config: Path, output: Path | None, batch_size: int) -> None:
     """Node Operator Withdrawal Transaction: Individual Rewards Collection"""
     try:
         print_progress("Loading Node Collect Configuration")
@@ -62,11 +74,34 @@ async def node_collect(config: Path, output: Path | None) -> None:
             tx_manager,
             _,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
+
+        # payment_key: check if withdrawal_mnemonic exists in config
+        # If it exists, load full key details
+        payment_key = None
+        signing_keys = [loaded_key.payment_sk]
+
+        if management_config.network.wallet.withdrawal_mnemonic:
+            from charli3_offchain_core.cli.config.keys import KeyManager
+
+            (
+                withdrawal_sk,
+                withdrawal_vk,
+                withdrawal_addr,
+            ) = KeyManager.load_withdrawal_key_from_mnemonic(
+                management_config.network.wallet.withdrawal_mnemonic,
+                management_config.network.network,
+            )
+            payment_key = (withdrawal_sk, withdrawal_addr)
+            # Add withdrawal key to signing keys (prevent duplicates if same key)
+            if withdrawal_sk != loaded_key.payment_sk:
+                signing_keys.append(withdrawal_sk)
 
         orchestrator = RewardOrchestrator(
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -75,57 +110,20 @@ async def node_collect(config: Path, output: Path | None) -> None:
             tokens=management_config.tokens,
             loaded_key=loaded_key,
             network=management_config.network.network,
+            max_inputs=batch_size,
+            payment_key=payment_key,
         )
-        if isinstance(result.error, NodeNotRegisteredError):
-            user_message = (
-                f"The payment verification key hash (VKH) derived from the configuration "
-                f"is not associated with any node in the oracle contract.\n"
-                f"Payment Verification Key Hash (VKH): {result.error}\n"
-                f"Oracle contract address: {oracle_addresses.script_address}\n"
-                "Please ensure the mnemonic in the configuration file is correct and "
-                "corresponds to a registered node."
-            )
-            print_status(result.status, user_message, False)
-            return
 
-        if isinstance(result.error, NoRewardsAvailableError):
-            user_message = (
-                f"No rewards available\n"
-                f"{result.error} \n"
-                f"Contract: {oracle_addresses.script_address}\n"
-                "Try again later"
-            )
-            print_status(result.status, user_message, True)
-            return
-
-        if isinstance(result.error, CollectingNodesError):
-            user_message = (
-                "Insufficient rewards balance\n"
-                "Please verify settings or contact Charli3 support for assistance"
-            )
-            print_status(result.status, user_message, success=True)
-            return
-
-        if isinstance(result.error, NodeCollectCancelled):
-            print_status(
-                "Collect Node Status", "Operation cancelled by user", success=True
-            )
-            return
-        if isinstance(result.error, ADABalanceNotFoundError | CollateralError):
-            user_message = (
-                "Your wallet appears to be empty.\n"
-                "ADA is required for transaction fees.\n"
-                f"Wallet address: {loaded_key.address}"
-            )
-
-            print_status(result.status, user_message, success=False)
+        if _handle_node_collect_error(
+            result, oracle_addresses, loaded_key, payment_key
+        ):
             return
 
         if result.transaction and print_confirmation_message_prompt(
             "Proceed signing and submitting Node-Collect tx?"
         ):
             status, _ = await tx_manager.sign_and_submit(
-                result.transaction, [loaded_key.payment_sk], wait_confirmation=True
+                result.transaction, signing_keys, wait_confirmation=True
             )
             if status != ProcessStatus.TRANSACTION_CONFIRMED:
                 raise click.ClickException(f"Collect nodes failed: {status}")
@@ -134,6 +132,59 @@ async def node_collect(config: Path, output: Path | None) -> None:
     except Exception as e:
         logger.error("Collect nodes failed", exc_info=e)
         raise click.ClickException(str(e)) from e
+
+
+def _handle_node_collect_error(
+    result: RewardOrchestratorResult,
+    oracle_addresses: DerivedAddresses,
+    loaded_key: LoadedKeys,
+    payment_key: tuple[PaymentSigningKey, Address] | None = None,
+) -> bool:
+    """Handle errors from node collect operation. Returns True if execution should stop."""
+    if isinstance(result.error, NodeNotRegisteredError):
+        user_message = (
+            f"The payment verification key hash (VKH) derived from the configuration "
+            f"is not associated with any node in the oracle contract.\n"
+            f"Payment Verification Key Hash (VKH): {result.error}\n"
+            f"Oracle contract address: {oracle_addresses.script_address}\n"
+            "Please ensure the mnemonic in the configuration file is correct and "
+            "corresponds to a registered node."
+        )
+        print_status(result.status, user_message, False)
+        return True
+
+    if isinstance(result.error, NoRewardsAvailableError):
+        user_message = (
+            f"No rewards available\n"
+            f"{result.error} \n"
+            f"Contract: {oracle_addresses.script_address}\n"
+            "Try again later"
+        )
+        print_status(result.status, user_message, True)
+        return True
+
+    if isinstance(result.error, CollectingNodesError):
+        user_message = (
+            "Insufficient rewards balance\n"
+            "Please verify settings or contact Charli3 support for assistance"
+        )
+        print_status(result.status, user_message, success=True)
+        return True
+
+    if isinstance(result.error, NodeCollectCancelled):
+        print_status("Collect Node Status", "Operation cancelled by user", success=True)
+        return True
+
+    if isinstance(result.error, ADABalanceNotFoundError | CollateralError):
+        user_message = (
+            "Your wallet appears to be empty.\n"
+            "ADA is required for transaction fees.\n"
+            f"Wallet address: {payment_key[1] if payment_key else loaded_key.address}"
+        )
+        print_status(result.status, user_message, success=False)
+        return True
+
+    return False
 
 
 @click.option(
@@ -147,9 +198,15 @@ async def node_collect(config: Path, output: Path | None) -> None:
     type=click.Path(path_type=Path),
     help="Output file for transaction data",
 )
+@click.option(
+    "--batch-size",
+    type=int,
+    default=10,
+    help="Maximum number of reward accounts to process",
+)
 @click.command()
 @async_command
-async def platform_collect(config: Path, output: Path | None) -> None:
+async def platform_collect(config: Path, output: Path | None, batch_size: int) -> None:
     """Platform Withdrawal Transaction"""
     try:
         print_header("Platform Collect")
@@ -162,6 +219,7 @@ async def platform_collect(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -181,6 +239,7 @@ async def platform_collect(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -191,6 +250,7 @@ async def platform_collect(config: Path, output: Path | None) -> None:
             tokens=management_config.tokens,
             loaded_key=loaded_key,
             network=management_config.network.network,
+            max_inputs=batch_size,
         )
 
         if isinstance(result.error, NoRewardsAvailableError):
@@ -273,12 +333,12 @@ async def platform_collect(config: Path, output: Path | None) -> None:
     "--batch-size",
     type=int,
     default=10,
-    help="Maximum number of transports to process",
+    help="Maximum number of reward accounts to process",
 )
 @click.command()
 @async_command
 async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) -> None:
-    """Clear all rewards transport UTxO"""
+    """Dismiss rewards from reward account UTxOs"""
     try:
         print_header("Dismiss Rewrads")
         (
@@ -290,6 +350,7 @@ async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) ->
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -309,6 +370,7 @@ async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) ->
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -324,7 +386,7 @@ async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) ->
         )
 
         if isinstance(result.error, NoPendingTransportsFoundError):
-            user_message = "No transport rewards UTxOs available for claiming"
+            user_message = "No reward account UTxOs available for dismissing"
             print_status(result.status, user_message, success=True)
             return
 

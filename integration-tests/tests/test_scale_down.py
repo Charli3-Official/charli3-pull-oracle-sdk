@@ -1,9 +1,9 @@
-"""Test module for scaling down Oracle Data Verification UTxO pairs.
+"""Test module for scaling down Oracle Data Verification UTxOs.
 
-This module tests the functionality of decreasing the number of UTxO pairs
-in the Oracle. It validates that the scaling down operation correctly
-removes the specified number of pairs (each consisting of an AggState UTxO and a
-RewardTransport UTxO) from the blockchain environment.
+This module tests the functionality of decreasing the number of RewardAccount
+and AggState UTxOs in the Oracle. It validates that the scaling down operation
+correctly removes the specified number of UTxOs independently from the blockchain
+environment.
 """
 
 from collections.abc import Callable
@@ -25,16 +25,17 @@ class TestScaleDown(GovernanceBase):
     """Test class for validating Oracle scale-down operations in the governance system.
 
     This class inherits from GovernanceBase and implements test methods for
-    decreasing the number of UTxO pairs in the Oracle system. Each pair consists of an
-    AggState UTxO and a RewardTransport UTxO. It verifies the transaction building,
-    signing, and submission processes, and ensures that the expected number of pairs
-    are removed from the blockchain.
+    decreasing the number of RewardAccount and AggState UTxOs in the Oracle system.
+    It verifies the transaction building, signing, and submission processes, and
+    ensures that the expected number of UTxOs are removed from the blockchain.
 
     Attributes:
-        PAIRS_TO_REMOVE_COUNT (int): Number of UTxO pairs to remove during the test.
+        REWARD_ACCOUNTS_TO_REMOVE (int): Number of RewardAccount UTxOs to remove during the test.
+        AGGSTATES_TO_REMOVE (int): Number of AggState UTxOs to remove during the test.
     """
 
-    PAIRS_TO_REMOVE_COUNT = 1
+    REWARD_ACCOUNTS_TO_REMOVE = 1
+    AGGSTATES_TO_REMOVE = 1
 
     def setup_method(self, method: Callable) -> None:
         """Set up the test environment before each test method execution.
@@ -51,25 +52,24 @@ class TestScaleDown(GovernanceBase):
 
     @pytest.mark.asyncio
     async def test_scale_down(self) -> None:
-        """Test the process of scaling down Oracle UTxO pairs.
+        """Test the process of scaling down Oracle RewardAccount and AggState UTxOs.
 
-        Each pair consists of an AggState UTxO and a RewardTransport UTxO.
-        These pairs are used by the Oracle system to track aggregation states and
-        manage reward distribution. When scaling down, pairs are removed from the
-        blockchain to reduce resource usage.
+        RewardAccount UTxOs manage reward distribution, while AggState UTxOs track
+        aggregation states. When scaling down, empty/expired UTxOs are removed from
+        the blockchain to reduce resource usage. These can be scaled independently.
 
         This test method:
-        1. Counts the current AggState and RewardTransport UTxOs
+        1. Counts the current AggState and RewardAccount UTxOs
         2. Retrieves the platform authentication NFT
         3. Gets the platform script configuration
-        4. Builds a transaction to remove UTxO pairs
+        4. Builds a transaction to remove empty RewardAccount and AggState UTxOs independently
         5. Signs and submits the transaction
         6. Verifies the transaction was confirmed
-        7. Confirms the UTxO pairs are removed correctly from the blockchain
+        7. Confirms the UTxOs are removed correctly from the blockchain
 
         Raises:
             AssertionError: If the transaction fails to build or confirm,
-                           or if the expected number of pairs is not removed
+                           or if the expected number of UTxOs is not removed
         """
         logger.info("Starting Oracle scale-down operation")
 
@@ -86,10 +86,11 @@ class TestScaleDown(GovernanceBase):
             f"Oracle Token ScriptHash: {self.management_config.tokens.oracle_policy}"
         )
         logger.info(
-            f"Scale-down amount: {self.PAIRS_TO_REMOVE_COUNT} UTxO pair(s) to remove"
+            f"Scale-down: {self.REWARD_ACCOUNTS_TO_REMOVE} RewardAccount(s) + "
+            f"{self.AGGSTATES_TO_REMOVE} AggState(s) to remove"
         )
 
-        # BEFORE: Get current UTxOs and count initial AggState and RewardTransport UTxOs
+        # BEFORE: Get current UTxOs and count initial AggState and RewardAccount UTxOs
         initial_utxos = await get_script_utxos(
             Address.from_primitive(self.oracle_addresses.script_address),
             self.tx_manager,
@@ -99,31 +100,25 @@ class TestScaleDown(GovernanceBase):
             initial_utxos, self.management_config.tokens.oracle_policy
         )
 
-        initial_reward_transport_utxos = self.extract_reward_transport_utxos(
+        initial_reward_account_utxos = self.extract_reward_account_utxos(
             initial_utxos, self.management_config.tokens.oracle_policy
         )
 
         initial_agg_state_count = len(initial_agg_state_utxos)
-        initial_reward_transport_count = len(initial_reward_transport_utxos)
+        initial_reward_account_count = len(initial_reward_account_utxos)
 
         logger.info(f"Initial AggState UTxOs: {initial_agg_state_count}")
-        logger.info(f"Initial RewardTransport UTxOs: {initial_reward_transport_count}")
+        logger.info(f"Initial RewardAccount UTxOs: {initial_reward_account_count}")
 
-        # Verify that we have enough UTxO pairs to remove
-        assert initial_agg_state_count >= self.PAIRS_TO_REMOVE_COUNT, (
+        # Verify that we have enough UTxOs to remove
+        assert initial_agg_state_count >= self.AGGSTATES_TO_REMOVE, (
             f"Insufficient AggState UTxOs for scale-down: Found {initial_agg_state_count}, "
-            f"but need at least {self.PAIRS_TO_REMOVE_COUNT} to remove"
+            f"but need at least {self.AGGSTATES_TO_REMOVE} to remove"
         )
 
-        assert initial_reward_transport_count >= self.PAIRS_TO_REMOVE_COUNT, (
-            f"Insufficient RewardTransport UTxOs for scale-down: Found {initial_reward_transport_count}, "
-            f"but need at least {self.PAIRS_TO_REMOVE_COUNT} to remove"
-        )
-
-        # Verify that the initial counts match (should be in pairs)
-        assert initial_agg_state_count == initial_reward_transport_count, (
-            f"Initial UTxO pair mismatch: Found {initial_agg_state_count} AggState UTxOs "
-            f"but {initial_reward_transport_count} RewardTransport UTxOs"
+        assert initial_reward_account_count >= self.REWARD_ACCOUNTS_TO_REMOVE, (
+            f"Insufficient RewardAccount UTxOs for scale-down: Found {initial_reward_account_count}, "
+            f"but need at least {self.REWARD_ACCOUNTS_TO_REMOVE} to remove"
         )
 
         # Find platform auth NFT at the platform address
@@ -143,11 +138,13 @@ class TestScaleDown(GovernanceBase):
 
         # Build the scale-down transaction
         logger.info(
-            f"Building scale-down transaction to remove {self.PAIRS_TO_REMOVE_COUNT} UTxO pair(s)"
+            f"Building scale-down transaction: {self.REWARD_ACCOUNTS_TO_REMOVE} RewardAccount(s) + "
+            f"{self.AGGSTATES_TO_REMOVE} AggState(s)"
         )
         scale_down_result = await self.governance_orchestrator.scale_down_oracle(
             oracle_policy=self.management_config.tokens.oracle_policy,
-            scale_amount=self.PAIRS_TO_REMOVE_COUNT,
+            reward_account_count=self.REWARD_ACCOUNTS_TO_REMOVE,
+            aggstate_count=self.AGGSTATES_TO_REMOVE,
             platform_utxo=platform_auth_utxo,
             platform_script=platform_script,
             change_address=self.oracle_addresses.admin_address,
@@ -178,8 +175,8 @@ class TestScaleDown(GovernanceBase):
         # Wait for UTxOs to be indexed
         await wait_for_indexing(5)
 
-        # AFTER: Check the updated UTxOs to verify pairs were removed
-        logger.info("Verifying UTxO pairs were removed correctly")
+        # AFTER: Check the updated UTxOs to verify they were removed
+        logger.info("Verifying UTxOs were removed correctly")
         updated_utxos = await get_script_utxos(
             Address.from_primitive(self.oracle_addresses.script_address),
             self.tx_manager,
@@ -189,37 +186,38 @@ class TestScaleDown(GovernanceBase):
             updated_utxos, self.management_config.tokens.oracle_policy
         )
 
-        final_reward_transport_utxos = self.extract_reward_transport_utxos(
+        final_reward_account_utxos = self.extract_reward_account_utxos(
             updated_utxos, self.management_config.tokens.oracle_policy
         )
 
         final_agg_state_count = len(final_agg_state_utxos)
-        final_reward_transport_count = len(final_reward_transport_utxos)
+        final_reward_account_count = len(final_reward_account_utxos)
 
         logger.info(f"Final AggState UTxOs: {final_agg_state_count}")
-        logger.info(f"Final RewardTransport UTxOs: {final_reward_transport_count}")
+        logger.info(f"Final RewardAccount UTxOs: {final_reward_account_count}")
 
-        # Calculate expected counts after removing pairs
-        expected_utxo_count = initial_agg_state_count - self.PAIRS_TO_REMOVE_COUNT
-        logger.info(f"Expected UTxOs of each type after removal: {expected_utxo_count}")
+        # Calculate expected counts after removing UTxOs
+        expected_agg_state_count = initial_agg_state_count - self.AGGSTATES_TO_REMOVE
+        expected_reward_account_count = (
+            initial_reward_account_count - self.REWARD_ACCOUNTS_TO_REMOVE
+        )
+        logger.info(
+            f"Expected AggState UTxOs after removal: {expected_agg_state_count}, "
+            f"Expected RewardAccount UTxOs: {expected_reward_account_count}"
+        )
 
-        # Assert that both types of UTxOs were removed correctly
-        assert expected_utxo_count == final_agg_state_count, (
-            f"AggState UTxO count mismatch: Expected {expected_utxo_count} UTxOs "
-            f"(initial {initial_agg_state_count} - {self.PAIRS_TO_REMOVE_COUNT} removed), "
+        # Assert that AggState UTxOs were removed correctly
+        assert expected_agg_state_count == final_agg_state_count, (
+            f"AggState UTxO count mismatch: Expected {expected_agg_state_count} UTxOs "
+            f"(initial {initial_agg_state_count} - {self.AGGSTATES_TO_REMOVE} removed), "
             f"but found {final_agg_state_count} UTxOs in the blockchain"
         )
 
-        assert expected_utxo_count == final_reward_transport_count, (
-            f"RewardTransport UTxO count mismatch: Expected {expected_utxo_count} UTxOs "
-            f"(initial {initial_reward_transport_count} - {self.PAIRS_TO_REMOVE_COUNT} removed), "
-            f"but found {final_reward_transport_count} UTxOs in the blockchain"
-        )
-
-        # Assert that we have the same number of each type of UTxO (should be in pairs)
-        assert final_agg_state_count == final_reward_transport_count, (
-            f"Final UTxO pair mismatch: Found {final_agg_state_count} AggState UTxOs "
-            f"but {final_reward_transport_count} RewardTransport UTxOs"
+        # Assert that RewardAccount UTxOs were removed correctly
+        assert expected_reward_account_count == final_reward_account_count, (
+            f"RewardAccount UTxO count mismatch: Expected {expected_reward_account_count} UTxOs "
+            f"(initial {initial_reward_account_count} - {self.REWARD_ACCOUNTS_TO_REMOVE} removed), "
+            f"but found {final_reward_account_count} UTxOs in the blockchain"
         )
 
         logger.info("Scale-down operation completed successfully")

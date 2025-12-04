@@ -18,6 +18,7 @@ class WalletConfig:
     """Configuration for wallet loading."""
 
     mnemonic: str | None = None
+    withdrawal_mnemonic: str | None = None
     payment_skey_path: str | None = None
     payment_vkey_path: str | None = None
     stake_vkey_path: str | None = None
@@ -28,6 +29,7 @@ class WalletConfig:
         """Create wallet config from dictionary."""
         return cls(
             mnemonic=config.get("mnemonic"),
+            withdrawal_mnemonic=config.get("withdrawal_mnemonic"),
             payment_skey_path=config.get("payment_skey_path"),
             payment_vkey_path=config.get("payment_vkey_path"),
             stake_vkey_path=config.get("stake_vkey_path"),
@@ -104,9 +106,9 @@ class KeyManager:
                      stake verification key, derived address)
         """
         # Load keys
-        payment_signing_key = PaymentSigningKey.load(payment_skey_path)
-        payment_verification_key = PaymentVerificationKey.load(payment_vkey_path)
-        stake_verification_key = PaymentVerificationKey.load(stake_vkey_path)
+        payment_signing_key = PaymentSigningKey.load(str(payment_skey_path))
+        payment_verification_key = PaymentVerificationKey.load(str(payment_vkey_path))
+        stake_verification_key = PaymentVerificationKey.load(str(stake_vkey_path))
 
         # Create address
         address = Address(
@@ -153,3 +155,51 @@ class KeyManager:
 
         else:
             raise ValueError("Must provide either mnemonic or all key file paths")
+
+    @staticmethod
+    def derive_payment_vkh_from_mnemonic(
+        mnemonic: str, network: Network = Network.TESTNET
+    ) -> PaymentVerificationKey:
+        """Derive only the payment verification key hash from a mnemonic.
+
+        This is useful for deriving the withdrawal payment VKH from a separate mnemonic
+        without loading the full wallet.
+
+        Args:
+            mnemonic: 24-word mnemonic phrase
+            network: Target network
+
+        Returns:
+            Payment verification key
+        """
+        hdwallet = HDWallet.from_mnemonic(mnemonic)
+        payment_hdwallet = hdwallet.derive_from_path("m/4343'/1815'/0'/0/1")
+        payment_verification_key = PaymentVerificationKey.from_primitive(
+            payment_hdwallet.public_key
+        )
+        return payment_verification_key
+
+    @staticmethod
+    def load_withdrawal_key_from_mnemonic(
+        mnemonic: str, network: Network = Network.TESTNET
+    ) -> tuple[PaymentSigningKey, PaymentVerificationKey, Address]:
+        """Load withdrawal keys from mnemonic (derivation path .../0/0/1).
+
+        Args:
+            mnemonic: 24-word mnemonic phrase
+            network: Target network
+
+        Returns:
+            Tuple of (payment signing key, payment verification key, derived address)
+        """
+        hdwallet = HDWallet.from_mnemonic(mnemonic)
+        # Withdrawal key path
+        payment_hdwallet = hdwallet.derive_from_path("m/1852'/1815'/0'/0/0")
+        payment_signing_key = ExtendedSigningKey.from_hdwallet(payment_hdwallet)
+        payment_verification_key = PaymentVerificationKey.from_primitive(
+            payment_hdwallet.public_key
+        )
+        # Enterprise address (no stake key)
+        address = Address(payment_part=payment_verification_key.hash(), network=network)
+
+        return payment_signing_key, payment_verification_key, address

@@ -24,6 +24,7 @@ from pycardano import (
     Transaction,
     TransactionBuilder,
     TransactionId,
+    TransactionInput,
     TransactionOutput,
     UTxO,
 )
@@ -236,6 +237,32 @@ class ChainQuery:
 
         try:
             return self.context._utxos_with_asset_kupo(asset_policy_id, asset_name)
+
+        except ApiError as e:
+            raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e
+        except Exception as e:
+            raise UTxOQueryError(f"Unexpected error querying UTxOs: {e}") from e
+
+    def get_utxo_by_ref_kupo(self, utxo_reference: TransactionInput) -> UTxO | None:
+        """Get a UTxO associated with a reference - transaction id and output index number.
+
+        Args:
+            utxo_reference (TransactionInput): reference - transaction id and output index number.
+
+        Returns:
+            Optional[UTxO]: A UTxO.
+
+        Raises:
+            ChainContextError: Kupo context was not set up
+            UTxOQueryError: If UTxO query fails
+        """
+        if not self.context:
+            raise ChainContextError("No chain context available")
+        if not isinstance(self.context, KupoChainContextExtension):
+            raise ChainContextError("Kupo context was not set up")
+
+        try:
+            return self.context._utxo_by_ref_kupo(utxo_reference)
 
         except ApiError as e:
             raise UTxOQueryError(f"Failed to query UTxOs: {e}") from e
@@ -555,6 +582,10 @@ class ChainQuery:
                 script_json = await asyncio.to_thread(
                     lambda: requests.get(kupo_script_url, timeout=(5, 15)).json()
                 )
+                if not isinstance(script_json, dict):
+                    raise ScriptQueryError(
+                        f"Script not found or invalid response for hash: {script_hash}"
+                    )
                 script = NativeScript.from_cbor(script_json["script"])
             if not script:
                 raise ScriptQueryError(f"Script not found for hash: {script_hash}")

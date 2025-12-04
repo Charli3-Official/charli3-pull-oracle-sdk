@@ -117,7 +117,7 @@ def validate_message_nodes(
     """
     try:
         # Get set of registered node VKHs from settings
-        registered_nodes = set(settings.nodes.node_map.keys())
+        registered_nodes = set(settings.nodes.keys())
 
         # Get set of VKHs from message
         message_nodes = set(msg.node_feeds_sorted_by_feed.keys())

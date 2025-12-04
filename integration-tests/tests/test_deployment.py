@@ -71,6 +71,8 @@ class TestDeployment(TestBase):
         logger.info("Building deployment transaction")
         result = await self.orchestrator.build_tx(
             oracle_config=self.oracle_config,
+            use_aiken=self.deployment_config.use_aiken,
+            blueprint_path=self.deployment_config.blueprint_path,
             platform_script=platform_script,
             admin_address=self.admin_address,
             script_address=self.oracle_script_address,
@@ -84,6 +86,7 @@ class TestDeployment(TestBase):
             rate_config=self.fee_config,
             signing_key=self.admin_signing_key,
             platform_utxo=platform_utxo,
+            utxo_size_safety_buffer=self.timing_config.utxo_size_safety_buffer,
         )
 
         assert (

@@ -26,6 +26,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_progress,
     print_status,
 )
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     Asset,
     FeeConfig,
@@ -38,6 +39,7 @@ from charli3_offchain_core.models.oracle_datums import (
     SomeAsset,
 )
 from charli3_offchain_core.models.oracle_redeemers import (
+    ManageSettings,
     UpdateSettings,
 )
 from charli3_offchain_core.oracle.exceptions import (
@@ -73,7 +75,7 @@ class SettingOption(Enum):
 
 
 class UpdateBuilder(BaseBuilder):
-    REDEEMER = Redeemer(UpdateSettings())
+    REDEEMER = Redeemer(ManageSettings(redeemer=UpdateSettings()))
     FEE_BUFFER = 10_000
 
     async def build_tx(
@@ -82,7 +84,9 @@ class UpdateBuilder(BaseBuilder):
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: Any,
+        script_address: Address,
         utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         required_signers: list[VerificationKeyHash] | None = None,
@@ -90,7 +94,11 @@ class UpdateBuilder(BaseBuilder):
         """Build the update transaction."""
         try:
             _, settings_utxo = get_oracle_settings_by_policy_id(utxos, policy_hash)
-            script_utxo = get_reference_script_utxo(utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
+            )
 
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
@@ -132,7 +140,7 @@ async def get_setting_value(  # noqa: C901
             # Build help text based on option
             help_text = []
             if option == SettingOption.THRESHOLD:
-                help_text.append(f"max: {deployed_settings.datum.nodes.length}")
+                help_text.append(f"max: {len(deployed_settings.datum.nodes)}")
             elif option == SettingOption.TIME_UNCERTAINTY_AGGREGATION:
                 help_text.append("must be positive")
             elif option == SettingOption.UTXO_BUFFER:
@@ -396,12 +404,9 @@ def validate_setting(  # noqa: C901
             "Median divergency factor must be greater or equal to 1"
         )
 
-    if (
-        option == SettingOption.THRESHOLD
-        and value > deployed_settings.datum.nodes.length
-    ):
+    if option == SettingOption.THRESHOLD and value > len(deployed_settings.datum.nodes):
         raise SettingsValidationError(
-            f"Threshold cannot be greater than number of deployed parties ({deployed_settings.datum.nodes.length})"
+            f"Threshold cannot be greater than number of deployed parties ({len(deployed_settings.datum.nodes)})"
         )
 
     if option == SettingOption.TIME_UNCERTAINTY_PLATFORM:

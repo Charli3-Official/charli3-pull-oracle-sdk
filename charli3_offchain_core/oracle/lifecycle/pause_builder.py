@@ -12,25 +12,26 @@ from pycardano import (
     UTxO,
 )
 
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     OracleSettingsDatum,
     OracleSettingsVariant,
     SomePosixTime,
 )
-from charli3_offchain_core.models.oracle_redeemers import PauseOracle
+from charli3_offchain_core.models.oracle_redeemers import ManageSettings, PauseOracle
 from charli3_offchain_core.oracle.exceptions import PauseError
+from charli3_offchain_core.oracle.lifecycle.base import BaseBuilder, LifecycleTxResult
 from charli3_offchain_core.oracle.utils.common import get_reference_script_utxo
 from charli3_offchain_core.oracle.utils.state_checks import (
     get_oracle_settings_by_policy_id,
     is_oracle_paused,
 )
 
-from .base import BaseBuilder, LifecycleTxResult
-
 
 class PauseBuilder(BaseBuilder):
     """Builds oracle pause transaction"""
 
+    REDEEMER = Redeemer(ManageSettings(redeemer=PauseOracle()))
     FEE_BUFFER = 10_000
 
     async def build_tx(
@@ -38,7 +39,9 @@ class PauseBuilder(BaseBuilder):
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: Any,
+        script_address: Address,
         utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
     ) -> LifecycleTxResult:
@@ -46,7 +49,11 @@ class PauseBuilder(BaseBuilder):
             settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
                 utxos, policy_hash
             )
-            script_utxo = get_reference_script_utxo(utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
+            )
 
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
@@ -73,7 +80,7 @@ class PauseBuilder(BaseBuilder):
                 script_inputs=[
                     (
                         settings_utxo,
-                        Redeemer(PauseOracle()),
+                        self.REDEEMER,
                         script_utxo,
                     ),
                     (platform_utxo, None, platform_script),

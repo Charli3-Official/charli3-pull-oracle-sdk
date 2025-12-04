@@ -27,6 +27,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
     print_title,
 )
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     OracleSettingsDatum,
@@ -35,6 +36,7 @@ from charli3_offchain_core.models.oracle_datums import (
 )
 from charli3_offchain_core.models.oracle_redeemers import (
     PlatformCollect,
+    RedeemRewards,
 )
 from charli3_offchain_core.oracle.exceptions import (
     CollectingPlatformError,
@@ -42,12 +44,14 @@ from charli3_offchain_core.oracle.exceptions import (
     PlatformCollectCancelled,
 )
 from charli3_offchain_core.oracle.rewards.base import BaseBuilder, RewardTxResult
+from charli3_offchain_core.oracle.utils import asset_checks
 from charli3_offchain_core.oracle.utils.common import (
     get_reference_script_utxo,
 )
 from charli3_offchain_core.oracle.utils.state_checks import (
+    convert_cbor_to_reward_accounts,
+    filter_reward_accounts,
     get_oracle_settings_by_policy_id,
-    get_reward_account_by_policy_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,10 +65,13 @@ class PlatformCollectBuilder(BaseBuilder):
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: ScriptHash,
+        script_address: Address,
         contract_utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         reward_token: NoDatum | SomeAsset,
         loaded_key: LoadedKeys,
         network: Network,
+        max_inputs: int,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> RewardTxResult:
         try:
@@ -74,59 +81,103 @@ class PlatformCollectBuilder(BaseBuilder):
                 contract_utxos, policy_hash
             )
 
-            # Input Reward Account UTxO
-            in_reward_account_datum, in_reward_account_utxo = (
-                get_reward_account_by_policy_id(contract_utxos, policy_hash)
-            )
-
             # Contract Script
-            script_utxo = get_reference_script_utxo(contract_utxos)
-
-            # Modified Reward Account: Removed withdrawal amount
-            out_reward_account_utxo, platform_reward = self.modified_reward_utxo(
-                in_reward_account_utxo,
-                in_reward_account_datum,
-                in_core_datum,
-                reward_token,
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
             )
+
+            # Find reward account UTxOs
+            reward_accounts = self.find_reward_accounts(
+                contract_utxos, policy_hash, max_inputs, in_core_datum, reward_token
+            )
+
+            if not reward_accounts:
+                raise NoRewardsAvailableError("No reward account UTxOs found")
+
+            logger.info(
+                f"Found {len(reward_accounts)} reward account(s) to collect from"
+            )
+
+            # Calculate platform rewards from each account and create outputs
+            total_platform_reward = 0
+            reward_account_outputs = []
+            reward_account_inputs = []
+
+            for idx, reward_account in enumerate(reward_accounts):
+                reward_datum = reward_account.output.datum.datum
+
+                # Calculate platform reward and create modified output
+                out_reward_utxo, platform_amount = self.modified_reward_utxo(
+                    reward_account,
+                    reward_datum,
+                    in_core_datum,
+                    reward_token,
+                )
+
+                total_platform_reward += platform_amount
+                reward_account_outputs.append(out_reward_utxo.output)
+
+                # Create redeemer with corresponding_out_ix pointing to output index
+                redeemer = Redeemer(
+                    RedeemRewards(collector=PlatformCollect(), corresponding_out_ix=idx)
+                )
+                reward_account_inputs.append((reward_account, redeemer, script_utxo))
+
+                logger.info(
+                    f"Account #{idx}: Platform reward = {platform_amount:_}, corresponding_out_ix = {idx}"
+                )
+
+            logger.info(f"Total platform reward: {total_platform_reward:_}")
 
             # Get withdrawal address
             requested_address = await confirm_withdrawal_amount_and_address(
                 loaded_key,
                 reward_token,
-                platform_reward,
+                total_platform_reward,
                 network,
+                len(reward_accounts),
             )
 
-            # Create withdrawal output UTxO
+            # Create combined platform fee output
             out_platform_reward = self.platform_operator_output(
                 requested_address,
                 reward_token,
-                platform_reward,
+                total_platform_reward,
+            )
+
+            # Platform auth input
+            platform_auth = (platform_utxo, None, platform_script)
+
+            # Build outputs: [reward_out_1, reward_out_2, ..., platform_nft, combined_fee]
+            script_outputs = [
+                *reward_account_outputs,
+                platform_utxo.output,
+                out_platform_reward,
+            ]
+
+            logger.info(
+                f"Building transaction with {len(reward_account_inputs)} reward account inputs"
+            )
+            logger.info(
+                f"Output order: {len(reward_account_outputs)} reward accounts, 1 platform NFT, 1 platform fee"
             )
 
             # Build transaction
             tx = await self.tx_manager.build_script_tx(
-                script_inputs=[
-                    (
-                        in_reward_account_utxo,
-                        Redeemer(PlatformCollect()),
-                        script_utxo,
-                    ),
-                    (platform_utxo, None, platform_script),
-                ],
-                script_outputs=[
-                    out_reward_account_utxo.output,
-                    out_platform_reward,
-                    platform_utxo.output,
-                ],
-                reference_inputs={in_core_utxo},
+                script_inputs=[*reward_account_inputs, platform_auth],
+                script_outputs=script_outputs,
+                reference_inputs=[in_core_utxo],
                 required_signers=required_signers,
                 change_address=loaded_key.address,
                 signing_key=loaded_key.payment_sk,
             )
             return RewardTxResult(
-                transaction=tx, reward_utxo=out_reward_account_utxo.output
+                transaction=tx,
+                reward_utxo=(
+                    reward_account_outputs[0] if reward_account_outputs else None
+                ),
             )
 
         except CollectingPlatformError as e:
@@ -144,6 +195,91 @@ class PlatformCollectBuilder(BaseBuilder):
         except CollateralError as e:
             logging.error("ADA balance not found error")
             return RewardTxResult(exception_type=e)
+
+    def find_reward_accounts(
+        self,
+        contract_utxos: list[UTxO],
+        policy_id: ScriptHash,
+        max_inputs: int,
+        settings: OracleSettingsDatum,
+        reward_token: NoDatum | SomeAsset,
+    ) -> list[UTxO]:
+        """Find reward account UTxOs with platform fees to collect.
+
+        Args:
+            contract_utxos: All available UTxOs
+            policy_id: Policy ID for filtering C3RA tokens
+            max_inputs: Maximum number of reward accounts to process
+            settings: Oracle settings datum for safety buffer
+            reward_token: Reward token type (ADA or custom asset)
+
+        Returns:
+            List of reward account UTxOs with platform fees
+        """
+        # Filter by C3RA token
+        c3ra_utxos = asset_checks.filter_utxos_by_token_name(
+            contract_utxos, policy_id, "C3RA"
+        )
+        logger.info(f"Found {len(c3ra_utxos)} UTxOs with C3RA token")
+
+        # Convert CBOR to reward account objects
+        converted_utxos = convert_cbor_to_reward_accounts(c3ra_utxos)
+        logger.info(
+            f"Converted {len(converted_utxos)} UTxOs from CBOR to RewardAccountVariant"
+        )
+
+        # Filter for reward accounts
+        reward_account_utxos = filter_reward_accounts(converted_utxos)
+        logger.info(f"Found {len(reward_account_utxos)} reward account UTxOs")
+
+        # Filter out accounts with no platform rewards available
+        accounts_with_platform_fees = []
+        for account in reward_account_utxos:
+            if self._has_platform_rewards(account, settings, reward_token):
+                accounts_with_platform_fees.append(account)
+
+        logger.info(
+            f"Found {len(accounts_with_platform_fees)} accounts with platform fees to collect"
+        )
+
+        return accounts_with_platform_fees[:max_inputs]
+
+    def _has_platform_rewards(
+        self,
+        reward_account: UTxO,
+        settings: OracleSettingsDatum,
+        reward_token: NoDatum | SomeAsset,
+    ) -> bool:
+        """Check if a reward account has platform rewards available to collect.
+
+        Args:
+            reward_account: The reward account UTxO to check
+            settings: Oracle settings datum for safety buffer
+            reward_token: Reward token type (ADA or custom asset)
+
+        Returns:
+            True if platform rewards are available, False otherwise
+        """
+        reward_datum = reward_account.output.datum.datum
+        node_rewards = sum(reward_datum.nodes_to_rewards.values())
+
+        if isinstance(reward_token, NoDatum):
+            # ADA case: check if there's ADA above node_rewards + safety_buffer
+            lovelace_amount = reward_account.output.amount.coin
+            allocated_amount = node_rewards + settings.utxo_size_safety_buffer
+            platform_amount = lovelace_amount - allocated_amount
+            return platform_amount > 0
+        else:
+            # Custom token case: check if there's token balance above node_rewards
+            asset_name = AssetName(reward_token.asset.name)
+            policy_hash = ScriptHash.from_primitive(reward_token.asset.policy_id.hex())
+
+            token_balance = reward_account.output.amount.multi_asset.get(
+                policy_hash, {}
+            ).get(asset_name, 0)
+
+            platform_amount = token_balance - node_rewards
+            return platform_amount > 0
 
     def modified_reward_utxo(
         self,
@@ -174,7 +310,7 @@ class PlatformCollectBuilder(BaseBuilder):
         modified_utxo = deepcopy(in_reward_utxo)
 
         lovelace_amount = modified_utxo.output.amount.coin
-        node_rewards = sum(in_reward_datum.nodes_to_rewards)
+        node_rewards = sum(in_reward_datum.nodes_to_rewards.values())
 
         allocated_amount = node_rewards + safety_buffer
         platform_amount = lovelace_amount - allocated_amount
@@ -219,7 +355,7 @@ class PlatformCollectBuilder(BaseBuilder):
             policy_hash, {}
         ).get(asset_name, 0)
 
-        node_rewards = sum(in_reward_datum.nodes_to_rewards)
+        node_rewards = sum(in_reward_datum.nodes_to_rewards.values())
         platform_amount = token_balance - node_rewards
 
         logger.info(f"Reward balance: {token_balance:_}")
@@ -287,20 +423,32 @@ async def confirm_withdrawal_amount_and_address(
     reward_token: SomeAsset | NoDatum,
     platform_reward: int,
     network: Network,
+    total_accounts: int = 1,
 ) -> Address:
     """
-    Prompts the user to confirm or change an address.
+    Prompts the user to confirm or change an address for platform reward withdrawal.
+
+    Args:
+        loaded_key: User's wallet keys
+        reward_token: Type of reward token (ADA or custom asset)
+        platform_reward: Total platform reward amount
+        network: Cardano network (mainnet/testnet)
+        total_accounts: Number of reward accounts being processed
+
+    Returns:
+        Address where rewards will be sent
     """
     print_progress("Loading wallet configuration...")
 
     symbol = "₳ (lovelace)" if isinstance(reward_token, NoDatum) else "C3 (Charli3)"
 
     print_status(
-        "Verififcaion Key Hash associated with user's wallet",
+        "Verification Key Hash associated with user's wallet",
         message=f"{loaded_key.payment_vk.hash()}",
     )
 
-    print_information(f"Total Accumulated Rewards: {platform_reward:_} {symbol}")
+    print_information(f"Total Platform Rewards: {platform_reward:_} {symbol}")
+    print_information(f"Reward Accounts to process: {total_accounts}")
 
     print_title(
         "Select a withdrawal address (derived from your mnemonic configuration):"

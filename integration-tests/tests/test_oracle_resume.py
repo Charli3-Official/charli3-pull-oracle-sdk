@@ -1,4 +1,4 @@
-"""Test the pause/resume functionality of the Charli3 ODV Oracle."""
+"""Test the resume functionality of the Charli3 ODV Oracle."""
 
 from collections.abc import Callable
 
@@ -16,12 +16,12 @@ from .test_utils import logger, wait_for_indexing
 
 
 @pytest.mark.run(order=6)
-class TestOraclePause(TestBase):
-    """Test oracle pause."""
+class TestOracleResume(TestBase):
+    """Test oracle resume."""
 
     def setup_method(self, method: "Callable") -> None:
         """Set up the test environment."""
-        logger.info("Setting up TestOraclePause environment")
+        logger.info("Setting up TestOracleResume environment")
 
         super().setup_method(method)
 
@@ -43,10 +43,10 @@ class TestOraclePause(TestBase):
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.run(order=6.1)
+    @pytest.mark.run(order=6.2)
     @async_retry(tries=TEST_RETRIES, delay=5)
-    async def test_oracle_pause(self) -> None:
-        """Test oracle pause."""
+    async def test_oracle_resume(self) -> None:
+        """Test oracle resume."""
         # Prepare the transaction
         platform_utxo = await self.platform_auth_finder.find_auth_utxo(
             policy_id=self.management_config.tokens.platform_auth_policy,
@@ -55,13 +55,13 @@ class TestOraclePause(TestBase):
 
         assert (
             platform_utxo is not None
-        ), "No platform auth UTxO found for oracle pause test"
+        ), "No platform auth UTxO found for oracle resume test"
 
         platform_script = await self.platform_auth_finder.get_platform_script(
             self.oracle_addresses.platform_address
         )
 
-        result = await self.lifecycle_orchestrator.pause_oracle(
+        result = await self.lifecycle_orchestrator.resume_oracle(
             oracle_policy=self.management_config.tokens.oracle_policy,
             platform_utxo=platform_utxo,
             platform_script=platform_script,
@@ -71,18 +71,18 @@ class TestOraclePause(TestBase):
 
         assert (
             result.transaction is not None
-        ), "Failed to build oracle pause transaction"
+        ), "Failed to build oracle resume transaction"
 
-        logger.info("Oracle pause transaction built")
+        logger.info("Oracle resume transaction built")
 
         # Submit the transaction
         await self.lifecycle_orchestrator.tx_manager.sign_and_submit(
             result.transaction, [self.loaded_keys.payment_sk], wait_confirmation=False
         )
 
-        logger.info("Oracle pause transaction submitted")
+        logger.info("Oracle resume transaction submitted")
 
-        # Verify that the oracle was paused
+        # Verify that the oracle was resumed
         await wait_for_indexing(10)
 
         utxos = await common.get_script_utxos(
@@ -95,5 +95,5 @@ class TestOraclePause(TestBase):
             utxos, policy_hash
         )
         assert (
-            settings_datum.pause_period_started_at != NoDatum()
-        ), "Oracle pause timestamp not found after creation"
+            settings_datum.pause_period_started_at == NoDatum()
+        ), "Oracle was not resumed"

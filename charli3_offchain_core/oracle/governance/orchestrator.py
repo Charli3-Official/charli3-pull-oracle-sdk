@@ -8,7 +8,6 @@ from pycardano import (
     Address,
     ExtendedSigningKey,
     NativeScript,
-    Network,
     PaymentSigningKey,
     ScriptHash,
     Transaction,
@@ -19,10 +18,10 @@ from pycardano import (
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
-from charli3_offchain_core.models.base import PosixTimeDiff
 from charli3_offchain_core.models.oracle_datums import OracleConfiguration
 from charli3_offchain_core.oracle.exceptions import (
     AddingNodesError,
@@ -58,11 +57,13 @@ class GovernanceOrchestrator:
         chain_query: ChainQuery,
         tx_manager: TransactionManager,
         script_address: Address,
+        ref_script_config: ReferenceScriptConfig,
         status_callback: Callable | None = None,
     ) -> None:
         self.chain_query = chain_query
         self.tx_manager = tx_manager
         self.script_address = script_address
+        self.ref_script_config = ref_script_config
         self.status_callback = status_callback
         self.current_status = ProcessStatus.NOT_STARTED
 
@@ -93,6 +94,8 @@ class GovernanceOrchestrator:
                     platform_utxo=platform_utxo,
                     platform_script=platform_script,
                     policy_hash=policy_hash,
+                    script_address=self.script_address,
+                    ref_script_config=self.ref_script_config,
                     utxos=utxos,
                     change_address=change_address,
                     signing_key=signing_key,
@@ -126,10 +129,6 @@ class GovernanceOrchestrator:
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         tokens: TokenConfig,
-        reward_dismissing_period_length: PosixTimeDiff,
-        network: Network,
-        reward_issuer_addr: Address | None = None,
-        escrow_address: Address | None = None,
         required_signers: list[VerificationKeyHash] | None = None,
         test_mode: bool = False,
     ) -> GovernanceResult:
@@ -144,10 +143,6 @@ class GovernanceOrchestrator:
             change_address: Address for change
             signing_key: Signing key for the transaction
             tokens: Token configuration
-            reward_dismissing_period_length: Period length for reward dismissal
-            network: Network configuration
-            reward_issuer_addr: Optional reward issuer address
-            escrow_address: Optional escrow address
             required_signers: Optional list of required signers
 
         Returns:
@@ -155,7 +150,6 @@ class GovernanceOrchestrator:
         """
         try:
 
-            auth_policy_id = bytes.fromhex(tokens.platform_auth_policy)
             oracle_policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
 
             contract_utxos = await get_script_utxos(
@@ -173,15 +167,12 @@ class GovernanceOrchestrator:
                     platform_script=platform_script,
                     policy_hash=oracle_policy_hash,
                     contract_utxos=contract_utxos,
+                    script_address=self.script_address,
+                    ref_script_config=self.ref_script_config,
                     change_address=change_address,
                     signing_key=signing_key,
                     new_nodes_config=new_nodes_config,
                     reward_token=reward_token,
-                    network=network,
-                    auth_policy_id=auth_policy_id,
-                    reward_dismissing_period_length=reward_dismissing_period_length,
-                    reward_issuer_addr=reward_issuer_addr,
-                    escrow_address=escrow_address,
                     required_signers=required_signers,
                     test_mode=test_mode,
                 )
@@ -227,6 +218,8 @@ class GovernanceOrchestrator:
                 oracle_config=oracle_config,
                 platform_utxo=platform_utxo,
                 platform_script=platform_script,
+                script_address=self.script_address,
+                ref_script_config=self.ref_script_config,
                 policy_hash=policy_hash,
                 utxos=utxos,
                 change_address=change_address,
@@ -247,14 +240,29 @@ class GovernanceOrchestrator:
     async def scale_up_oracle(
         self,
         oracle_policy: str,
-        scale_amount: int,
         platform_utxo: UTxO,
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        reward_account_count: int = 0,
+        aggstate_count: int = 0,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> GovernanceResult:
-        """Scale up oracle ODV capacity."""
+        """Scale up oracle ODV capacity.
+
+        Args:
+            oracle_policy: Oracle policy ID
+            platform_utxo: Platform authentication UTxO
+            platform_script: Platform script
+            change_address: Address for change
+            signing_key: Signing key
+            reward_account_count: Number of RewardAccount UTxOs to create (default 0)
+            aggstate_count: Number of AggState UTxOs to create (default 0)
+            required_signers: Optional required signers
+
+        Returns:
+            GovernanceResult with transaction status
+        """
         try:
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
             policy_hash = ScriptHash(bytes.fromhex(oracle_policy))
@@ -263,6 +271,7 @@ class GovernanceOrchestrator:
                 tx_manager=self.tx_manager,
                 script_address=self.script_address,
                 policy_id=policy_hash,
+                ref_script_config=self.ref_script_config,
             )
 
             try:
@@ -272,7 +281,8 @@ class GovernanceOrchestrator:
                     utxos=utxos,
                     change_address=change_address,
                     signing_key=signing_key,
-                    scale_amount=scale_amount,
+                    reward_account_count=reward_account_count,
+                    aggstate_count=aggstate_count,
                     required_signers=required_signers,
                 )
             except (ScalingError, StateValidationError) as e:
@@ -293,16 +303,35 @@ class GovernanceOrchestrator:
     async def scale_down_oracle(
         self,
         oracle_policy: str,
-        scale_amount: int,
         platform_utxo: UTxO,
         platform_script: NativeScript,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
+        reward_account_count: int = 0,
+        aggstate_count: int = 0,
         required_signers: list[VerificationKeyHash] | None = None,
     ) -> GovernanceResult:
-        """Scale down oracle ODV capacity."""
+        """Scale down oracle ODV capacity.
+
+        Args:
+            oracle_policy: Oracle policy ID
+            platform_utxo: Platform authentication UTxO
+            platform_script: Platform script
+            change_address: Address for change
+            signing_key: Signing key
+            reward_account_count: Number of empty RewardAccount UTxOs to remove (default 0)
+            aggstate_count: Number of empty/expired AggState UTxOs to remove (default 0)
+            required_signers: Optional required signers
+
+        Returns:
+            GovernanceResult with transaction status
+        """
         try:
-            logger.info("Starting scale down operation for %d UTxO pairs", scale_amount)
+            logger.info(
+                "Starting scale down operation for %d RewardAccount(s) and %d AggState(s)",
+                reward_account_count,
+                aggstate_count,
+            )
 
             utxos = await get_script_utxos(self.script_address, self.tx_manager)
             logger.info("Found %d total UTxOs at script address", len(utxos))
@@ -312,6 +341,7 @@ class GovernanceOrchestrator:
             builder = OracleScaleBuilder(
                 tx_manager=self.tx_manager,
                 script_address=self.script_address,
+                ref_script_config=self.ref_script_config,
                 policy_id=policy_hash,
             )
 
@@ -322,13 +352,14 @@ class GovernanceOrchestrator:
                     utxos=utxos,
                     change_address=change_address,
                     signing_key=signing_key,
-                    scale_amount=scale_amount,
+                    reward_account_count=reward_account_count,
+                    aggstate_count=aggstate_count,
                     required_signers=required_signers,
                 )
                 logger.info(
                     "Successfully built scale down transaction. "
-                    "Removed %d transport UTxOs and %d AggState UTxOs",
-                    len(result.removed_transport_utxos),
+                    "Removed %d RewardAccount UTxOs and %d AggState UTxOs",
+                    len(result.removed_reward_account_utxos),
                     len(result.removed_agg_state_utxos),
                 )
 

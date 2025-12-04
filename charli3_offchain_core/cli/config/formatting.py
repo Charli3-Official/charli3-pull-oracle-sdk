@@ -65,10 +65,9 @@ def format_deployment_summary(result: Any) -> None:
     if result.start_result:
         print_header("Oracle UTxOs Created")
         print_status("Settings UTxO", "Created")
-        print_status("Reward Account UTxO", "Created")
         print_status(
-            "Reward Transport UTxOs",
-            f"{len(result.start_result.reward_transport_utxos)} created",
+            "Reward Account UTxOs",
+            f"{len(result.start_result.reward_account_utxos)} created",
         )
         print_status(
             "Aggregation State UTxOs",
