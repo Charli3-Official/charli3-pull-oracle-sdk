@@ -50,6 +50,34 @@ ensure_node_keys() {
   fi
 }
 
+# Function to wait for a service to be ready
+wait_for_service() {
+  local url="$1"
+  local service_name="$2"
+  local timeout="$3"
+  local interval=2
+
+  echo "Waiting for $service_name to be ready at $url..."
+  local start_time=$(date +%s)
+
+  while true; do
+    if curl -s -f "$url" >/dev/null 2>&1; then
+      echo "$service_name is ready!"
+      return 0
+    fi
+
+    local current_time=$(date +%s)
+    local elapsed=$((current_time - start_time))
+
+    if [ "$elapsed" -ge "$timeout" ]; then
+      echo "Error: Timed out waiting for $service_name to be ready."
+      return 1
+    fi
+
+    sleep "$interval"
+  done
+}
+
 # Trap the SIGINT, SIGTERM, and EXIT signals and call the function to kill processes
 trap 'kill_processes' SIGINT SIGTERM EXIT
 
@@ -58,9 +86,12 @@ ensure_node_keys
 
 # Start the node in the background
 ./bin/devkit.sh stop && ./bin/devkit.sh start create-node -o --start -e 1000 --era conway >/dev/null 2>&1 &
-# Wait for the node to start
-echo "Waiting for the node to start..."
-sleep 120
+
+# Wait for the node to start by polling services
+# Wait up to 300 seconds for Ogmios (node startup can take time)
+wait_for_service "http://localhost:1337/health" "Ogmios" 300 || exit 1
+# Wait up to 60 seconds for Kupo (should be ready shortly after Ogmios)
+wait_for_service "http://localhost:1442/health" "Kupo" 60 || exit 1
 
 # Tests
 run_test() {
