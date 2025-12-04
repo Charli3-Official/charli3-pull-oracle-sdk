@@ -10,6 +10,7 @@ from pycardano import Address, PaymentSigningKey
 from charli3_offchain_core.blockchain.exceptions import CollateralError
 from charli3_offchain_core.cli.base import DerivedAddresses, LoadedKeys
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.oracle.exceptions import (
     ADABalanceNotFoundError,
     CollectingNodesError,
@@ -73,6 +74,7 @@ async def node_collect(config: Path, output: Path | None, batch_size: int) -> No
             tx_manager,
             _,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         # payment_key: check if withdrawal_mnemonic exists in config
         # If it exists, load full key details
@@ -99,6 +101,7 @@ async def node_collect(config: Path, output: Path | None, batch_size: int) -> No
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -216,6 +219,7 @@ async def platform_collect(config: Path, output: Path | None, batch_size: int) -
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -235,6 +239,7 @@ async def platform_collect(config: Path, output: Path | None, batch_size: int) -
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -345,6 +350,7 @@ async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) ->
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -364,6 +370,7 @@ async def dismiss_rewards(config: Path, output: Path | None, batch_size: int) ->
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 

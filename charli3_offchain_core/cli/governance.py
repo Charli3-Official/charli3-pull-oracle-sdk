@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.oracle.governance.orchestrator import GovernanceOrchestrator
 
 from ..constants.status import ProcessStatus
@@ -48,6 +49,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:  # noqa: C901
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -66,6 +68,7 @@ async def add_nodes(config: Path, output: Path | None) -> None:  # noqa: C901
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -151,6 +154,7 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -169,6 +173,7 @@ async def del_nodes(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -256,6 +261,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -274,6 +280,7 @@ async def update_settings(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -366,6 +373,7 @@ async def scale_up(
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -384,6 +392,7 @@ async def scale_up(
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -483,6 +492,7 @@ async def scale_down(
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -501,6 +511,7 @@ async def scale_down(
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 

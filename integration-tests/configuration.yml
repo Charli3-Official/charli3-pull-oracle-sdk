@@ -30,8 +30,9 @@ nodes:
   - d7a6019ef1992df288c36617a0d554cbdd747c4c948fd20a22bdcd5e
   - 4966131de699f3bd2d55aff6df158fcd885d06d0d6b8e8c323914bbf
   required_signatures: 9
-oracle_address: addr_test1wrmwddtzhfh6fcaht63kuz4l7ccrru2xretf60aujg2sursn5jkyg
-reference_script_addr: addr_test1wqnk0zrhwleqvkhcn3d3uygrsu6xupqefnxdxv6lv79l9hgag9z52
+oracle_address: addr_test1wp9dw7xd6pv95akj0l27jletzfu20n97gvu48euwgev838g96a9dy
+reference_script:
+  address: addr_test1wp653q94ze4kc7xfffgpwrfpan79m0z7x3hvfqeczhp6uug6fwg8n
 reward_count: 3
 timing:
   aggregation_liveness: 65000
@@ -43,6 +44,6 @@ timing:
   time_uncertainty_platform: 60000
 tokens:
   fee_token_name: '546573744333'
-  fee_token_policy: cdf42e63be4a2a01d26d231d00f5cc3bd22e39d24aa54a5509640dae
-  oracle_policy: b71e4df5a54ce78bcb6804287bc91e395b2e2146726c72d18632759b
-  platform_auth_policy: 9b5d45c3ae8ac64164c01b35d540b0fd6c62245eddde673f7d1540a3
+  fee_token_policy: 989f69693c34cdfe20a7542b4d134b5564c83aa0ee5b9101d94fffe1
+  oracle_policy: ba0d0f1e8d1151ba0b677980f114c5b6a8900e5bbe9430ccf768bcfe
+  platform_auth_policy: 8b143c1bb8effe2bfddb32630b8dea02fea17dfdbfdca6a7e9e4a12b

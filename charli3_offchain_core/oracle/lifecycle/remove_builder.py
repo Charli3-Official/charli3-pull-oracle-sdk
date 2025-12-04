@@ -21,6 +21,7 @@ from charli3_offchain_core.blockchain.transactions import (
     TransactionConfig,
     TransactionManager,
 )
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import OracleSettingsDatum
 from charli3_offchain_core.models.oracle_redeemers import (
     Burn,
@@ -50,7 +51,9 @@ class RemoveBuilder(BaseBuilder):
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: ScriptHash,
+        script_address: Address,
         utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         pause_period: int,
@@ -65,7 +68,11 @@ class RemoveBuilder(BaseBuilder):
             )
             self._raise_for_status(settings_datum, pause_period)
 
-            script_utxo = get_reference_script_utxo(utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
+            )
             minting_script = await self.chain_query.get_plutus_script(policy_hash)
 
             # Calculate validity range

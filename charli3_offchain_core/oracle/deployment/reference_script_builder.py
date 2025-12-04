@@ -13,6 +13,7 @@ from pycardano import (
 
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.oracle.config import OracleScriptConfig
 from charli3_offchain_core.oracle.deployment.reference_script_finder import (
@@ -37,17 +38,20 @@ class ReferenceScriptBuilder:
         self,
         chain_query: ChainQuery,
         contracts: OracleContracts,
+        ref_script_config: ReferenceScriptConfig,
         tx_manager: TransactionManager,
     ) -> None:
         self.chain_query = chain_query
         self.contracts = contracts
         self.tx_manager = tx_manager
-        self.script_finder = ReferenceScriptFinder(chain_query, contracts)
+        self.ref_script_config = ref_script_config
+        self.script_finder = ReferenceScriptFinder(
+            chain_query, contracts, ref_script_config
+        )
 
     async def prepare_reference_script(
         self,
         script_config: OracleScriptConfig,
-        script_address: Address,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
     ) -> ReferenceScriptResult:
@@ -76,7 +80,7 @@ class ReferenceScriptBuilder:
 
         result.manager_tx = await self.tx_manager.build_reference_script_tx(
             script=self.contracts.spend.contract,
-            script_address=script_address,
+            reference_script_address=self.script_finder.reference_script_address,
             admin_address=admin_address,
             signing_key=signing_key,
             reference_ada=script_config.reference_ada_amount,

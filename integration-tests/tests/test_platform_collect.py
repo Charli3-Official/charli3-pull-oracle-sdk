@@ -36,6 +36,7 @@ class TestPlatformCollect(TestBase):
             chain_query=self.chain_query,
             tx_manager=self.tx_manager,
             script_address=self.oracle_script_address,
+            ref_script_config=self.ref_script_config,
         )
 
         logger.info("TestPlatformCollect setup complete")

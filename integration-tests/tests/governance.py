@@ -8,6 +8,7 @@ from pycardano.hash import VerificationKeyHash
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
 from charli3_offchain_core.cli.config.nodes import NodesConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.governance import setup_management_from_config
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
@@ -87,12 +88,14 @@ class GovernanceBase:
                 self.tx_manager,
                 self.platform_auth_finder,
             ) = setup_result
+            self.ref_script_config = ReferenceScriptConfig.from_yaml(self.config_path)
 
             # Initialize escrow configuration and governance orchestrator
             self.governance_orchestrator = GovernanceOrchestrator(
                 chain_query=self.chain_query,
                 tx_manager=self.tx_manager,
                 script_address=self.oracle_addresses.script_address,
+                ref_script_config=self.ref_script_config,
                 status_callback=format_status_update,
             )
 

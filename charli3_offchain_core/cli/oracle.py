@@ -5,9 +5,10 @@ import logging
 from pathlib import Path
 
 import click
+from pycardano import Network
 
-from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.governance import (
     add_nodes,
     del_nodes,
@@ -24,19 +25,10 @@ from charli3_offchain_core.cli.transaction import (
     create_sign_tx_command,
     create_submit_tx_command,
 )
-from charli3_offchain_core.contracts.aiken_loader import OracleContracts
-from charli3_offchain_core.oracle.config import (
-    OracleScriptConfig,
-)
+from charli3_offchain_core.constants.colors import CliColor
 from charli3_offchain_core.oracle.lifecycle.orchestrator import LifecycleOrchestrator
 
 from ..constants.status import ProcessStatus
-from .base import (
-    create_chain_query,
-    derive_deployment_addresses,
-    load_keys_with_validation,
-)
-from .config.deployment import DeploymentConfig
 from .config.formatting import (
     format_deployment_summary,
     oracle_success_callback,
@@ -108,7 +100,7 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
             payment_sk,
             _payment_vk,
             addresses,
-            _chain_query,
+            chain_query,
             tx_manager,
             orchestrator,
             platform_auth_finder,
@@ -150,12 +142,25 @@ async def deploy(config: Path, output: Path | None) -> None:  # noqa
         # Handle reference scripts
         reference_result, needs_reference = await orchestrator.handle_reference_scripts(
             script_config=configs["script"],
-            script_address=addresses.script_address,
             admin_address=addresses.admin_address,
             signing_key=payment_sk,
         )
 
         if needs_reference:
+            if (
+                orchestrator.reference_builder.script_finder.reference_script_address
+                != (
+                    orchestrator.contracts.spend.mainnet_addr
+                    if chain_query.context.network == Network.MAINNET
+                    else orchestrator.contracts.spend.testnet_addr
+                )
+            ):
+                click.secho(
+                    "WARNING: If you are deploying a reference script to an address that you are going to use with another third party wallet:\n\
+                                1. This reference script UTXO might become unusable from that third party wallet.\n\
+                                2. To use this UTXO again, remove reference script from there using the CLI - run `charli3 reference-script remove`.",
+                    fg=CliColor.WARNING,
+                )
             if not print_confirmation_message_prompt(
                 "Reference Script was not found! Would you like to proceed with reference script creation now?"
             ):
@@ -254,6 +259,7 @@ async def pause(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -271,6 +277,7 @@ async def pause(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
         result = await orchestrator.pause_oracle(
@@ -337,6 +344,7 @@ async def resume(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -354,6 +362,7 @@ async def resume(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
 
@@ -421,6 +430,7 @@ async def remove(config: Path, output: Path | None) -> None:
             tx_manager,
             platform_auth_finder,
         ) = setup_management_from_config(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
         platform_utxo = await platform_auth_finder.find_auth_utxo(
             policy_id=management_config.tokens.platform_auth_policy,
@@ -438,6 +448,7 @@ async def remove(config: Path, output: Path | None) -> None:
             chain_query=chain_query,
             tx_manager=tx_manager,
             script_address=oracle_addresses.script_address,
+            ref_script_config=ref_script_config,
             status_callback=format_status_update,
         )
         result = await orchestrator.remove_oracle(
@@ -480,75 +491,6 @@ async def remove(config: Path, output: Path | None) -> None:
 
     except Exception as e:
         logger.error("Remove failed", exc_info=e)
-        raise click.ClickException(str(e)) from e
-
-
-@oracle.command()
-@click.option(
-    "--config",
-    type=click.Path(exists=True, path_type=Path),
-    required=True,
-    help="Path to deployment configuration YAML",
-)
-@click.option(
-    "--force/--no-force",
-    default=False,
-    help="Force creation even if script exists",
-)
-@async_command
-async def create_reference_script(config: Path, force: bool) -> None:
-    """Create oracle manager reference script separately."""
-    try:
-        # Load configuration and contracts
-        click.echo("Loading configuration...")
-        deployment_config = DeploymentConfig.from_yaml(config)
-        contracts = OracleContracts.from_blueprint(deployment_config.blueprint_path)
-
-        # Load keys and initialize components
-        keys = load_keys_with_validation(deployment_config, contracts)
-        addresses = derive_deployment_addresses(deployment_config, contracts)
-
-        # Initialize chain query
-        chain_query = create_chain_query(deployment_config.network)
-
-        tx_manager = TransactionManager(chain_query)
-
-        # Create script config
-        script_config = OracleScriptConfig(
-            create_manager_reference=True, reference_ada_amount=53000000
-        )
-
-        # Check for existing script
-        if not force:
-            click.echo("Checking for existing reference script...")
-            existing = await chain_query.get_utxos(addresses.script_address)
-            if existing:
-                click.echo(
-                    f"Found existing reference script at: {addresses.script_address}"
-                )
-                if not click.confirm("Continue with creation?"):
-                    return
-
-        # Create and submit transaction
-        click.echo("\nCreating reference script...")
-
-        result = await tx_manager.build_reference_script_tx(
-            script=contracts.spend.contract,
-            script_address=addresses.script_address,
-            admin_address=addresses.admin_address,
-            signing_key=keys.payment_sk,
-            reference_ada=script_config.reference_ada_amount,
-        )
-
-        status, tx = await tx_manager.sign_and_submit(result, [keys.payment_sk])
-        if status == "confirmed":
-            click.secho("\n✓ Reference script created successfully!", fg="green")
-            click.echo(f"Transaction: {tx.id}")
-        else:
-            raise click.ClickException(f"Transaction failed with status: {status}")
-
-    except Exception as e:
-        logger.error("Reference script creation failed", exc_info=e)
         raise click.ClickException(str(e)) from e
 
 

@@ -6,6 +6,7 @@ import click
 
 from charli3_offchain_core.cli.aggregate_txs.base import tx_options
 from charli3_offchain_core.cli.config.formatting import print_header, print_progress
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.config.utils import async_command
 from charli3_offchain_core.cli.odv_simulator.models import SimulationConfig
 from charli3_offchain_core.cli.odv_simulator.oracle import OracleSimulator
@@ -39,9 +40,10 @@ async def run(
     print_progress("Loading configuration...")
     # Load simulation config
     sim_config = SimulationConfig.from_yaml(config)
+    ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
     # Create simulator
-    oracle_simulator = OracleSimulator(sim_config)
+    oracle_simulator = OracleSimulator(sim_config, ref_script_config)
 
     try:
         # Run simulation

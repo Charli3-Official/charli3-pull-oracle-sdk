@@ -8,6 +8,7 @@ from typing import Any
 import click
 from pycardano import PaymentExtendedSigningKey, UTxO, VerificationKeyHash
 
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
 )
@@ -71,6 +72,7 @@ async def submit(
         # Load configuration
         print_progress("Loading configuration...")
         tx_config = TxConfig.from_yaml(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
         ctx = TransactionContext(tx_config)
 
         # Load and validate feed data
@@ -101,6 +103,7 @@ async def submit(
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
+            ref_script_config=ref_script_config,
             reward_token_hash=ctx.reward_token_hash,
             reward_token_name=ctx.reward_token_name,
         )
