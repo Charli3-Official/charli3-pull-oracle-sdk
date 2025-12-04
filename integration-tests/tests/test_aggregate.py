@@ -84,6 +84,7 @@ class TestAggregate(TestBase):
             reward_token_name=(
                 AssetName(reward_token_name) if reward_token_name else None
             ),
+            ref_script_config=self.ref_script_config,
         )
 
         logger.info("TestAggregate setup complete")

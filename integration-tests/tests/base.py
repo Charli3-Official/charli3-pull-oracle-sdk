@@ -14,6 +14,7 @@ from pycardano import (
 )
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.setup import setup_oracle_from_config
 
 from .async_utils import async_retry
@@ -62,6 +63,7 @@ class TestBase:
                 self.platform_auth_finder,
                 self.configs,
             ) = setup_result
+            self.ref_script_config = ReferenceScriptConfig.from_yaml(self.config_path)
 
             # Set status callback once in base class
             self.orchestrator.status_callback = format_status_update

@@ -19,6 +19,7 @@ from pycardano import (
 )
 
 from charli3_offchain_core.blockchain.transactions import TransactionManager
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     PriceData,
@@ -74,6 +75,7 @@ class OracleScaleBuilder:
         tx_manager: TransactionManager,
         script_address: Address,
         policy_id: ScriptHash,
+        ref_script_config: ReferenceScriptConfig,
     ) -> None:
         """Initialize transaction builder.
 
@@ -85,6 +87,7 @@ class OracleScaleBuilder:
         self.tx_manager = tx_manager
         self.script_address = script_address
         self.policy_id = policy_id
+        self.ref_script_config = ref_script_config
         self.network_config = self.tx_manager.chain_query.config.network_config
         self._standard_min_ada = self.MIN_UTXO_VALUE
 
@@ -124,7 +127,11 @@ class OracleScaleBuilder:
                     "At least one of reward_account_count or aggstate_count must be greater than 0"
                 )
 
-            script_utxo = get_reference_script_utxo(utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                self.ref_script_config,
+                self.script_address,
+            )
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
 
@@ -251,7 +258,11 @@ class OracleScaleBuilder:
                 aggstate_count,
             )
 
-            script_utxo = get_reference_script_utxo(utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                self.ref_script_config,
+                self.script_address,
+            )
             if not script_utxo:
                 logger.error("Reference script UTxO not found")
                 raise ValueError("Reference script UTxO not found")

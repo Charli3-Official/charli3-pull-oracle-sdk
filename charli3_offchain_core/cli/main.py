@@ -11,6 +11,7 @@ from charli3_offchain_core.cli.odv_client.commands import client
 from charli3_offchain_core.cli.odv_simulator.commands import simulator
 from charli3_offchain_core.cli.oracle import oracle
 from charli3_offchain_core.cli.platform import platform
+from charli3_offchain_core.cli.reference_script import reference_script
 
 
 @click.group()
@@ -27,6 +28,7 @@ cli.add_command(aggregate_tx)
 cli.add_command(platform)
 cli.add_command(simulator)
 cli.add_command(generate_node_keys_command, name="generate-node-keys")
+cli.add_command(reference_script)
 
 
 if __name__ == "__main__":

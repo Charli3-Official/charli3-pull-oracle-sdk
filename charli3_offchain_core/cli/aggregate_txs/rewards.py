@@ -5,6 +5,7 @@ from pathlib import Path
 
 import click
 
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.oracle.aggregate.builder import (
     OracleTransactionBuilder,
     # RewardsResult,
@@ -48,6 +49,7 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
         print_header("Reward Processing")
         print_progress("Loading configuration...")
         tx_config = TxConfig.from_yaml(config)
+        ref_script_config = ReferenceScriptConfig.from_yaml(config)
         ctx = TransactionContext(tx_config)
 
         # Load keys
@@ -59,6 +61,7 @@ async def process(config: Path, batch_size: int, wait: bool) -> None:
             tx_manager=ctx.tx_manager,
             script_address=ctx.script_address,
             policy_id=ctx.policy_id,
+            ref_script_config=ref_script_config,
             reward_token_hash=ctx.reward_token_hash,
             reward_token_name=ctx.reward_token_name,
         )

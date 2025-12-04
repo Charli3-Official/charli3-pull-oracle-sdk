@@ -29,6 +29,7 @@ from charli3_offchain_core.cli.config.formatting import (
     print_status,
     print_title,
 )
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     OracleSettingsDatum,
@@ -68,7 +69,9 @@ class NodeCollectBuilder(BaseBuilder):
     async def build_tx(
         self,
         policy_hash: ScriptHash,
+        script_address: Address,
         contract_utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         reward_token: NoDatum | SomeAsset,
         loaded_key: LoadedKeys,
         network: Network,
@@ -94,7 +97,11 @@ class NodeCollectBuilder(BaseBuilder):
             )
 
             # Contract Script
-            script_utxo = get_reference_script_utxo(contract_utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
+            )
 
             # Find reward account UTxOs for this feed_vkh
             reward_accounts = self.find_reward_accounts(

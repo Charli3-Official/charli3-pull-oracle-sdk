@@ -13,6 +13,7 @@ from pycardano import (
 )
 
 from charli3_offchain_core.cli.config.formatting import format_status_update
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.contracts.aiken_loader import (
     OracleContracts,
 )
@@ -118,6 +119,7 @@ def setup_oracle_from_config(
     # Load and validate configuration
     deployment_config = DeploymentConfig.from_yaml(config)
     validate_deployment_config(deployment_config)
+    ref_script_config = ReferenceScriptConfig.from_yaml(config)
 
     reward_token = setup_token(
         deployment_config.tokens.reward_token_policy,
@@ -196,6 +198,7 @@ def setup_oracle_from_config(
         chain_query=chain_query,
         contracts=parameterized_contracts,
         tx_manager=tx_manager,
+        ref_script_config=ref_script_config,
         status_callback=format_status_update,
     )
 

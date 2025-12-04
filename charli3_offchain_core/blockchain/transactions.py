@@ -8,6 +8,7 @@ from pycardano import (
     BlockFrostChainContext,
     ExtendedSigningKey,
     MultiAsset,
+    NativeScript,
     PaymentSigningKey,
     PlutusV3Script,
     Redeemer,
@@ -139,7 +140,9 @@ class TransactionManager:
 
     async def build_script_tx(
         self,
-        script_inputs: list[tuple[UTxO, Redeemer, UTxO | PlutusV3Script | None]],
+        script_inputs: list[
+            tuple[UTxO, Redeemer, UTxO | PlutusV3Script | NativeScript | None]
+        ],
         script_outputs: list[TransactionOutput],
         reference_inputs: set[UTxO | TransactionInput] | None = None,
         mint: MultiAsset | None = None,
@@ -196,7 +199,7 @@ class TransactionManager:
     async def build_reference_script_tx(
         self,
         script: PlutusV3Script,
-        script_address: Address,
+        reference_script_address: Address,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
         reference_ada: int | None = None,
@@ -208,7 +211,7 @@ class TransactionManager:
             # Create reference script output
             reference_amount = reference_ada or self.config.default_script_utxo_cost
             reference_output = TransactionOutput(
-                address=script_address, amount=reference_amount, script=script
+                address=reference_script_address, amount=reference_amount, script=script
             )
             builder.add_output(reference_output)
 

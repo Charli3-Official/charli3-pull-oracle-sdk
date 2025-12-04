@@ -16,6 +16,7 @@ from pycardano import (
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.contracts.aiken_loader import OracleContracts
 from charli3_offchain_core.models.oracle_datums import (
     FeeConfig,
@@ -57,6 +58,7 @@ class OracleDeploymentOrchestrator:
         chain_query: ChainQuery,
         contracts: OracleContracts,
         tx_manager: TransactionManager,
+        ref_script_config: ReferenceScriptConfig,
         status_callback: Callable[[ProcessStatus, str], None] | None = None,
     ) -> None:
         """Initialize the deployment orchestrator.
@@ -74,7 +76,10 @@ class OracleDeploymentOrchestrator:
 
         # Initialize builders
         self.reference_builder = ReferenceScriptBuilder(
-            chain_query, contracts, tx_manager
+            chain_query,
+            contracts,
+            ref_script_config,
+            tx_manager,
         )
         self.start_builder = OracleStartBuilder(chain_query, contracts, tx_manager)
 
@@ -177,7 +182,6 @@ class OracleDeploymentOrchestrator:
     async def handle_reference_scripts(
         self,
         script_config: OracleScriptConfig,
-        script_address: Address,
         admin_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
     ) -> tuple[ReferenceScriptResult, bool]:
@@ -190,7 +194,6 @@ class OracleDeploymentOrchestrator:
 
         result = await self.reference_builder.prepare_reference_script(
             script_config=script_config,
-            script_address=script_address,
             admin_address=admin_address,
             signing_key=signing_key,
         )

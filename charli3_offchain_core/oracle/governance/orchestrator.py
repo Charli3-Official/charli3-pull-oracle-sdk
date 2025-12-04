@@ -18,6 +18,7 @@ from pycardano import (
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.nodes import NodesConfig
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.cli.config.token import TokenConfig
 from charli3_offchain_core.cli.setup import setup_token
 from charli3_offchain_core.constants.status import ProcessStatus
@@ -56,11 +57,13 @@ class GovernanceOrchestrator:
         chain_query: ChainQuery,
         tx_manager: TransactionManager,
         script_address: Address,
+        ref_script_config: ReferenceScriptConfig,
         status_callback: Callable | None = None,
     ) -> None:
         self.chain_query = chain_query
         self.tx_manager = tx_manager
         self.script_address = script_address
+        self.ref_script_config = ref_script_config
         self.status_callback = status_callback
         self.current_status = ProcessStatus.NOT_STARTED
 
@@ -91,6 +94,8 @@ class GovernanceOrchestrator:
                     platform_utxo=platform_utxo,
                     platform_script=platform_script,
                     policy_hash=policy_hash,
+                    script_address=self.script_address,
+                    ref_script_config=self.ref_script_config,
                     utxos=utxos,
                     change_address=change_address,
                     signing_key=signing_key,
@@ -162,6 +167,8 @@ class GovernanceOrchestrator:
                     platform_script=platform_script,
                     policy_hash=oracle_policy_hash,
                     contract_utxos=contract_utxos,
+                    script_address=self.script_address,
+                    ref_script_config=self.ref_script_config,
                     change_address=change_address,
                     signing_key=signing_key,
                     new_nodes_config=new_nodes_config,
@@ -211,6 +218,8 @@ class GovernanceOrchestrator:
                 oracle_config=oracle_config,
                 platform_utxo=platform_utxo,
                 platform_script=platform_script,
+                script_address=self.script_address,
+                ref_script_config=self.ref_script_config,
                 policy_hash=policy_hash,
                 utxos=utxos,
                 change_address=change_address,
@@ -262,6 +271,7 @@ class GovernanceOrchestrator:
                 tx_manager=self.tx_manager,
                 script_address=self.script_address,
                 policy_id=policy_hash,
+                ref_script_config=self.ref_script_config,
             )
 
             try:
@@ -331,6 +341,7 @@ class GovernanceOrchestrator:
             builder = OracleScaleBuilder(
                 tx_manager=self.tx_manager,
                 script_address=self.script_address,
+                ref_script_config=self.ref_script_config,
                 policy_id=policy_hash,
             )
 

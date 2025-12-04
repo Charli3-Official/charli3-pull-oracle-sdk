@@ -12,6 +12,7 @@ from pycardano import (
     UTxO,
 )
 
+from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
 from charli3_offchain_core.models.oracle_datums import (
     NoDatum,
     OracleSettingsVariant,
@@ -37,7 +38,9 @@ class ResumeBuilder(BaseBuilder):
         platform_utxo: UTxO,
         platform_script: NativeScript,
         policy_hash: Any,
+        script_address: Address,
         utxos: list[UTxO],
+        ref_script_config: ReferenceScriptConfig,
         change_address: Address,
         signing_key: PaymentSigningKey | ExtendedSigningKey,
     ) -> LifecycleTxResult:
@@ -45,7 +48,11 @@ class ResumeBuilder(BaseBuilder):
             settings_datum, settings_utxo = get_oracle_settings_by_policy_id(
                 utxos, policy_hash
             )
-            script_utxo = get_reference_script_utxo(utxos)
+            script_utxo = await get_reference_script_utxo(
+                self.tx_manager.chain_query,
+                ref_script_config,
+                script_address,
+            )
 
             if not script_utxo:
                 raise ValueError("Reference script UTxO not found")
