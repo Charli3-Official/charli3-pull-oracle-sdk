@@ -155,49 +155,10 @@ class TestMultisigGovernance(GovernanceBase):
             Address.from_primitive(self.oracle_addresses.script_address),
             self.tx_manager,
         )
-        
-        try:
-            initial_oracle_datum, initial_settings_utxo = get_oracle_settings_by_policy_id(
-                initial_utxos,
-                ScriptHash(bytes.fromhex(self.management_config.tokens.oracle_policy)),
-            )
-        except Exception as e:
-            logger.warning(f"Failed to find oracle settings with configured policy: {e}")
-            logger.info("Attempting to find ANY oracle settings token (C3CS) at the address...")
-            
-            # Fallback: Search for any C3CS token
-            found_utxo = None
-            found_policy = None
-            
-            for utxo in initial_utxos:
-                if utxo.output.amount.multi_asset:
-                    for policy_id, assets in utxo.output.amount.multi_asset.items():
-                        # Check for C3CS token name (encoded or string)
-                        for asset_name in assets:
-                            name_str = asset_name.decode() if isinstance(asset_name, bytes) else str(asset_name)
-                            if name_str == "C3CS":
-                                found_utxo = utxo
-                                found_policy = policy_id
-                                break
-                    if found_utxo:
-                        break
-            
-            if found_utxo and found_policy:
-                logger.warning(f"FOUND Oracle Settings with DIFFERENT Policy ID: {found_policy}")
-                logger.warning("Updating test configuration to use this found policy.")
-                
-                # Update instance config
-                self.management_config.tokens.oracle_policy = str(found_policy)
-                
-                # Retry getting settings with new policy
-                initial_oracle_datum, initial_settings_utxo = get_oracle_settings_by_policy_id(
-                    initial_utxos,
-                    found_policy,
-                )
-            else:
-                # Re-raise if still not found
-                raise e
-
+        initial_oracle_datum, initial_settings_utxo = get_oracle_settings_by_policy_id(
+            initial_utxos,
+            ScriptHash(bytes.fromhex(self.management_config.tokens.oracle_policy)),
+        )
         initial_sig_threshold = initial_oracle_datum.required_node_signatures_count
 
         modified_settings_utxo = deepcopy(initial_settings_utxo)

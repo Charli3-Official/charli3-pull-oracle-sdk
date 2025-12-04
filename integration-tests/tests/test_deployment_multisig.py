@@ -72,7 +72,9 @@ class TestMultisigDeployment(TestBase):
                 skey = PaymentExtendedSigningKey.load(
                     str(platform_dir / "administrator.skey")
                 )
-                vkey = PaymentVerificationKey.load(str(platform_dir / "administrator.vkey"))
+                vkey = PaymentVerificationKey.load(
+                    str(platform_dir / "administrator.vkey")
+                )
                 vkh = VerificationKeyHash(
                     bytes.fromhex(
                         (platform_dir / "administrator.vkh").read_text().strip()
