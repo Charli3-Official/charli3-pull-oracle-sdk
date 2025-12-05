@@ -265,9 +265,9 @@ class OracleSimulator:
 
             # Extract reward distribution from account output
             rewards_dict = None
-            if odv_result.transport_output.datum:
+            if odv_result.account_output.datum:
                 try:
-                    reward_datum = odv_result.transport_output.datum.datum
+                    reward_datum = odv_result.account_output.datum.datum
                     if hasattr(reward_datum, "nodes_to_rewards"):
                         rewards_dict = {
                             vkh.to_primitive().hex(): amount

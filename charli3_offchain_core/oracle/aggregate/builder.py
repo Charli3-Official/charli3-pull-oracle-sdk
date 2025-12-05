@@ -58,7 +58,7 @@ class OdvResult:
     """Result of ODV transaction."""
 
     transaction: Transaction
-    transport_output: TransactionOutput
+    account_output: TransactionOutput
     agg_state_output: TransactionOutput
     sorted_required_signers: list[VerificationKeyHash]
 

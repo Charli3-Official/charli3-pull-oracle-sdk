@@ -164,12 +164,10 @@ async def status(config: Path) -> None:
         script_utxos = await ctx.chain_query.get_utxos(ctx.script_address)
         current_time = ctx.chain_query.get_current_posix_chain_time_ms()
 
-        # Filter transport states using utility functions
-        transport_utxos = asset_checks.filter_utxos_by_token_name(
-            script_utxos, ctx.policy_id, "C3RT"
+        # Filter account states using utility functions
+        account_utxos = asset_checks.filter_utxos_by_token_name(
+            script_utxos, ctx.policy_id, "C3RA"
         )
-        empty_transports = state_checks.filter_empty_transports(transport_utxos)
-        pending_transports = state_checks.filter_pending_transports(transport_utxos)
 
         # Filter agg states
         agg_state_utxos = asset_checks.filter_utxos_by_token_name(
@@ -192,22 +190,11 @@ async def status(config: Path) -> None:
         # Display status
         click.echo("\nODV Aggregate Status:")
         click.echo("-" * 40)
-        click.echo(f"Empty Transport UTxOs: {len(empty_transports)}")
-        click.echo(f"Pending Transport UTxOs: {len(pending_transports)}")
+        click.echo(f"Number of account UTxOs: {len(account_utxos)}")
         click.echo("\nAggState UTxOs:")
         click.echo(f"Empty: {len(empty_agg_states)}")
         click.echo(f"Expired: {len(expired_agg_states)}")
         click.echo(f"Total Valid (Empty + Expired): {len(valid_agg_states)}")
-
-        # Display available pairs
-        available_pairs = min(len(empty_transports), len(valid_agg_states))
-        click.echo(f"\nAvailable ODV Pairs: {available_pairs}")
-
-        if pending_transports:
-            click.echo("\nPending ODV Transactions:")
-            click.echo("-" * 40)
-            for utxo in pending_transports:
-                _print_pending_transport(utxo)
 
         if expired_agg_states:
             click.echo("\nExpired AggState UTxOs:")
@@ -251,15 +238,15 @@ def _print_odv_summary(result: OdvResult) -> None:
     click.echo("\nTransaction Summary:")
     click.echo("-" * 40)
 
-    # Print Transport UTxO details
-    transport_datum = result.transport_output.datum.datum
-    total_fee = transport_datum.aggregation.rewards_amount_paid
-    node_count = len(transport_datum.aggregation.message.node_feeds_sorted_by_feed)
-    node_reward = transport_datum.aggregation.node_reward_price
+    # Print account UTxO details
+    account_datum = result.account_output.datum.datum
+    total_fee = account_datum.aggregation.rewards_amount_paid
+    node_count = len(account_datum.aggregation.message.node_feeds_sorted_by_feed)
+    node_reward = account_datum.aggregation.node_reward_price
     platform_fee = total_fee - (node_count * node_reward)
 
-    click.echo("Transport Details:")
-    click.echo(f"  Oracle Feed: {transport_datum.aggregation.oracle_feed}")
+    click.echo("account Details:")
+    click.echo(f"  Oracle Feed: {account_datum.aggregation.oracle_feed}")
     click.echo(f"  Node Count: {node_count}")
     click.echo(f"  Reward per Node: {node_reward}")
     click.echo(f"  Platform Fee: {platform_fee}")
@@ -273,16 +260,6 @@ def _print_odv_summary(result: OdvResult) -> None:
     click.echo(f"  Expires At: {agg_datum.get_creation_time}")
 
     click.echo(f"\nTransaction Fee: {result.transaction.transaction_body.fee}")
-
-
-def _print_pending_transport(utxo: UTxO) -> None:
-    """Print details of pending transport UTxO."""
-    datum = utxo.output.datum.datum
-    click.echo(f"\nUTxO: {utxo.input.transaction_id}#{utxo.input.index}")
-    click.echo(f"Message Timestamp: {datum.aggregation.message.timestamp}")
-    click.echo(
-        f"Node Count: {len(datum.aggregation.message.node_feeds_sorted_by_feed)}"
-    )
 
 
 def _validate_required_fields(feed_data: dict) -> None:
@@ -368,8 +345,4 @@ def process_feed_data(feed_data: dict[str, Any]) -> AggregateMessage:
         feeds[vkh] = feed_value  # NodeFeed is just an int
 
     # Directly create AggregateMessage
-    return AggregateMessage(
-        node_feeds_sorted_by_feed=feeds,
-        node_feeds_count=feed_data["node_feeds_count"],
-        timestamp=feed_data["timestamp"],
-    )
+    return AggregateMessage(node_feeds_sorted_by_feed=feeds)
