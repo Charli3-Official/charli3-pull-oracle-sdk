@@ -92,9 +92,7 @@ async def send(config: Path, wait: bool) -> None:
         print_node_messages(node_messages)
 
         print_progress("Constructing ODV aggregate transaction")
-        aggregate_message = build_aggregate_message(
-            list(node_messages.values()), validity_window.current_time
-        )
+        aggregate_message = build_aggregate_message(list(node_messages.values()))
         print_aggregate_summary(aggregate_message, validity_window)
 
         result = await builder.build_odv_tx(
