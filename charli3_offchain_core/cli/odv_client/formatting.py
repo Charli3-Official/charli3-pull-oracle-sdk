@@ -66,12 +66,7 @@ def print_aggregate_summary(
     click.secho("└─ End:   ", fg=CliColor.SECONDARY, nl=False)
     click.secho(f"{window_end.strftime('%Y-%m-%d %H:%M:%S')}", fg=CliColor.DETAIL)
 
-    # Print Aggregate Message Details
-    msg_time = datetime.fromtimestamp(aggregate_message.timestamp / 1000)
-
     click.secho("\n┌ Aggregate Message", fg=CliColor.INFO)
-    click.secho("├─ Timestamp: ", fg=CliColor.SECONDARY, nl=False)
-    click.secho(f"{msg_time.strftime('%Y-%m-%d %H:%M:%S')}", fg=CliColor.DETAIL)
     click.secho("├─ Node Count: ", fg=CliColor.SECONDARY, nl=False)
     click.secho(f"{aggregate_message.node_feeds_count}", fg=CliColor.DETAIL)
 

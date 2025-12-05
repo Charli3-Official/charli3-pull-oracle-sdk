@@ -1,10 +1,12 @@
+"""Client for ODV node interactions."""
+
 import asyncio
 import logging
 
 import aiohttp
-from pycardano import Transaction, TransactionWitnessSet
+from pycardano import Transaction, TransactionWitnessSet, VerificationKeyWitness
 
-from charli3_offchain_core.cli.config.odv_client import NodeNetworkId
+from charli3_offchain_core.cli.config.odv_client import NodeConfig
 from charli3_offchain_core.models.client import OdvFeedRequest, OdvTxSignatureRequest
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
 
@@ -16,7 +18,7 @@ class ODVClient:
 
     async def collect_feed_updates(
         self,
-        nodes: list[NodeNetworkId],
+        nodes: list[NodeConfig],
         feed_request: OdvFeedRequest,
     ) -> dict[str, SignedOracleNodeMessage]:
         """
@@ -28,7 +30,7 @@ class ODVClient:
         """
 
         async def fetch_from_node(
-            session: aiohttp.ClientSession, node: NodeNetworkId
+            session: aiohttp.ClientSession, node: NodeConfig
         ) -> tuple[str, SignedOracleNodeMessage | None]:
             try:
                 endpoint = f"{node.root_url.rstrip('/')}/odv/feed"
@@ -55,31 +57,36 @@ class ODVClient:
 
     async def collect_tx_signatures(
         self,
-        nodes: list[NodeNetworkId],
+        nodes: list[NodeConfig],
         tx_request: OdvTxSignatureRequest,
     ) -> dict[str, str]:
         """
         Collect transaction signatures from nodes.
 
         :param nodes: List of nodes to interact with.
-        :param tx_request: The transaction signature request to send to the nodes.
-        :return: A dictionary mapping node public keys to their signatures.
+        :param tx_request: The transaction signature request with tx_body_cbor.
+        :return: A dictionary mapping node public keys to their signature hex strings.
         """
 
-        async def fetch_signature(
-            session: aiohttp.ClientSession, node: NodeNetworkId
+        async def fetch_signature_from_node(
+            session: aiohttp.ClientSession, node: NodeConfig
         ) -> tuple[str, str | None]:
             try:
                 endpoint = f"{node.root_url.rstrip('/')}/odv/sign"
+
                 payload = tx_request.model_dump()
+
                 async with session.post(endpoint, json=payload) as response:
                     if response.status != 200:
                         logger.error(f"Error from {node.root_url}: {response.status}")
                         return node.pub_key, None
 
                     data = await response.json()
-                    logger.debug(f"Received response from {node.root_url}: {data}")
-                    return node.pub_key, data["signed_tx_cbor"]
+                    signature_hex = data["signature"]
+                    logger.debug(
+                        f"Received signature from {node.root_url}: {signature_hex[:20]}..."
+                    )
+                    return node.pub_key, signature_hex
 
             except aiohttp.ClientError as e:
                 logger.error(f"Connection error to {node.root_url}: {e!s}")
@@ -89,34 +96,55 @@ class ODVClient:
                 return node.pub_key, None
 
         async with aiohttp.ClientSession() as session:
-            tasks = [fetch_signature(session, node) for node in nodes]
+            tasks = [fetch_signature_from_node(session, node) for node in nodes]
             responses = await asyncio.gather(*tasks)
 
-            return {pkh: sig for pkh, sig in responses if sig is not None}
+            return {
+                node_pub_key: sig_hex
+                for node_pub_key, sig_hex in responses
+                if sig_hex is not None
+            }
 
-    def attach_tx_signatures(
+    def attach_signature_witnesses(
         self,
-        transaction: Transaction,
-        signed_txs: dict[str, str],
+        original_tx: Transaction,
+        signatures: dict[str, str],
+        node_messages: dict[str, SignedOracleNodeMessage],
     ) -> Transaction:
         """
-        Attach collected signatures to the transaction.
+        Attach signature witnesses to the original transaction object.
 
-        :param transaction: The transaction to attach signatures to.
-        :param signed_txs: A dictionary of node public keys to their signatures.
-        :return: The transaction with attached signatures.
+        :param original_tx: Original transaction to attach witnesses to.
+        :param signatures: Dictionary mapping node public keys to signature hex strings.
+        :param node_messages: Dictionary of node messages containing verification keys.
+        :return: Transaction with attached witnesses.
         """
-        if transaction.transaction_witness_set is None:
-            transaction.transaction_witness_set = TransactionWitnessSet()
 
-        for signed_tx_response in signed_txs.values():
-            signed_tx = Transaction.from_cbor(signed_tx_response)
-            if (
-                signed_tx.transaction_witness_set
-                and signed_tx.transaction_witness_set.vkey_witnesses
-            ):
-                transaction.transaction_witness_set.vkey_witnesses.extend(
-                    signed_tx.transaction_witness_set.vkey_witnesses
+        if original_tx.transaction_witness_set is None:
+            original_tx.transaction_witness_set = TransactionWitnessSet()
+        if original_tx.transaction_witness_set.vkey_witnesses is None:
+            original_tx.transaction_witness_set.vkey_witnesses = []
+
+        for node_pub_key, signature_hex in signatures.items():
+            try:
+                if node_pub_key not in node_messages:
+                    logger.warning(f"No node message found for node {node_pub_key}")
+                    continue
+
+                node_message = node_messages[node_pub_key]
+                verification_key = node_message.verification_key
+
+                signature = bytes.fromhex(signature_hex)
+
+                witness = VerificationKeyWitness(
+                    vkey=verification_key, signature=signature
                 )
+                original_tx.transaction_witness_set.vkey_witnesses.append(witness)
+                logger.debug(f"Created witness for node {node_pub_key}")
 
-        return transaction
+            except Exception as e:
+                logger.error(f"Failed to create witness for node {node_pub_key}: {e}")
+                raise
+
+        logger.info(f"Attached {len(signatures)} witnesses to transaction")
+        return original_tx
