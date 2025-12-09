@@ -160,7 +160,6 @@ class OracleSimulator:
                     continue
 
                 node_message = node_messages[node_pub_key]
-                print("node_message JJJJJJJJJJJJJ")
                 print(node_message)
                 verification_key = node_message.verification_key
 
