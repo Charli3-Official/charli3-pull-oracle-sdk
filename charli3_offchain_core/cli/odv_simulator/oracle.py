@@ -110,7 +110,7 @@ class OracleSimulator:
         print_progress("Preparing transaction signature request")
         tx_request = OdvTxSignatureRequest(
             node_messages=node_messages,
-            tx_cbor=tx.transaction_body.to_cbor_hex(),
+            tx_body_cbor=tx.transaction_body.to_cbor_hex(),
         )
 
         print_progress("Requesting transaction signatures from nodes")
@@ -133,54 +133,51 @@ class OracleSimulator:
         )
         return signed_signatures
 
-    def attach_tx_signatures(
+    def attach_signature_witnesses(
         self,
         original_tx: Transaction,
+        signatures: dict[str, str],
         node_messages: dict[str, SignedOracleNodeMessage],
-        signed_signatures: dict[str, str],
-    ) -> None:
-        """Attach collected signatures to transaction.
-
-        Args:
-            original_tx: The transaction to attach signatures to
-            node_messages: Dict of node VKH -> SignedOracleNodeMessage (for verification keys)
-            signed_signatures: Dict of node VKH -> signature hex string
+    ) -> Transaction:
         """
+        Attach signature witnesses to the original transaction object.
+
+        :param original_tx: Original transaction to attach witnesses to.
+        :param signatures: Dictionary mapping node public keys to signature hex strings.
+        :param node_messages: Dictionary of node messages containing verification keys.
+        :return: Transaction with attached witnesses.
+        """
+
         if original_tx.transaction_witness_set is None:
             original_tx.transaction_witness_set = TransactionWitnessSet()
         if original_tx.transaction_witness_set.vkey_witnesses is None:
             original_tx.transaction_witness_set.vkey_witnesses = []
 
-        for node_vkh, signature_hex in signed_signatures.items():
+        for node_pub_key, signature_hex in signatures.items():
             try:
-                if node_vkh not in node_messages:
-                    logger.warning(f"No node message found for node {node_vkh[:8]}")
+                if node_pub_key not in node_messages:
+                    logger.warning(f"No node message found for node {node_pub_key}")
                     continue
 
-                # Get verification key from the node message
-                node_message = node_messages[node_vkh]
+                node_message = node_messages[node_pub_key]
+                print("node_message JJJJJJJJJJJJJ")
+                print(node_message)
                 verification_key = node_message.verification_key
 
-                # Convert hex signature to bytes
-                signature_bytes = bytes.fromhex(signature_hex)
+                signature = bytes.fromhex(signature_hex)
 
-                # Create and add witness
                 witness = VerificationKeyWitness(
-                    vkey=verification_key, signature=signature_bytes
+                    vkey=verification_key, signature=signature
                 )
                 original_tx.transaction_witness_set.vkey_witnesses.append(witness)
-                logger.info(f"Attached witness for node {node_vkh[:8]}")
+                logger.debug(f"Created witness for node {node_pub_key}")
 
             except Exception as e:
-                logger.error(f"Failed to create witness for node {node_vkh[:8]}: {e}")
+                logger.error(f"Failed to create witness for node {node_pub_key}: {e}")
                 raise
 
-        witness_count = len(original_tx.transaction_witness_set.vkey_witnesses)
-        print_status(
-            "Witnesses Attachment",
-            f"{witness_count} witnesses successfully attached",
-            success=True,
-        )
+        logger.info(f"Attached {len(signatures)} witnesses to transaction")
+        return original_tx
 
     async def submit_odv(
         self,
@@ -228,7 +225,11 @@ class OracleSimulator:
         )
 
         print_progress("Adding node signatures to transaction")
-        self.attach_tx_signatures(result.transaction, node_messages, node_signatures)
+        self.attach_signature_witnesses(
+            result.transaction,
+            node_signatures,
+            node_messages,
+        )
 
         print_progress("Submitting final ODV transaction")
         status, _ = await self.ctx.tx_manager.sign_and_submit(
