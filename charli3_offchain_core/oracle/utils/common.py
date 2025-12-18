@@ -17,6 +17,7 @@ from pycardano import (
 from charli3_offchain_core.blockchain.chain_query import ChainQuery
 from charli3_offchain_core.blockchain.transactions import TransactionManager
 from charli3_offchain_core.cli.config.reference_script import ReferenceScriptConfig
+from charli3_offchain_core.models.message import SignedOracleNodeMessage
 from charli3_offchain_core.models.oracle_datums import (
     AggState,
     SomeAsset,
@@ -140,7 +141,9 @@ async def get_reference_script_utxo(
         raise ValidationError("No reference script UTxO found") from e
 
 
-def build_aggregate_message(nodes_messages: list) -> AggregateMessage:
+def build_aggregate_message(
+    nodes_messages: list[SignedOracleNodeMessage],
+) -> AggregateMessage:
     if not nodes_messages:
         raise ValueError("No node messages provided")
 

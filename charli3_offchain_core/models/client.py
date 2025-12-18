@@ -1,25 +1,22 @@
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, Field
 
 from charli3_offchain_core.models.base import TxValidityInterval
 from charli3_offchain_core.models.message import SignedOracleNodeMessage
 
 
 class OdvFeedRequest(BaseModel):
-    """Request feed from oracle node"""
+    """Request for oracle feed data."""
 
-    oracle_nft_policy_id: str
-    tx_validity_interval: TxValidityInterval
+    oracle_nft_policy_id: str = Field(..., description="Oracle NFT policy ID")
+    tx_validity_interval: TxValidityInterval = Field(
+        ..., description="Transaction validity window"
+    )
 
 
 class OdvTxSignatureRequest(BaseModel):
-    """Request signature from oracle node"""
+    """Request for transaction signatures."""
 
-    node_messages: dict[str, SignedOracleNodeMessage]
-    tx_cbor: str
-
-    @model_serializer
-    def serialize(self) -> dict[str, dict]:
-        return {
-            "node_messages": {k: v.model_dump() for k, v in self.node_messages.items()},
-            "tx_cbor": self.tx_cbor,
-        }
+    node_messages: dict[str, SignedOracleNodeMessage] = Field(
+        ..., description="Node messages"
+    )
+    tx_body_cbor: str = Field(..., description="Transaction Body CBOR to sign")

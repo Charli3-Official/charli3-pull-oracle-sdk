@@ -264,7 +264,9 @@ class RewardAccountDatum(PlutusData):
             return cls.empty()
 
         sorted_items = sorted(data.items(), key=lambda item: item[0].payload)
-        sorted_distribution = dict(sorted_items)
+        sorted_distribution = {
+            node: reward for node, reward in sorted_items if reward > 0
+        }
 
         return cls(
             nodes_to_rewards=sorted_distribution, last_update_time=last_update_time

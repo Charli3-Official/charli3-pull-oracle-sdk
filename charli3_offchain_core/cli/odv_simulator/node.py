@@ -88,7 +88,7 @@ class NodeSimulator:
             logger.info(f"  VKH from file:         {file_vkh.to_primitive().hex()}")
             logger.info(f"  Match: {witness_vkh.payload == file_vkh.payload}")
 
-            tx_body_cbor_bytes = bytes.fromhex(request.tx_cbor)
+            tx_body_cbor_bytes = bytes.fromhex(request.tx_body_cbor)
             tx_body_hash_bytes = hashlib.blake2b(
                 tx_body_cbor_bytes, digest_size=32
             ).digest()
@@ -97,7 +97,7 @@ class NodeSimulator:
             logger.info(f"Computed transaction body hash: {tx_body_hash_hex}")
 
             # Deserialize transaction body for validation purposes only
-            parsed_tx_body = TransactionBody.from_cbor(request.tx_cbor)
+            parsed_tx_body = TransactionBody.from_cbor(request.tx_body_cbor)
 
             validation_tx = Transaction(
                 transaction_body=parsed_tx_body,

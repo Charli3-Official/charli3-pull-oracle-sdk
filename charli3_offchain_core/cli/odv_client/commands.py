@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import click
@@ -16,7 +17,6 @@ from charli3_offchain_core.cli.odv_client.formatting import (
     print_aggregate_summary,
     print_collection_stats,
     print_node_messages,
-    # print_send_summary,  # Out of scope - commented out
     print_signature_status,
 )
 from charli3_offchain_core.client.odv import ODVClient
@@ -25,6 +25,8 @@ from charli3_offchain_core.models.client import OdvFeedRequest, OdvTxSignatureRe
 from charli3_offchain_core.oracle.aggregate.builder import OracleTransactionBuilder
 from charli3_offchain_core.oracle.exceptions import TransactionError
 from charli3_offchain_core.oracle.utils.common import build_aggregate_message
+
+logger = logging.getLogger(__name__)
 
 
 @click.group()
@@ -92,9 +94,7 @@ async def send(config: Path, wait: bool) -> None:
         print_node_messages(node_messages)
 
         print_progress("Constructing ODV aggregate transaction")
-        aggregate_message = build_aggregate_message(
-            list(node_messages.values()), validity_window.current_time
-        )
+        aggregate_message = build_aggregate_message(list(node_messages.values()))
         print_aggregate_summary(aggregate_message, validity_window)
 
         result = await builder.build_odv_tx(
@@ -109,21 +109,21 @@ async def send(config: Path, wait: bool) -> None:
         print_progress("Initiating signature collection from oracle nodes")
         tx_request = OdvTxSignatureRequest(
             node_messages=node_messages,
-            tx_cbor=result.transaction.to_cbor_hex(),
+            tx_body_cbor=result.transaction.transaction_body.to_cbor_hex(),
         )
 
-        signed_txs = await odv_client.collect_tx_signatures(
+        signatures = await odv_client.collect_tx_signatures(
             nodes=odv_config.nodes, tx_request=tx_request
         )
 
         print_collection_stats(
-            received=len(signed_txs),
+            received=len(signatures),
             total=len(odv_config.nodes),
             collection_type="signatures",
         )
-        print_signature_status(signed_txs)
+        print_signature_status(signatures)
 
-        if not signed_txs:
+        if not signatures:
             print_status(
                 "Signature Collection", "No valid signatures received", success=False
             )
@@ -131,9 +131,10 @@ async def send(config: Path, wait: bool) -> None:
 
         print_progress("Finalizing transaction with collected signatures")
 
-        odv_client.attach_tx_signatures(
-            transaction=result.transaction,
-            signed_txs=signed_txs,
+        result.transaction = odv_client.attach_signature_witnesses(
+            original_tx=result.transaction,
+            signatures=signatures,
+            node_messages=node_messages,
         )
 
         print_progress("Initiating ODV transaction submission")
@@ -161,4 +162,5 @@ async def send(config: Path, wait: bool) -> None:
         raise click.ClickException(str(e)) from e
     except Exception as e:
         print_status("ODV Process", str(e), success=False)
+        logger.error("ODV failed", exc_info=e)
         raise click.ClickException(str(e)) from e

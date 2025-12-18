@@ -8,14 +8,14 @@ from charli3_offchain_core.cli.config.utils import load_yaml_config
 
 
 @dataclass
-class NodeNetworkId:
+class NodeConfig:
     """Network identification for oracle node."""
 
     root_url: str
     pub_key: str
 
     @classmethod
-    def from_dict(cls, data: dict) -> "NodeNetworkId":
+    def from_dict(cls, data: dict) -> "NodeConfig":
         """Create node config from dictionary."""
         return cls(
             root_url=data["root_url"],
@@ -29,7 +29,7 @@ class OdvClientConfig:
 
     tx_config: TxConfig
     odv_validity_length: int  # milliseconds
-    nodes: list[NodeNetworkId]
+    nodes: list[NodeConfig]
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "OdvClientConfig":
@@ -41,6 +41,6 @@ class OdvClientConfig:
 
         return cls(
             tx_config=TxConfig.from_yaml(path),
-            nodes=[NodeNetworkId.from_dict(node) for node in data["nodes"]],
+            nodes=[NodeConfig.from_dict(node) for node in data["nodes"]],
             odv_validity_length=data["odv_validity_length"],
         )

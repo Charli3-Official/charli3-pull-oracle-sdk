@@ -243,16 +243,16 @@ def print_nodes_table(
         for i, feed_vkh in enumerate(nodes, 1)
     ]
 
-    if is_ada:
-        for row in table_data:
-            reward = row[3]  # Get the reward amount
-            if reward > 0 and reward < min_utxo_value:
-                row[3] = (
-                    f"Original: {reward:_} ₳, "
-                    f"Final (Min UTxO): {min_utxo_value:r_} ₳"
-                )
-            else:
-                row[3] = f"{reward:_} ₳ "
+    # if is_ada:
+    #     for row in table_data:
+    #         reward = row[3]  # Get the reward amount
+    #         if reward > 0 and reward < min_utxo_value:
+    #             row[3] = (
+    #                 f"Original: {reward:_} ₳, "
+    #                 f"Final (Min UTxO): {min_utxo_value:r_} ₳"
+    #             )
+    #         else:
+    #             row[3] = f"{reward:_} ₳ "
 
     table = tabulate(
         table_data,

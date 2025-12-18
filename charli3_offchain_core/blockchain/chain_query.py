@@ -18,6 +18,7 @@ from pycardano import (
     ExtendedSigningKey,
     GenesisParameters,
     NativeScript,
+    Network,
     PaymentSigningKey,
     PlutusV3Script,
     ScriptHash,
@@ -39,7 +40,7 @@ from .exceptions import (
     TransactionSubmissionError,
     UTxOQueryError,
 )
-from .network import NetworkConfig, get_network_type
+from .network import NetworkConfig, NetworkType, get_network_type
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,21 @@ class ChainQuery:
         # Initialize network config if not provided
         if not self.config.network_config:
             try:
-                network_type = get_network_type(self.genesis_params.network_magic)
+                if self.blockfrost:
+                    network_type = (
+                        NetworkType.MAINNET
+                        if self.blockfrost.network == Network.MAINNET
+                        else NetworkType.PREPROD
+                    )
+                elif self.ogmios:
+                    network_type = (
+                        NetworkType.MAINNET
+                        if self.ogmios.network == Network.MAINNET
+                        else NetworkType.PREPROD
+                    )
+                else:
+                    network_type = get_network_type(self.genesis_params.network_magic)
+
                 self.config.network_config = NetworkConfig.from_network(network_type)
             except Exception as e:
                 raise NetworkConfigError(
