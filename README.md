@@ -27,8 +27,8 @@ Core off-chain infrastructure for Charli3's Oracle Data Verification (ODV) syste
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Charli3-Official/odv-multisig-charli3-offchain-core.git
-cd odv-multisig-charli3-offchain-core
+git clone https://github.com/Charli3-Official/charli3-pull-oracle-sdk
+cd charli3-pull-oracle-sdk
 ```
 
 2. Install dependencies using Poetry:
