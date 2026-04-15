@@ -174,7 +174,7 @@ def setup_oracle_from_config(
     configs = {
         "script": OracleScriptConfig(
             create_manager_reference=deployment_config.create_reference,
-            reference_ada_amount=53334780,
+            reference_ada_amount=54663730,
         ),
         "deployment": OracleDeploymentConfig(
             network=deployment_config.network.network,
